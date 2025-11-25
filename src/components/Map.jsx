@@ -166,7 +166,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
             <PurchaseHistory business={business} />
 
             {/* Opening Hours Section */}
-            {business.openingHours && (
+            {business.openingHours && Array.isArray(business.openingHours) && business.openingHours.length > 0 && (
                 <div style={{ marginTop: '8px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
                     <div
                         style={{
@@ -198,7 +198,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                         }}>
                             {business.openingHours.map((day, index) => (
                                 <div key={index} style={{ marginBottom: '2px' }}>
-                                    {day}
+                                    {String(day || '')}
                                 </div>
                             ))}
                         </div>

@@ -153,6 +153,10 @@ app.post('/api/get-business-location', async (req, res) => {
         const result = await getBusinessDetails(businessName, address);
 
         if (result && result.found) {
+            // Normaliser les horaires pour s'assurer qu'ils sont toujours un tableau ou null
+            if (result.hours && !Array.isArray(result.hours)) {
+                result.hours = null;
+            }
             res.json(result);
         } else {
             res.json({ found: false });

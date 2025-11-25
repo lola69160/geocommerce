@@ -29,8 +29,8 @@ export const generateMarkdownReport = (cartItems, notes) => {
 
         // Horaires
         let hours = 'N/A';
-        if (item.openingHours && item.openingHours.length > 0) {
-            hours = item.openingHours.join('; ').replace(/\n/g, ' ');
+        if (item.openingHours && Array.isArray(item.openingHours) && item.openingHours.length > 0) {
+            hours = item.openingHours.map(h => String(h || '')).join('; ').replace(/\n/g, ' ');
         }
 
         // Dirigeants
