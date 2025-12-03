@@ -1,71 +1,101 @@
 import { saveAs } from 'file-saver';
-import { formatDate, getEstablishmentCreationDate } from '../utils/businessDisplayUtils';
+import { formatDate } from '../utils/businessDisplayUtils';
 
-export const generateMarkdownReport = (cartItems, notes) => {
+export const generateMarkdownReport = (analyzedItems) => {
     const date = new Date().toLocaleDateString('fr-FR');
-    let markdown = `# Rapport de sélection - Commerce Finder\n\n`;
+    let markdown = `# Rapport d'Analyse - Commerce Finder\n\n`;
     markdown += `**Date:** ${date}\n`;
-    markdown += `**Nombre de commerces:** ${cartItems.length}\n\n`;
+    markdown += `**Nombre de commerces:** ${analyzedItems.length}\n\n`;
+    markdown += `---\n\n`;
 
-    markdown += `| Nom | Adresse | Créé | MAJ | Âge | Horaires | Dirigeants | Prix BODACC | Date BODACC | Note |\n`;
-    markdown += `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
+    analyzedItems.forEach((item, index) => {
+        // Data comes from the orchestration endpoint which combines Identity, Assets, and Intelligence
+        const { identity, assets, intelligence, openData } = item;
 
-    cartItems.forEach(item => {
-        const id = item.siren || item.siret;
-        const name = item.nom_complet || item.enseigne || 'N/A';
-        const address = item.adresse || 'N/A';
+        const commercialName = identity?.commercial_name || 'Nom Inconnu';
+        const legalName = identity?.legal_name || 'Société Inconnue';
+        const siret = identity?.siret || 'N/A';
 
-        // Dates
-        const creationDate = getEstablishmentCreationDate(item) ? formatDate(getEstablishmentCreationDate(item)) : 'N/A';
-        const majDate = item.date_mise_a_jour_insee ? formatDate(item.date_mise_a_jour_insee) : 'N/A';
+        const rating = assets?.rating || 'N/A';
+        const userRatingTotal = assets?.user_rating_total || 0;
 
-        // Age calculation
-        let age = 'N/A';
-        if (item.date_creation) {
-            const created = new Date(item.date_creation);
-            const now = new Date();
-            age = `${Math.floor((now - created) / (365.25 * 24 * 60 * 60 * 1000))} ans`;
+        const analysisText = intelligence || "Analyse non disponible.";
+
+        // OpenData Fields
+        const creationDate = openData?.date_creation ? formatDate(openData.date_creation) : 'Non renseignée';
+        const age = openData?.date_creation ? `${new Date().getFullYear() - new Date(openData.date_creation).getFullYear()} ans` : '';
+
+        // Directors
+        let directorsList = 'Non renseignés';
+        if (openData?.dirigeants && Array.isArray(openData.dirigeants)) {
+            directorsList = openData.dirigeants
+                .map(d => `${d.prenoms} ${d.nom} (${d.qualite})`)
+                .join(', ');
         }
+
+        // BODACC
+        let bodaccInfo = 'Aucune publication récente';
+        if (openData?.bodaccData && Array.isArray(openData.bodaccData) && openData.bodaccData.length > 0) {
+            bodaccInfo = openData.bodaccData.map(b => {
+                // Mapping keys from bodaccService.js: date, type, description
+                const date = b.date ? formatDate(b.date) : (b.dateparution ? formatDate(b.dateparution) : '');
+                const type = b.type || b.typeavis_lib || 'Publication';
+                const details = b.description || b.details || '';
+                return `- ${date}: ${type} (${details})`;
+            }).join('\n');
+        }
+
+        markdown += `## Rapport : ${commercialName}\n\n`;
+
+        markdown += `### 🏢 Identité\n`;
+        markdown += `**Enseigne :** ${commercialName}\n\n`;
+        markdown += `**Société :** ${legalName} (SIRET : ${siret})\n`;
+        markdown += `**Date de création :** ${creationDate} ${age ? `(${age})` : ''}\n`;
+        markdown += `**Dirigeants :** ${directorsList}\n\n`;
+        markdown += `**Note :** ⭐ ${rating}/5 (${userRatingTotal} avis)\n\n`;
 
         // Horaires
-        let hours = 'N/A';
-        if (item.openingHours && Array.isArray(item.openingHours) && item.openingHours.length > 0) {
-            hours = item.openingHours.map(h => String(h || '')).join('; ').replace(/\n/g, ' ');
+        if (assets?.opening_hours && Array.isArray(assets.opening_hours)) {
+            markdown += `### 🕒 Horaires d'ouverture\n`;
+            assets.opening_hours.forEach(day => {
+                markdown += `- ${day}\n`;
+            });
+            markdown += `\n`;
         }
 
-        // Dirigeants
-        let dirigeants = 'N/A';
-        if (item.dirigeants && item.dirigeants.length > 0) {
-            const filteredDirigeants = item.dirigeants.filter(d => d.date_de_naissance || d.annee_de_naissance);
-            if (filteredDirigeants.length > 0) {
-                dirigeants = filteredDirigeants
-                    .map(d => `${d.prenoms} ${d.nom}${d.qualite ? ` (${d.qualite})` : ''}`)
-                    .join('; ');
-            }
+        if (bodaccInfo !== 'Aucune publication récente') {
+            markdown += `### ⚖️ Publications BODACC\n`;
+            markdown += `${bodaccInfo}\n\n`;
         }
 
-        // BODACC price and date
-        let bodaccPrice = 'N/A';
-        let bodaccDate = 'N/A';
-        if (item.bodaccData) {
-            if (Array.isArray(item.bodaccData) && item.bodaccData.length > 0) {
-                // Multiple BODACC records
-                const prices = item.bodaccData.map(b => `${b.amount.toLocaleString('fr-FR')} €`).join('; ');
-                const dates = item.bodaccData.map(b => formatDate(b.date)).join('; ');
-                bodaccPrice = prices;
-                bodaccDate = dates;
-            } else if (item.bodaccData.amount) {
-                // Single record
-                bodaccPrice = `${item.bodaccData.amount.toLocaleString('fr-FR')} €`;
-                bodaccDate = formatDate(item.bodaccData.date);
-            }
+        markdown += `### 📸 Visuels\n`;
+        if (assets?.photos && assets.photos.length > 0) {
+            markdown += `<div style="display: flex; gap: 10px; margin-bottom: 20px;">\n`;
+            assets.photos.forEach(url => {
+                markdown += `<img src="${url}" alt="${commercialName}" width="300" style="border-radius: 8px;" />\n`;
+            });
+            markdown += `</div>\n\n`;
+        } else {
+            markdown += `_Aucun visuel disponible._\n\n`;
         }
 
-        const note = notes[id] ? notes[id].replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
+        markdown += `### 📍 Analyse de la Zone\n`;
+        markdown += `${analysisText}\n\n`;
 
-        markdown += `| ${name} | ${address} | ${creationDate} | ${majDate} | ${age} | ${hours} | ${dirigeants} | ${bodaccPrice} | ${bodaccDate} | ${note} |\n`;
+        markdown += `### 💬 Ce qu'en disent les clients\n`;
+        if (assets?.reviews && assets.reviews.length > 0) {
+            assets.reviews.forEach(review => {
+                markdown += `> "${review.review_text}"\n`;
+                markdown += `> — **${review.author_name}** (${review.relative_time})\n\n`;
+            });
+        } else {
+            markdown += `_Aucun avis pertinent disponible._\n\n`;
+        }
+
+        markdown += `_Données issues de l'OpenData Gouv & Google Maps_\n\n`;
+        markdown += `---\n\n`;
     });
 
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-    saveAs(blob, `rapport_commerces_${Date.now()}.md`);
+    saveAs(blob, `rapport_commerces_complet_${Date.now()}.md`);
 };
