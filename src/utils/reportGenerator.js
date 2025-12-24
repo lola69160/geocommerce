@@ -54,10 +54,11 @@ export const generateMarkdownReport = (analyzedItems) => {
         markdown += `**Dirigeants :** ${directorsList}\n\n`;
         markdown += `**Note :** ⭐ ${rating}/5 (${userRatingTotal} avis)\n\n`;
 
-        // Horaires
-        if (assets?.opening_hours && Array.isArray(assets.opening_hours)) {
+        // Horaires - Check both openData and assets (standardized to openingHours)
+        const hours = openData?.openingHours || assets?.openingHours;
+        if (hours && Array.isArray(hours) && hours.length > 0) {
             markdown += `### 🕒 Horaires d'ouverture\n`;
-            assets.opening_hours.forEach(day => {
+            hours.forEach(day => {
                 markdown += `- ${day}\n`;
             });
             markdown += `\n`;

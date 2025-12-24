@@ -60,6 +60,8 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
     );
     const hasDirigeants = filteredDirigeants.length > 0;
     const age = calculateBusinessAge(business.date_creation);
+    // Use geo_adresse (formatted) if available, otherwise fallback to adresse
+    const displayAddress = business.geo_adresse || business.adresse;
 
     return (
         <div style={{ minWidth: showDirigeants ? '300px' : '200px', transition: 'all 0.3s ease' }}>
@@ -72,7 +74,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                 </p>
             )}
             <p style={{ margin: '4px 0', fontSize: '0.85rem' }}>
-                <strong>Adresse:</strong> {business.adresse}
+                <strong>Adresse:</strong> {displayAddress}
             </p>
             {getEstablishmentCreationDate(business) && (
                 <p style={{ margin: '4px 0', fontSize: '0.85rem' }}>
@@ -262,7 +264,11 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
 
             {/* Link to Street View */}
             <a
-                href={`https://www.google.com/maps/search/?api=1&query=${business.lat},${business.lon}`}
+                href={
+                    business.googlePlaceId
+                        ? `https://www.google.com/maps/place/?q=place_id:${business.googlePlaceId}`
+                        : `https://www.google.com/maps/place/${encodeURIComponent(displayAddress)}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ display: 'inline-block', marginTop: '8px', color: '#0ea5e9', textDecoration: 'none', fontSize: '0.85rem' }}

@@ -4,6 +4,92 @@ import logger from '../../logger.js';
 const PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText';
 
 /**
+ * Calculate distance between two GPS points in meters (Haversine formula)
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lon1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lon2 - Longitude of second point
+ * @returns {number} Distance in meters
+ */
+export const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3; // Earth radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+};
+
+/**
+ * Score a Google Place result by address accuracy
+ * @param {Object} place - Google Place result
+ * @param {string} expectedAddress - Expected address from OpenData
+ * @param {Object} coords - {lat, lon} expected coordinates (optional)
+ * @returns {number} Score 0-100
+ */
+export const scorePlaceByAddress = (place, expectedAddress, coords = null) => {
+    let score = 0;
+
+    if (!place || !expectedAddress) {
+        return 0;
+    }
+
+    // Extract components from expected address
+    const streetNumberMatch = expectedAddress.match(/^(\d+)/);
+    const postalCodeMatch = expectedAddress.match(/(\d{5})/);
+    const streetNameMatch = expectedAddress.match(/^\d+\s+([A-Z\s]+)/);
+
+    // Extract from result
+    const resultAddress = place.formattedAddress || '';
+    const resultStreetNumber = resultAddress.match(/^(\d+)/);
+    const resultPostalCode = resultAddress.match(/(\d{5})/);
+
+    // 1. STREET NUMBER MATCH (40 points)
+    if (streetNumberMatch && resultStreetNumber) {
+        if (streetNumberMatch[1] === resultStreetNumber[1]) {
+            score += 40;
+        }
+    }
+
+    // 2. POSTAL CODE MATCH (30 points)
+    if (postalCodeMatch && resultPostalCode) {
+        if (postalCodeMatch[1] === resultPostalCode[1]) {
+            score += 30;
+        }
+    }
+
+    // 3. GPS DISTANCE (20 points)
+    if (coords && place.location) {
+        const distance = calculateDistance(
+            coords.lat, coords.lon,
+            place.location.latitude, place.location.longitude
+        );
+        // Full points if within 25m, decreasing to 0 at 100m
+        if (distance <= 25) score += 20;
+        else if (distance <= 50) score += 15;
+        else if (distance <= 75) score += 10;
+        else if (distance <= 100) score += 5;
+    }
+
+    // 4. STREET NAME SIMILARITY (10 points)
+    if (streetNameMatch) {
+        const expectedStreet = streetNameMatch[1].trim().toLowerCase();
+        const resultStreetLower = resultAddress.toLowerCase();
+        if (resultStreetLower.includes(expectedStreet.substring(0, Math.min(10, expectedStreet.length)))) {
+            score += 10;
+        }
+    }
+
+    return score;
+};
+
+/**
  * Search for a business and return its details (Address, GPS, Hours)
  * @param {string} businessName - The name of the business
  * @param {string} address - The address of the business
@@ -40,7 +126,8 @@ export const getBusinessDetails = async (businessName, address) => {
             PLACES_API_URL,
             {
                 textQuery,
-                languageCode: 'fr'
+                languageCode: 'fr',
+                maxResultCount: 5  // Request 5 results for scoring
             },
             {
                 headers: {
@@ -52,28 +139,49 @@ export const getBusinessDetails = async (businessName, address) => {
             }
         );
 
-        // Check if a result was found
+        // Check if results were found
         if (response.data.places && response.data.places.length > 0) {
-            const place = response.data.places[0];
+            const places = response.data.places;
 
-            logger.info(`Places API found match for: "${businessName}"`, {
-                placeId: place.name, // Resource name
-                location: place.location
+            logger.info(`Places API returned ${places.length} results for: "${businessName}"`);
+
+            // Score all results
+            const scoredPlaces = places.map(place => ({
+                place,
+                score: scorePlaceByAddress(place, address, null)
+            }));
+
+            // Sort by score descending
+            scoredPlaces.sort((a, b) => b.score - a.score);
+
+            // Log scores for debugging
+            scoredPlaces.forEach(({place, score}) => {
+                logger.debug(`Result: "${place.displayName?.text}" at ${place.formattedAddress} - Score: ${score}`);
             });
 
-            return {
-                name: place.displayName?.text,
-                address: place.formattedAddress,
-                latitude: place.location?.latitude,
-                longitude: place.location?.longitude,
-                hours: place.regularOpeningHours?.weekdayDescriptions || null,
-                photos: place.photos || [],
-                rating: place.rating,
-                userRatingCount: place.userRatingCount,
-                reviews: place.reviews || [],
-                editorialSummary: place.editorialSummary?.text,
-                found: true
-            };
+            // Take best result if score >= 80
+            const best = scoredPlaces[0];
+            if (best.score >= 80) {
+                logger.info(`Places API found match with score ${best.score}: "${best.place.displayName?.text}"`);
+
+                return {
+                    name: best.place.displayName?.text,
+                    address: best.place.formattedAddress,
+                    latitude: best.place.location?.latitude,
+                    longitude: best.place.location?.longitude,
+                    openingHours: best.place.regularOpeningHours?.weekdayDescriptions || null,
+                    photos: best.place.photos || [],
+                    rating: best.place.rating,
+                    userRatingCount: best.place.userRatingCount,
+                    reviews: best.place.reviews || [],
+                    editorialSummary: best.place.editorialSummary?.text,
+                    found: true,
+                    matchScore: best.score  // Include score for transparency
+                };
+            } else {
+                logger.warn(`Best match score ${best.score} below threshold (80) for: "${businessName}"`);
+                return { found: false };
+            }
         }
 
         logger.info(`No match found in Places API for: "${businessName}"`);
@@ -151,7 +259,7 @@ export const fetchGoogleAssets = async (placeId) => {
             reviews,
             rating: place.rating,
             user_rating_total: place.userRatingCount,
-            opening_hours: place.regularOpeningHours?.weekdayDescriptions || null
+            openingHours: place.regularOpeningHours?.weekdayDescriptions || null
         };
 
     } catch (error) {

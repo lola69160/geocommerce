@@ -3,7 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import logger from './logger.js';
-import { getBusinessDetails } from './server/services/placesService.js';
+import { getBusinessDetails, fetchGoogleAssets, scorePlaceByAddress } from './server/services/placesService.js';
+import { generateBusinessContext } from './server/services/enrichmentService.js';
+import { reconcileIdentity } from './server/services/identityService.js';
+import { analyzeLocality } from './server/services/intelligenceService.js';
 
 dotenv.config();
 
@@ -154,8 +157,8 @@ app.post('/api/get-business-location', async (req, res) => {
 
         if (result && result.found) {
             // Normaliser les horaires pour s'assurer qu'ils sont toujours un tableau ou null
-            if (result.hours && !Array.isArray(result.hours)) {
-                result.hours = null;
+            if (result.openingHours && !Array.isArray(result.openingHours)) {
+                result.openingHours = null;
             }
             res.json(result);
         } else {
@@ -168,6 +171,139 @@ app.post('/api/get-business-location', async (req, res) => {
             stack: error.stack
         });
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Endpoint pour enrichir les données d'un commerce (Photos, Avis, Contexte généré)
+ * POST /api/enrich-business
+ * Body: { businessName: string, address: string, activity: string }
+ */
+app.post('/api/enrich-business', async (req, res) => {
+    try {
+        const { businessName, address, activity } = req.body;
+
+        if (!businessName || !address) {
+            return res.status(400).json({
+                error: 'Missing required parameters: businessName and address'
+            });
+        }
+
+        logger.info('Enriching business data', { businessName, address });
+
+        // 1. Récupérer les détails Google Places (Photos, Avis, Summary)
+        const placesData = await getBusinessDetails(businessName, address);
+
+        let enrichedData = {
+            businessName,
+            address,
+            found: false
+        };
+
+        if (placesData && placesData.found) {
+            enrichedData = { ...enrichedData, ...placesData };
+
+            // 2. Générer le contexte avec Gemini
+            const context = await generateBusinessContext({
+                name: businessName,
+                address: address,
+                reviews: placesData.reviews,
+                editorialSummary: placesData.editorialSummary,
+                activity: activity
+            });
+
+            enrichedData.context = context;
+
+            // 3. Transformer les photos en URLs utilisables
+            if (placesData.photos && placesData.photos.length > 0) {
+                const PLACE_API_KEY = process.env.PLACE_API_KEY;
+                enrichedData.photoUrls = placesData.photos.slice(0, 2).map(photo =>
+                    `https://places.googleapis.com/v1/${photo.name}/media?key=${PLACE_API_KEY}&maxHeightPx=400&maxWidthPx=400`
+                );
+            }
+        } else {
+            // Si pas trouvé dans Places, on essaie quand même de générer un contexte basique si on a l'activité
+            if (activity) {
+                const context = await generateBusinessContext({
+                    name: businessName,
+                    address: address,
+                    activity: activity
+                });
+                enrichedData.context = context;
+            }
+        }
+
+        res.json(enrichedData);
+
+    } catch (error) {
+        logger.error('Error in enrich-business endpoint', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+/**
+ * Endpoint principal d'analyse complète d'un commerce (Orchestrateur)
+ * POST /api/analyze-business
+ * Body: { businessData: Object }
+ */
+app.post('/api/analyze-business', async (req, res) => {
+    try {
+        const { businessData } = req.body;
+
+        if (!businessData) {
+            return res.status(400).json({ error: 'Missing businessData' });
+        }
+
+        logger.info('Starting full analysis for business', { siret: businessData.siret });
+
+        // Module 1: Identity Reconciliation
+        const identity = await reconcileIdentity(businessData);
+        logger.info('Identity reconciled', identity);
+
+        // Module 2: Asset Recovery (including opening hours)
+        let assets = { photos: [], reviews: [], rating: null, user_rating_total: 0, openingHours: null };
+        if (identity.place_id) {
+            assets = await fetchGoogleAssets(identity.place_id);
+
+            // Normalize opening hours to ensure they're always an array or null
+            if (assets.openingHours && !Array.isArray(assets.openingHours)) {
+                assets.openingHours = null;
+            }
+        }
+
+        // Use opening hours from assets (already fetched with photos/reviews)
+        const openingHours = assets.openingHours || null;
+
+        // Module 3: Territorial Intelligence
+        const address = businessData.adresse || 'Adresse inconnue';
+        const city = businessData.adresse_ville || '';
+        const activity = businessData.activite_principale_libelle || 'Commerce';
+
+        const intelligence = await analyzeLocality(address, city, activity);
+
+        // Combine all data
+        const result = {
+            identity,
+            assets,
+            intelligence,
+            openData: {
+                ...businessData,
+                openingHours  // Add opening hours at root level for frontend access
+            }
+        };
+
+        res.json(result);
+
+    } catch (error) {
+        logger.error('Error in analyze-business endpoint', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ error: 'Internal server error during analysis' });
     }
 });
 
@@ -231,6 +367,126 @@ app.delete('/api/cart/:id', async (req, res) => {
     } catch (error) {
         logger.error('Error removing from cart', { error: error.message });
         res.status(500).json({ error: 'Failed to remove from cart' });
+    }
+});
+
+/**
+ * Endpoint pour recherche nearby par coordonnées GPS
+ * POST /api/places-nearby
+ * Body: { lat: number, lon: number, radius: number }
+ */
+app.post('/api/places-nearby', async (req, res) => {
+    try {
+        const { lat, lon, radius = 25, address } = req.body;
+
+        if (!lat || !lon) {
+            return res.status(400).json({ error: 'Missing lat or lon' });
+        }
+
+        const PLACE_API_KEY = process.env.PLACE_API_KEY;
+        if (!PLACE_API_KEY) {
+            logger.warn('PLACE_API_KEY not configured for nearby search');
+            return res.json({ found: false });
+        }
+
+        logger.info('Searching nearby places', { lat, lon, radius });
+
+        const response = await axios.post(
+            'https://places.googleapis.com/v1/places:searchNearby',
+            {
+                locationRestriction: {
+                    circle: {
+                        center: { latitude: lat, longitude: lon },
+                        radius: radius
+                    }
+                },
+                languageCode: 'fr',
+                maxResultCount: 5  // Request 5 results for scoring
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': PLACE_API_KEY,
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.regularOpeningHours,places.id'
+                }
+            }
+        );
+
+        if (response.data.places && response.data.places.length > 0) {
+            const places = response.data.places;
+
+            logger.info(`Nearby search returned ${places.length} results`);
+
+            // Score all results
+            const scoredPlaces = places.map(place => ({
+                place,
+                score: scorePlaceByAddress(place, address, { lat, lon })
+            }));
+
+            // Sort by score descending
+            scoredPlaces.sort((a, b) => b.score - a.score);
+
+            // Log scores for debugging
+            scoredPlaces.forEach(({place, score}) => {
+                logger.debug(`Nearby result: "${place.displayName?.text}" at ${place.formattedAddress} - Score: ${score}`);
+            });
+
+            // Take best result if score >= 80
+            const best = scoredPlaces[0];
+            if (best.score >= 80) {
+                logger.info(`Nearby match with score ${best.score}: "${best.place.displayName?.text}"`);
+
+                return res.json({
+                    found: true,
+                    name: best.place.displayName?.text,
+                    address: best.place.formattedAddress,
+                    latitude: best.place.location?.latitude,
+                    longitude: best.place.location?.longitude,
+                    openingHours: best.place.regularOpeningHours?.weekdayDescriptions || null,
+                    placeId: best.place.id,
+                    matchScore: best.score
+                });
+            } else {
+                logger.warn(`Best nearby score ${best.score} below threshold (80)`);
+                return res.json({ found: false });
+            }
+        }
+
+        logger.info('No nearby places found');
+        res.json({ found: false });
+    } catch (error) {
+        logger.error('Error in places-nearby endpoint', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+        });
+        res.json({ found: false });
+    }
+});
+
+/**
+ * Endpoint pour recherche texte avec validation d'adresse
+ * POST /api/places-search
+ * Body: { query: string, address: string }
+ */
+app.post('/api/places-search', async (req, res) => {
+    try {
+        const { query, address } = req.body;
+
+        if (!query) {
+            return res.status(400).json({ error: 'Missing query' });
+        }
+
+        logger.info('Searching places by text', { query, address });
+
+        const result = await getBusinessDetails(query, address);
+        res.json(result || { found: false });
+    } catch (error) {
+        logger.error('Error in places-search endpoint', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.json({ found: false });
     }
 });
 
