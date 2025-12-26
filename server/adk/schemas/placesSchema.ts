@@ -27,6 +27,25 @@ export const OpeningHoursSchema = z.object({
   weekdayDescriptions: z.array(z.string()).optional()
 });
 
+export const NameMatchDetailsSchema = z.object({
+  businessName: z.string(),
+  googleName: z.string(),
+  normalized: z.object({
+    business: z.string(),
+    google: z.string()
+  }),
+  matchType: z.enum(['exact', 'substring', 'partial', 'none']),
+  confidence: z.number()
+});
+
+export const TypeMatchDetailsSchema = z.object({
+  nafCode: z.string(),
+  expectedTypes: z.array(z.string()),
+  actualTypes: z.array(z.string()),
+  matchedTypes: z.array(z.string()),
+  matchStrength: z.enum(['exact', 'related', 'none'])
+});
+
 export const PlacesOutputSchema = z.object({
   found: z.boolean(),
   place_id: z.string().optional(),
@@ -44,13 +63,19 @@ export const PlacesOutputSchema = z.object({
   photos: z.array(PlacesPhotoSchema).optional(),
   openingHours: OpeningHoursSchema.optional(),
   types: z.array(z.string()).optional(),
-  matchScore: z.number().optional(), // Score multi-résultats (0-100)
+  matchScore: z.number().optional(), // Score multi-dimensionnel (0-150)
   matchDetails: z.object({
     streetNumberMatch: z.number(),
     zipCodeMatch: z.number(),
     distanceScore: z.number(),
-    streetNameScore: z.number()
+    streetNameScore: z.number(),
+    nameScore: z.number().optional(),
+    typeScore: z.number().optional(),
+    identityScore: z.number().optional()
   }).optional(),
+  nameMatchDetails: NameMatchDetailsSchema.optional(),
+  typeMatchDetails: TypeMatchDetailsSchema.optional(),
+  isAmbiguous: z.boolean().optional(),
   reason: z.string().optional(),
   error: z.boolean().optional(),
   message: z.string().optional()
@@ -59,3 +84,5 @@ export const PlacesOutputSchema = z.object({
 export type PlacesOutput = z.infer<typeof PlacesOutputSchema>;
 export type PlacesReview = z.infer<typeof PlacesReviewSchema>;
 export type PlacesPhoto = z.infer<typeof PlacesPhotoSchema>;
+export type NameMatchDetails = z.infer<typeof NameMatchDetailsSchema>;
+export type TypeMatchDetails = z.infer<typeof TypeMatchDetailsSchema>;

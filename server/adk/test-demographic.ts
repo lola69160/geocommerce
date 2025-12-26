@@ -2,7 +2,7 @@
  * Test DemographicAgent - Validation
  */
 
-import { DemographicAgent } from './agents/DemographicAgent.js';
+import { DemographicAgent } from './agents/demographicAgent.js';
 
 async function testDemographicAgent() {
   console.log('🧪 Testing DemographicAgent instantiation...\n');

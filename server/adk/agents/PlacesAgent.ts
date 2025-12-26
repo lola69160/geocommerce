@@ -55,11 +55,17 @@ WORKFLOW:
    - Priorité: business.enseigne OU business.nom_complet OU business.nom_raison_sociale
    - Adresse: preparation.normalizedAddress.full
    - Coordonnées: preparation.coordinates (pour scoring GPS)
+   - Code NAF: business.activite_principale OU business.code_naf (pour scoring type)
 
-2. Rechercher avec searchPlaces(businessName, address, coordinates)
-   - Système de scoring multi-résultats (seuil 80%)
-   - Si found=false, essayer sans nom (juste adresse) pour commerces sans enseigne
-   - searchPlaces retourne: { found, placeId, name, location, matchScore, ... }
+2. Rechercher avec searchPlaces() - SCORING MULTI-DIMENSIONNEL
+   - Lit automatiquement depuis state: business, preparation
+   - Scoring 0-150 points (adresse:100 + identité:50)
+     * Adresse (100pts): numéro rue (40) + code postal (30) + GPS (20) + nom rue (10)
+     * Identité (50pts): nom commercial (30) + type NAF (20)
+   - Seuil adaptatif: 90/150 avec NAF, 85/150 sans NAF
+   - Tie-breaking: identité > reviews > rating > premier résultat
+   - Détection ambiguïté: found=false si scores similaires ET <5 avis
+   - searchPlaces retourne: { found, placeId, matchScore, nameMatchDetails, typeMatchDetails, isAmbiguous, ... }
 
 3. ⚠️ OBLIGATOIRE si found=true:
    Tu DOIS IMMÉDIATEMENT appeler fetchAssets(placeId) après searchPlaces

@@ -1,6 +1,6 @@
 import { SequentialAgent } from '@google/adk';
 import { PreparationAgent } from './PreparationAgent.js';
-import { DemographicAgent } from './DemographicAgent.js';
+import { DemographicAgent } from './demographicAgent.js';
 import { PlacesAgent } from './PlacesAgent.js';
 import { PhotoAnalysisAgent } from './PhotoAnalysisAgent.js';
 import { CompetitorAgent } from './CompetitorAgent.js';
