@@ -621,8 +621,8 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 
 1. **DocumentExtractionAgent** ✅ - Extraction et classification de documents PDF
 2. **ComptableAgent** ✅ - Analyse comptable de niveau expert-comptable
-3. **ValorisationAgent** (à implémenter) - Valorisation de l'entreprise
-4. **ImmobilierAgent** (à implémenter) - Analyse immobilière professionnelle
+3. **ValorisationAgent** ✅ - Valorisation de l'entreprise (3 méthodes: EBE, CA, Patrimoniale)
+4. **ImmobilierAgent** ✅ - Analyse immobilière professionnelle (bail, murs, travaux)
 5. **FinancialValidationAgent** (à implémenter) - Validation de cohérence
 6. **FinancialReportAgent** (à implémenter) - Génération rapport HTML
 
@@ -791,6 +791,209 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 - ✅ Parsing JSON strings (pattern CLAUDE.md) dans tous les tools
 - ✅ Output injecté dans `state.comptable` via `outputKey`
 
+### 3. ValorisationAgent
+
+**Responsabilités** :
+- Valoriser le fonds de commerce par 3 méthodes reconnues en France
+- Calculer la valorisation par multiple d'EBE (méthode de référence)
+- Calculer la valorisation par % du CA (méthode complémentaire)
+- Calculer la valorisation patrimoniale (actif net + goodwill)
+- Synthétiser les 3 méthodes et recommander une fourchette
+- Comparer avec le prix affiché si fourni
+- Générer des arguments de négociation
+
+**Tools** (4) :
+- `calculateEbeValuationTool` - Valorisation par multiple d'EBE (2.5-4.5x selon secteur)
+- `calculateCaValuationTool` - Valorisation par % CA (40-110% selon secteur)
+- `calculatePatrimonialTool` - Valorisation patrimoniale (actif - dettes + goodwill)
+- `synthesizeValuationTool` - Synthèse des 3 méthodes avec pondération intelligente
+
+**Input** : `state.comptable` (SIG, ratios), `state.documentExtraction` (bilan), `state.businessInfo` (NAF)
+
+**Output** (`state.valorisation`) :
+```json
+{
+  "businessInfo": {
+    "name": "Commerce ABC",
+    "nafCode": "47.26Z",
+    "sector": "Tabac-presse"
+  },
+  "methodeEBE": {
+    "ebe_reference": 85000,
+    "ebe_retraite": 120000,
+    "retraitements": [
+      { "description": "Salaire gérant non rémunéré", "montant": 35000 }
+    ],
+    "coefficient_bas": 2.5,
+    "coefficient_median": 3.5,
+    "coefficient_haut": 4.5,
+    "valeur_basse": 300000,
+    "valeur_mediane": 420000,
+    "valeur_haute": 540000
+  },
+  "methodeCA": {
+    "ca_reference": 650000,
+    "pourcentage_median": 65,
+    "valeur_mediane": 422500
+  },
+  "methodePatrimoniale": {
+    "actif_net_comptable": 150000,
+    "goodwill": 127500,
+    "valeur_estimee": 297500
+  },
+  "synthese": {
+    "fourchette_basse": 315000,
+    "fourchette_mediane": 420000,
+    "fourchette_haute": 525000,
+    "methode_privilegiee": "EBE",
+    "valeur_recommandee": 420000
+  },
+  "comparaisonPrix": {
+    "prix_affiche": 480000,
+    "ecart_vs_estimation_pct": 14,
+    "appreciation": "sur-evalue",
+    "marge_negociation": 60000
+  },
+  "argumentsNegociation": {
+    "pour_acheteur": ["📊 Prix +14% vs estimation", "⚠️ Délai clients élevé"],
+    "pour_vendeur": ["📈 Croissance +12.5%", "✅ Score santé 72/100"]
+  },
+  "confidence": 75
+}
+```
+
+**Configuration** :
+- `server/adk/financial/config/valuationCoefficients.ts` - 10 secteurs NAF avec coefficients :
+  - Tabac (47.26) : 2.5-4.5x EBE, 50-80% CA
+  - Restaurant (56.10) : 2-4x EBE, 50-90% CA
+  - Boulangerie (10.71) : 3-5x EBE, 60-100% CA
+  - Pharmacie (47.73) : 4-7x EBE, 70-110% CA
+  - Bar/Café (56.30) : 2.5-4.5x EBE, 60-90% CA
+
+**Workflow** :
+1. `calculateEbeValuation()` → EBE moyen 3 ans + retraitements + multiples sectoriels
+2. `calculateCaValuation()` → CA moyen 3 ans × % sectoriels
+3. `calculatePatrimonial()` → Actif net + goodwill (1.5x EBE)
+4. `synthesizeValuation()` → Pondération (70% EBE + 20% CA + 10% Patrimoniale), comparaison prix, arguments négociation
+
+**Méthode privilégiée** (logique automatique) :
+- Si EBE ≤ 0 → **Patrimoniale**
+- Si actif net > 2x valeur EBE → **Patrimoniale**
+- Sinon → **EBE** (défaut)
+
+**Pattern ADK respecté** :
+- ✅ Tous les calculs dans les tools (exactitude garantie)
+- ✅ LLM interprète et génère justifications
+- ✅ Parsing JSON strings dans tous les tools
+- ✅ Output injecté dans `state.valorisation` via `outputKey`
+
+### 4. ImmobilierAgent
+
+**Responsabilités** :
+- Analyser le bail commercial (dates, loyer, clauses, conformité)
+- Estimer la valeur du droit au bail (propriété commerciale)
+- Analyser l'option d'achat des murs (rentabilité locative)
+- Estimer les travaux nécessaires (obligatoires et recommandés)
+- Générer un score immobilier global (0-100)
+- **Fonctionne en mode dégradé** si bail non fourni
+
+**Tools** (4) :
+- `analyzeBailTool` - Analyse bail commercial (extraction PDF ou saisie manuelle)
+- `estimateDroitBailTool` - Estimation droit au bail (méthode loyer 1-3 ans)
+- `analyzeMursTool` - Analyse option murs (rentabilité brute/nette)
+- `estimateTravauxTool` - Estimation travaux (obligatoire/recommandé selon état)
+
+**Input** : `state.documentExtraction` (bail PDF), `state.businessInfo` (localisation), `state.valorisation` (pour droit bail), `state.photo` (état local)
+
+**Output** (`state.immobilier`) :
+```json
+{
+  "dataStatus": {
+    "bail_disponible": true,
+    "source": "document"
+  },
+  "bail": {
+    "type": "commercial_3_6_9",
+    "loyer_annuel_hc": 18000,
+    "surface_m2": 80,
+    "loyer_m2_annuel": 225,
+    "duree_restante_mois": 48,
+    "loyer_marche_estime": 20000,
+    "ecart_marche_pct": -10,
+    "appreciation": "avantageux",
+    "droit_au_bail_estime": 45000,
+    "methode_calcul_dab": "2.5 années × 18 000 €"
+  },
+  "murs": {
+    "option_possible": true,
+    "prix_demande": 200000,
+    "prix_m2_zone": 2500,
+    "rentabilite_brute_pct": 9.0,
+    "rentabilite_nette_pct": 7.7,
+    "recommandation": "acheter",
+    "arguments": ["💰 Excellente rentabilité 9%", "✅ Sécurisation emplacement"]
+  },
+  "travaux": {
+    "etat_general": "moyen",
+    "conformite_erp": "a_verifier",
+    "travaux_obligatoires": [
+      {
+        "description": "Mise en conformité PMR",
+        "estimation_basse": 8000,
+        "estimation_haute": 15000,
+        "urgence": "12_mois"
+      }
+    ],
+    "budget_total": {
+      "obligatoire_bas": 10000,
+      "obligatoire_haut": 20000
+    }
+  },
+  "synthese": {
+    "score_immobilier": 72,
+    "points_forts": [
+      "💰 Loyer avantageux : 10% sous marché",
+      "📈 Rentabilité murs 9% : achat recommandé"
+    ],
+    "points_vigilance": [
+      "⚠️ Travaux obligatoires : 10-20k€"
+    ],
+    "recommandation": "Bail avantageux. Achat murs recommandé (9%). Budget travaux 12-24k€ à négocier."
+  }
+}
+```
+
+**Workflow** :
+1. `analyzeBail()` → Extraction PDF ou manual_input, calcul loyer/m², comparaison marché
+2. `estimateDroitBail()` → Coefficient 1-3 ans selon facteurs (loyer, durée, type)
+3. `analyzeMurs()` → Estimation prix/m² par zone, rentabilité brute/nette, recommandation
+4. `estimateTravaux()` → État général (depuis photos IA), travaux obligatoires/recommandés
+5. Synthèse → Score 0-100 (40 pts bail + 30 pts travaux + 30 pts murs)
+
+**Scoring Immobilier** (0-100) :
+- **Bail** (40 points) : Appreciation + durée restante + type
+- **Travaux** (30 points) : État général + conformité + budget
+- **Murs** (30 points) : Rentabilité + recommandation
+
+**Recommandation achat murs** :
+- Rentabilité brute ≥ 7% → **acheter**
+- Rentabilité brute 5-7% → **negocier**
+- Rentabilité brute < 5% → **louer**
+
+**Mode dégradé** (sans bail) :
+- `analyzeBail` → `bail_disponible: false`
+- `estimateDroitBail` → `droit_au_bail_estime: 0`
+- `analyzeMurs` → `option_possible: false`
+- `estimateTravaux` → ✅ Fonctionne normalement (utilise photos)
+- Score max 30 points (travaux uniquement)
+
+**Pattern ADK respecté** :
+- ✅ Tous les calculs dans les tools (garantit exactitude)
+- ✅ LLM interprète et génère synthèse
+- ✅ Parsing JSON strings dans tous les tools
+- ✅ Output injecté dans `state.immobilier` via `outputKey`
+- ✅ Résilience : Mode dégradé si bail non fourni
+
 ### Files Structure
 
 ```
@@ -798,33 +1001,52 @@ server/adk/financial/
 ├── index.ts                        # Entry point, exports agents
 ├── agents/
 │   ├── DocumentExtractionAgent.ts  # PDF extraction & classification
-│   └── ComptableAgent.ts           # Accounting analysis
+│   ├── ComptableAgent.ts           # Accounting analysis
+│   ├── ValorisationAgent.ts        # Business valuation (3 methods)
+│   └── ImmobilierAgent.ts          # Real estate analysis (lease, walls, works)
 ├── tools/
 │   ├── document/
 │   │   ├── extractPdfTool.ts       # PDF.js text extraction
 │   │   ├── classifyDocumentTool.ts # Gemini classification
 │   │   └── parseTablesTool.ts      # Table parsing
-│   └── accounting/
-│       ├── calculateSigTool.ts     # SIG calculation
-│       ├── calculateRatiosTool.ts  # Financial ratios
-│       ├── analyzeTrendsTool.ts    # Trends analysis
-│       ├── compareToSectorTool.ts  # Sector benchmarking
-│       └── calculateHealthScoreTool.ts # Health score
+│   ├── accounting/
+│   │   ├── calculateSigTool.ts     # SIG calculation
+│   │   ├── calculateRatiosTool.ts  # Financial ratios
+│   │   ├── analyzeTrendsTool.ts    # Trends analysis
+│   │   ├── compareToSectorTool.ts  # Sector benchmarking
+│   │   └── calculateHealthScoreTool.ts # Health score
+│   ├── valuation/
+│   │   ├── calculateEbeValuationTool.ts    # EBE multiple valuation
+│   │   ├── calculateCaValuationTool.ts     # Revenue % valuation
+│   │   ├── calculatePatrimonialTool.ts     # Patrimonial valuation
+│   │   └── synthesizeValuationTool.ts      # Synthesis + negotiation args
+│   └── property/
+│       ├── analyzeBailTool.ts              # Lease analysis
+│       ├── estimateDroitBailTool.ts        # Lease right estimation
+│       ├── analyzeMursTool.ts              # Walls purchase analysis
+│       └── estimateTravauxTool.ts          # Works estimation
 └── config/
-    └── sectorBenchmarks.ts         # NAF sector averages
+    ├── sectorBenchmarks.ts         # NAF sector averages (accounting)
+    └── valuationCoefficients.ts    # NAF valuation multiples (10 sectors)
 ```
 
 ### Usage Example
 
 ```javascript
-import { DocumentExtractionAgent, ComptableAgent } from './server/adk/financial';
-import { Runner, InMemorySessionService } from '@google/adk';
+import {
+  DocumentExtractionAgent,
+  ComptableAgent,
+  ValorisationAgent,
+  ImmobilierAgent
+} from './server/adk/financial';
+import { Runner, InMemorySessionService, SequentialAgent } from '@google/adk';
 
 // Input data
 const financialInput = {
   documents: [
     { filename: 'bilan-2024.pdf', filePath: '/path/to/bilan-2024.pdf' },
-    { filename: 'compte-resultat-2024.pdf', filePath: '/path/to/cr-2024.pdf' }
+    { filename: 'compte-resultat-2024.pdf', filePath: '/path/to/cr-2024.pdf' },
+    { filename: 'bail-commercial.pdf', filePath: '/path/to/bail.pdf' }  // Optionnel
   ],
   businessInfo: {
     name: 'Mon Commerce SARL',
@@ -834,12 +1056,14 @@ const financialInput = {
   }
 };
 
-// Create agents
+// Create orchestrator with 4 agents
 const orchestrator = new SequentialAgent({
   name: 'financialPipeline',
   agents: [
-    new DocumentExtractionAgent(),
-    new ComptableAgent()
+    new DocumentExtractionAgent(),  // 1. Extract PDF data
+    new ComptableAgent(),            // 2. Accounting analysis
+    new ValorisationAgent(),         // 3. Business valuation
+    new ImmobilierAgent()            // 4. Real estate analysis
   ]
 });
 
