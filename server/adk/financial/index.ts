@@ -12,13 +12,15 @@
  */
 
 import { SequentialAgent } from '@googleadk/agent';
+import { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
+import { ComptableAgent } from './agents/ComptableAgent';
 
 /**
  * Financial Orchestrator (placeholder)
  *
  * À implémenter: SequentialAgent orchestrant 6 agents
- * 1. DocumentExtractionAgent - Extraction données PDF
- * 2. ComptableAgent - Analyse comptable ratios
+ * 1. DocumentExtractionAgent - Extraction données PDF ✅ IMPLEMENTED
+ * 2. ComptableAgent - Analyse comptable ratios ✅ IMPLEMENTED
  * 3. ValorisationAgent - Valorisation entreprise
  * 4. ImmobilierAgent - Analyse immobilier pro
  * 5. FinancialValidationAgent - Validation cohérence
@@ -28,6 +30,10 @@ export function createFinancialOrchestrator(): SequentialAgent {
   // Placeholder - sera implémenté avec les agents
   throw new Error('FinancialOrchestrator not yet implemented - structure ready for agent implementation');
 }
+
+// Export agents
+export { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
+export { ComptableAgent } from './agents/ComptableAgent';
 
 // Export types
 export type FinancialInput = {

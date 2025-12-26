@@ -609,6 +609,258 @@ The codebase includes specific handling for macOS vs Windows differences:
 - 14-day retention, 20MB max file size
 - Console output in development, file-only in production
 
+## Financial Pipeline Architecture (ADK)
+
+SearchCommerce intègre un **pipeline d'analyse financière autonome** basé sur ADK pour l'évaluation comptable d'entreprises à partir de documents PDF (bilans, liasses fiscales, baux).
+
+📁 **Module**: `server/adk/financial/`
+
+### Structure du Pipeline
+
+Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisés** :
+
+1. **DocumentExtractionAgent** ✅ - Extraction et classification de documents PDF
+2. **ComptableAgent** ✅ - Analyse comptable de niveau expert-comptable
+3. **ValorisationAgent** (à implémenter) - Valorisation de l'entreprise
+4. **ImmobilierAgent** (à implémenter) - Analyse immobilière professionnelle
+5. **FinancialValidationAgent** (à implémenter) - Validation de cohérence
+6. **FinancialReportAgent** (à implémenter) - Génération rapport HTML
+
+### 1. DocumentExtractionAgent
+
+**Responsabilités** :
+- Extraire le texte brut des PDF avec `pdfjs-dist`
+- Classifier automatiquement les documents (bilan, compte de résultat, liasse fiscale, bail)
+- Parser les tableaux comptables
+- Structurer les données en JSON
+
+**Tools** (3) :
+- `extractPdfTool` - Extraction texte PDF (lit depuis `state.documents`)
+- `classifyDocumentTool` - Classification Gemini (6 types de documents)
+- `parseTablesTool` - Parsing des tableaux comptables
+
+**Input** : `state.documents[]` - Liste des fichiers PDF avec `{ filename, filePath ou content }`
+
+**Output** (`state.documentExtraction`) :
+```json
+{
+  "documents": [
+    {
+      "filename": "bilan-2024.pdf",
+      "documentType": "bilan",
+      "year": 2024,
+      "confidence": 0.95,
+      "extractedData": {
+        "raw_text": "...",
+        "tables": [
+          {
+            "headers": ["ACTIF", "2024", "2023"],
+            "rows": [["Immobilisations", "50000", "45000"]],
+            "caption": "Bilan Actif"
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "total_documents": 2,
+    "years_covered": [2024, 2023],
+    "missing_documents": ["compte_resultat_2024"]
+  }
+}
+```
+
+### 2. ComptableAgent
+
+**Responsabilités** :
+- Calculer les Soldes Intermédiaires de Gestion (SIG) pour chaque année
+- Calculer 11 ratios financiers clés (rentabilité, liquidité, solvabilité)
+- Analyser l'évolution sur la période (tendances CA/EBE/RN)
+- Comparer aux benchmarks sectoriels (8 secteurs NAF couverts)
+- Générer un score de santé financière global (0-100)
+- Identifier les alertes et points de vigilance
+
+**Tools** (5) :
+- `calculateSigTool` - Calcule 14 indicateurs SIG par année
+- `calculateRatiosTool` - Calcule 11 ratios financiers (dernière année)
+- `analyzeTrendsTool` - Analyse évolution CA/EBE/RN
+- `compareToSectorTool` - Compare 9 ratios aux benchmarks sectoriels
+- `calculateHealthScoreTool` - Score 0-100 (4 dimensions : rentabilité, liquidité, solvabilité, activité)
+
+**Input** : `state.documentExtraction` - Documents comptables parsés
+
+**Output** (`state.comptable`) :
+```json
+{
+  "analysisDate": "2025-12-26",
+  "yearsAnalyzed": [2024, 2023, 2022],
+
+  "sig": {
+    "2024": {
+      "chiffre_affaires": 500000,
+      "marge_commerciale": 200000,
+      "valeur_ajoutee": 180000,
+      "ebe": 85000,
+      "resultat_exploitation": 70000,
+      "resultat_net": 55000
+    }
+  },
+
+  "evolution": {
+    "ca_evolution_pct": 12.5,
+    "ebe_evolution_pct": 8.3,
+    "rn_evolution_pct": 15.2,
+    "tendance": "croissance",
+    "commentaire": "Croissance soutenue sur 2022-2024"
+  },
+
+  "ratios": {
+    "marge_brute_pct": 40.0,
+    "marge_ebe_pct": 17.0,
+    "marge_nette_pct": 11.0,
+    "taux_va_pct": 36.0,
+    "rotation_stocks_jours": 25,
+    "delai_clients_jours": 30,
+    "delai_fournisseurs_jours": 45,
+    "bfr_jours_ca": 10,
+    "taux_endettement_pct": 85.0,
+    "capacite_autofinancement": 70000
+  },
+
+  "benchmark": {
+    "nafCode": "47.11",
+    "sector": "Commerce en magasin non spécialisé",
+    "comparisons": [
+      {
+        "ratio": "Marge brute",
+        "value": 40.0,
+        "sectorAverage": 22.0,
+        "position": "superieur",
+        "deviation_pct": 81.8
+      }
+    ]
+  },
+
+  "alertes": [
+    {
+      "level": "critical",
+      "category": "tresorerie",
+      "message": "Délai clients élevé (60 jours vs 30 secteur)",
+      "impact": "Risque de tension de trésorerie",
+      "recommendation": "Mettre en place relance systématique"
+    }
+  ],
+
+  "healthScore": {
+    "overall": 72,
+    "breakdown": {
+      "rentabilite": 65,
+      "liquidite": 70,
+      "solvabilite": 80,
+      "activite": 85
+    },
+    "interpretation": "Bonne santé financière"
+  },
+
+  "synthese": "L'entreprise affiche une croissance solide (+12.5% CA)..."
+}
+```
+
+**Configuration** :
+- `server/adk/financial/config/sectorBenchmarks.ts` - 8 secteurs NAF avec ratios moyens :
+  - 47.11 : Supermarchés
+  - 10.71 : Boulangerie-pâtisserie
+  - 56.10 : Restauration traditionnelle
+  - 56.30 : Bar, café
+  - 96.02 : Coiffure
+  - 47.7 : Commerce détail habillement
+  - 47.73 : Pharmacie
+  - 55.10 : Hôtellerie
+
+**Workflow** :
+1. `calculateSig()` → Lit `state.documentExtraction`, calcule SIG par année
+2. `calculateRatios()` → Calcule ratios à partir des SIG (dernière année)
+3. `analyzeTrends()` → Analyse évolution temporelle
+4. `compareToSector(nafCode)` → Compare aux benchmarks (lit NAF depuis `state.businessInfo`)
+5. `calculateHealthScore()` → Score global basé sur ratios et évolution
+6. Gemini interprète et génère alertes + synthèse
+
+**Pattern ADK respecté** :
+- ✅ Tous les calculs dans les tools (pas par le LLM) pour garantir exactitude
+- ✅ LLM interprète les résultats et génère commentaires/alertes
+- ✅ Parsing JSON strings (pattern CLAUDE.md) dans tous les tools
+- ✅ Output injecté dans `state.comptable` via `outputKey`
+
+### Files Structure
+
+```
+server/adk/financial/
+├── index.ts                        # Entry point, exports agents
+├── agents/
+│   ├── DocumentExtractionAgent.ts  # PDF extraction & classification
+│   └── ComptableAgent.ts           # Accounting analysis
+├── tools/
+│   ├── document/
+│   │   ├── extractPdfTool.ts       # PDF.js text extraction
+│   │   ├── classifyDocumentTool.ts # Gemini classification
+│   │   └── parseTablesTool.ts      # Table parsing
+│   └── accounting/
+│       ├── calculateSigTool.ts     # SIG calculation
+│       ├── calculateRatiosTool.ts  # Financial ratios
+│       ├── analyzeTrendsTool.ts    # Trends analysis
+│       ├── compareToSectorTool.ts  # Sector benchmarking
+│       └── calculateHealthScoreTool.ts # Health score
+└── config/
+    └── sectorBenchmarks.ts         # NAF sector averages
+```
+
+### Usage Example
+
+```javascript
+import { DocumentExtractionAgent, ComptableAgent } from './server/adk/financial';
+import { Runner, InMemorySessionService } from '@google/adk';
+
+// Input data
+const financialInput = {
+  documents: [
+    { filename: 'bilan-2024.pdf', filePath: '/path/to/bilan-2024.pdf' },
+    { filename: 'compte-resultat-2024.pdf', filePath: '/path/to/cr-2024.pdf' }
+  ],
+  businessInfo: {
+    name: 'Mon Commerce SARL',
+    siret: '12345678900012',
+    nafCode: '47.11F',
+    activity: 'Supermarché'
+  }
+};
+
+// Create agents
+const orchestrator = new SequentialAgent({
+  name: 'financialPipeline',
+  agents: [
+    new DocumentExtractionAgent(),
+    new ComptableAgent()
+  ]
+});
+
+// Run pipeline
+const runner = new Runner({
+  appName: 'financial',
+  agent: orchestrator,
+  sessionService: new InMemorySessionService()
+});
+
+for await (const event of runner.runAsync({
+  userId: 'user1',
+  sessionId: 'session1',
+  stateDelta: financialInput
+})) {
+  if (event.actions?.stateDelta) {
+    console.log('State updated:', Object.keys(event.actions.stateDelta));
+  }
+}
+```
+
 ## Testing Considerations
 
 When testing or debugging:
