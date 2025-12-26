@@ -16,6 +16,7 @@ import { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
 import { ComptableAgent } from './agents/ComptableAgent';
 import { ValorisationAgent } from './agents/ValorisationAgent';
 import { ImmobilierAgent } from './agents/ImmobilierAgent';
+import { FinancialValidationAgent } from './agents/FinancialValidationAgent';
 
 /**
  * Financial Orchestrator (placeholder)
@@ -25,7 +26,7 @@ import { ImmobilierAgent } from './agents/ImmobilierAgent';
  * 2. ComptableAgent - Analyse comptable ratios ✅ IMPLEMENTED
  * 3. ValorisationAgent - Valorisation entreprise ✅ IMPLEMENTED
  * 4. ImmobilierAgent - Analyse immobilier pro ✅ IMPLEMENTED
- * 5. FinancialValidationAgent - Validation cohérence
+ * 5. FinancialValidationAgent - Validation cohérence ✅ IMPLEMENTED
  * 6. FinancialReportAgent - Génération rapport HTML
  */
 export function createFinancialOrchestrator(): SequentialAgent {
@@ -38,6 +39,7 @@ export { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
 export { ComptableAgent } from './agents/ComptableAgent';
 export { ValorisationAgent } from './agents/ValorisationAgent';
 export { ImmobilierAgent } from './agents/ImmobilierAgent';
+export { FinancialValidationAgent } from './agents/FinancialValidationAgent';
 
 // Export types
 export type FinancialInput = {
