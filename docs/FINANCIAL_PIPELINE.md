@@ -13,7 +13,7 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 3. **ValorisationAgent** ✅ - Valorisation de l'entreprise (3 méthodes: EBE, CA, Patrimoniale)
 4. **ImmobilierAgent** ✅ - Analyse immobilière professionnelle (bail, murs, travaux)
 5. **FinancialValidationAgent** ✅ - Validation croisée et contrôle qualité des analyses
-6. **FinancialReportAgent** (à implémenter) - Génération rapport HTML
+6. **FinancialReportAgent** ✅ - Génération rapport HTML professionnel
 
 ## 1. DocumentExtractionAgent
 
@@ -584,17 +584,281 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 - ✅ Temperature 0.2 (validation rigoureuse, low creativity)
 - ✅ CRITIQUE pour fiabilité : bloque le pipeline si score < 40
 
+## 6. FinancialReportAgent
+
+### Responsabilités
+- Générer les configurations Chart.js pour les graphiques (4 charts)
+- Générer le HTML complet du rapport (7 sections professionnelles)
+- Sauvegarder le rapport dans `data/financial-reports/`
+- Rapport 100% AUTONOME (indépendant du Pipeline Stratégique)
+- Style CSS professionnel responsive (print-ready)
+
+### Tools (3)
+- `generateChartsTool` - Génère 4 configurations Chart.js (évolution, valorisation, santé, confiance)
+- `generateFinancialHtmlTool` - Génère HTML complet avec 7 sections
+- `saveFinancialReportTool` - Sauvegarde dans `data/financial-reports/`
+
+### Input
+`state.documentExtraction`, `state.comptable`, `state.valorisation`, `state.immobilier`, `state.financialValidation`, `state.businessInfo`
+
+### Output (`state.financialReport`)
+```json
+{
+  "generated": true,
+  "filepath": "C:\\AI\\searchcommerce\\data\\financial-reports\\financial-report-12345678900012-2025-12-26.html",
+  "filename": "financial-report-12345678900012-2025-12-26.html",
+  "size_bytes": 125000,
+  "sections_included": [
+    "cover_page",
+    "executive_summary",
+    "accounting_analysis",
+    "valuation",
+    "real_estate",
+    "validation",
+    "annexes"
+  ],
+  "generatedAt": "2025-12-26T14:30:00.000Z"
+}
+```
+
+### Workflow
+1. `generateCharts()` → 4 configurations Chart.js (evolutionChart, valorisationChart, healthGauge, confidenceRadar)
+2. `generateFinancialHtml({ charts })` → HTML complet avec 7 sections + CSS + charts intégrés
+3. `saveFinancialReport({ html, businessId, sections })` → Sauvegarde fichier dans data/financial-reports/
+
+### 7 Sections du rapport HTML
+
+#### 1. 📋 Page de Garde
+- Nom du commerce
+- Date d'analyse
+- "Analyse Financière - Due Diligence"
+- Badge score de confiance
+
+#### 2. 📊 Synthèse Exécutive
+- **Verdict** : FAVORABLE / FAVORABLE AVEC RÉSERVES / DÉFAVORABLE (calcul automatique)
+- Fourchette valorisation (min/max/recommandée)
+- 3 scores clés en cards (santé, confiance, marge EBE)
+- ✅ 3 points forts financiers
+- ⚠️ 3 points de vigilance
+
+#### 3. 📈 Analyse Comptable
+- Tableau SIG sur 3 ans (14 indicateurs)
+- Graphique évolution CA/EBE/RN (Chart.js line chart)
+- Tableau ratios clés (11 ratios)
+- Gauge score santé (Chart.js doughnut)
+- Comparaison sectorielle (tableau benchmarks)
+- Alertes détaillées (critical/warning/info)
+
+#### 4. 💰 Valorisation du Fonds
+- Graphique fourchettes (Chart.js horizontal bar)
+- Tableau comparatif 3 méthodes (EBE, CA, Patrimoniale)
+- Synthèse valorisation retenue (méthode privilégiée)
+- Arguments de négociation (pour acheteur / pour vendeur)
+
+#### 5. 🏠 Analyse Immobilière
+- Tableau synthèse bail commercial
+- Analyse loyer vs marché
+- Estimation droit au bail
+- Option rachat murs (si applicable)
+- Budget travaux (obligatoire/recommandé)
+- Score immobilier global
+
+#### 6. ✅ Validation & Fiabilité
+- Tableau score de confiance global + breakdown
+- Radar confiance par section (Chart.js)
+- Qualité des données (complétude, fiabilité, fraîcheur)
+- Anomalies détectées avec severity
+- Vérifications recommandées par priorité (1=urgent, 2=important, 3=souhaitable)
+
+#### 7. 📝 Annexes
+- Liste documents analysés
+- Hypothèses de calcul
+- Glossaire termes comptables
+
+### Graphiques Chart.js (4)
+
+1. **Evolution Chart** (Line chart)
+   - Évolution CA/EBE/RN sur 3 ans
+   - 3 courbes avec fill area
+   - Tension 0.4 pour smoothing
+
+2. **Valorisation Chart** (Horizontal bar chart)
+   - Fourchettes par méthode (min/median/max)
+   - 3 datasets (basse/médiane/haute)
+   - Couleurs : rouge/bleu/vert
+
+3. **Health Gauge** (Doughnut chart)
+   - Score 0-100 en semi-cercle (180°)
+   - Couleur dynamique selon score (rouge/orange/bleu/vert)
+   - Pas de légende
+
+4. **Confidence Radar** (Radar chart)
+   - 4 axes (extraction, comptabilité, valorisation, immobilier)
+   - Score 0-100 par axe
+   - Fill area bleu transparent
+
+### Style CSS Professionnel
+- **Couleurs** :
+  - Vert (#10b981) : Positif, favorable
+  - Orange (#f59e0b) : Attention, réserves
+  - Rouge (#ef4444) : Alerte, défavorable
+  - Bleu (#0066cc) : Neutre, information
+- **Responsive** : Grid layout adaptatif
+- **Print-ready** : Page breaks automatiques
+- **Charts** : Intégrés via Chart.js CDN
+- **Composants** : Badges, alertes, tableaux stylisés
+
+### Verdict automatique
+```javascript
+if (healthScore >= 70 && confidenceScore >= 70) {
+  verdict = 'FAVORABLE';
+} else if (healthScore >= 50 && confidenceScore >= 50) {
+  verdict = 'FAVORABLE AVEC RÉSERVES';
+} else {
+  verdict = 'DÉFAVORABLE';
+}
+```
+
+### Pattern ADK respecté
+- ✅ Génération HTML/Charts dans les tools (pas par le LLM)
+- ✅ LLM orchestre les tools dans l'ordre
+- ✅ Parsing JSON strings dans tous les tools
+- ✅ Output injecté dans `state.financialReport` via `outputKey`
+- ✅ Temperature 0.3 (créativité modérée pour présentation)
+- ✅ Model: gemini-2.0-flash-exp (rapide et efficace)
+
+## 7. FinancialOrchestrator
+
+### Architecture
+SequentialAgent orchestrant 6 agents dans l'ordre séquentiel :
+
+```
+FinancialOrchestrator (SequentialAgent)
+├── 1. DocumentExtractionAgent
+│   └── Output: state.documentExtraction
+├── 2. ComptableAgent
+│   └── Output: state.comptable
+├── 3. ValorisationAgent
+│   └── Output: state.valorisation
+├── 4. ImmobilierAgent
+│   └── Output: state.immobilier
+├── 5. FinancialValidationAgent
+│   └── Output: state.financialValidation
+└── 6. FinancialReportAgent
+    └── Output: state.financialReport
+```
+
+### Pattern ADK (État de l'art)
+- ✅ SequentialAgent direct comme root agent (pas de wrapper LlmAgent)
+- ✅ Pas de handoff inutile (évite UNKNOWN_ERROR)
+- ✅ Runner créé au niveau application (endpoint Express)
+- ✅ State flow automatique via outputKey de chaque agent
+- ✅ Auto-parsing JSON strings dans l'endpoint
+
+### Input State
+```json
+{
+  "documents": [
+    { "filename": "bilan-2024.pdf", "content": Buffer, "type": "application/pdf" }
+  ],
+  "businessInfo": {
+    "name": "Commerce XYZ",
+    "siret": "12345678901234",
+    "nafCode": "47.26Z",
+    "activity": "Tabac / Presse"
+  },
+  "options": {
+    "prixAffiche": 150000,
+    "includeImmobilier": true
+  }
+}
+```
+
+### Output State (final)
+```json
+{
+  "documentExtraction": { documents: [...], summary: {...} },
+  "comptable": { sig: {...}, ratios: {...}, healthScore: {...} },
+  "valorisation": { methodes: {...}, synthese: {...} },
+  "immobilier": { bail: {...}, murs: {...}, travaux: {...} },
+  "financialValidation": { coherenceChecks: [...], confidenceScore: {...} },
+  "financialReport": { generated: true, filepath: "...", filename: "..." }
+}
+```
+
+### Endpoint API
+
+**POST `/api/analyze-financial`**
+
+Request:
+```json
+{
+  "documents": [
+    {
+      "filename": "bilan-2024.pdf",
+      "content": "data:application/pdf;base64,JVBERi0x...",
+      "type": "application/pdf"
+    }
+  ],
+  "businessInfo": {
+    "name": "Commerce XYZ",
+    "siret": "12345678901234",
+    "nafCode": "47.26Z",
+    "activity": "Tabac / Presse"
+  },
+  "options": {
+    "prixAffiche": 150000,
+    "includeImmobilier": true
+  }
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "reportPath": "C:\\AI\\searchcommerce\\data\\financial-reports\\financial-report-12345678901234-2025-12-26.html",
+  "reportFilename": "financial-report-12345678901234-2025-12-26.html",
+  "summary": {
+    "healthScore": 72,
+    "valorisation": {
+      "min": 120000,
+      "median": 145000,
+      "max": 170000
+    },
+    "verdict": "FAVORABLE",
+    "confidence": 85
+  },
+  "executionTime": 45000,
+  "agentsExecuted": 6,
+  "state": {
+    "comptable": { "healthScore": {...}, "evolution": {...} },
+    "valorisation": { "synthese": {...} },
+    "validation": { "confidenceScore": {...} }
+  }
+}
+```
+
+### Logging
+- Auto-parsing JSON strings → objects
+- Log détaillé par agent (start/end)
+- Log des state updates (keys + sample data)
+- Durée d'exécution totale
+
 ## Files Structure
 
 ```
 server/adk/financial/
-├── index.ts                        # Entry point, exports agents
+├── index.ts                        # Entry point, exports agents + orchestrator
+├── orchestrator/
+│   └── FinancialOrchestrator.ts    # SequentialAgent orchestrating 6 agents
 ├── agents/
 │   ├── DocumentExtractionAgent.ts  # PDF extraction & classification
 │   ├── ComptableAgent.ts           # Accounting analysis
 │   ├── ValorisationAgent.ts        # Business valuation (3 methods)
 │   ├── ImmobilierAgent.ts          # Real estate analysis (lease, walls, works)
-│   └── FinancialValidationAgent.ts # Cross-validation & quality control
+│   ├── FinancialValidationAgent.ts # Cross-validation & quality control
+│   └── FinancialReportAgent.ts     # HTML report generation (7 sections)
 ├── tools/
 │   ├── document/
 │   │   ├── extractPdfTool.ts       # PDF.js text extraction
@@ -616,10 +880,14 @@ server/adk/financial/
 │   │   ├── estimateDroitBailTool.ts        # Lease right estimation
 │   │   ├── analyzeMursTool.ts              # Walls purchase analysis
 │   │   └── estimateTravauxTool.ts          # Works estimation
-│   └── validation/
-│       ├── crossValidateTool.ts            # Cross-validation checks (6 checks)
-│       ├── detectAnomaliesTool.ts          # Anomaly detection (6 types)
-│       └── assessDataQualityTool.ts        # Data quality assessment + confidence score
+│   ├── validation/
+│   │   ├── crossValidateTool.ts            # Cross-validation checks (6 checks)
+│   │   ├── detectAnomaliesTool.ts          # Anomaly detection (6 types)
+│   │   └── assessDataQualityTool.ts        # Data quality assessment + confidence score
+│   └── report/
+│       ├── generateChartsTool.ts           # Chart.js configs (4 charts)
+│       ├── generateFinancialHtmlTool.ts    # HTML generation (7 sections)
+│       └── saveFinancialReportTool.ts      # File save to data/financial-reports/
 └── config/
     ├── sectorBenchmarks.ts         # NAF sector averages (accounting)
     └── valuationCoefficients.ts    # NAF valuation multiples (10 sectors)
@@ -627,57 +895,133 @@ server/adk/financial/
 
 ## Usage Example
 
-```javascript
-import {
-  DocumentExtractionAgent,
-  ComptableAgent,
-  ValorisationAgent,
-  ImmobilierAgent,
-  FinancialValidationAgent
-} from './server/adk/financial';
-import { Runner, InMemorySessionService, SequentialAgent } from '@google/adk';
+### Client-side Usage (API Call)
 
-// Input data
-const financialInput = {
-  documents: [
-    { filename: 'bilan-2024.pdf', filePath: '/path/to/bilan-2024.pdf' },
-    { filename: 'compte-resultat-2024.pdf', filePath: '/path/to/cr-2024.pdf' },
-    { filename: 'bail-commercial.pdf', filePath: '/path/to/bail.pdf' }  // Optionnel
-  ],
-  businessInfo: {
-    name: 'Mon Commerce SARL',
-    siret: '12345678900012',
-    nafCode: '47.11F',
-    activity: 'Supermarché'
-  }
+```javascript
+// Convert PDF file to base64
+const convertFileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 };
 
-// Create orchestrator with 5 agents
-const orchestrator = new SequentialAgent({
-  name: 'financialPipeline',
-  agents: [
-    new DocumentExtractionAgent(),   // 1. Extract PDF data
-    new ComptableAgent(),             // 2. Accounting analysis
-    new ValorisationAgent(),          // 3. Business valuation
-    new ImmobilierAgent(),            // 4. Real estate analysis
-    new FinancialValidationAgent()    // 5. Cross-validation & quality control
-  ]
+// Prepare documents (from file input)
+const pdfFiles = document.getElementById('pdfInput').files;
+const documents = await Promise.all(
+  Array.from(pdfFiles).map(async (file) => ({
+    filename: file.name,
+    content: await convertFileToBase64(file),
+    type: 'application/pdf'
+  }))
+);
+
+// Call API
+const response = await fetch('http://localhost:3001/api/analyze-financial', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    documents,
+    businessInfo: {
+      name: 'Mon Commerce SARL',
+      siret: '12345678900012',
+      nafCode: '47.11F',
+      activity: 'Supermarché'
+    },
+    options: {
+      prixAffiche: 150000,
+      includeImmobilier: true
+    }
+  })
 });
 
-// Run pipeline
-const runner = new Runner({
-  appName: 'financial',
-  agent: orchestrator,
-  sessionService: new InMemorySessionService()
-});
+const result = await response.json();
 
-for await (const event of runner.runAsync({
-  userId: 'user1',
-  sessionId: 'session1',
-  stateDelta: financialInput
-})) {
-  if (event.actions?.stateDelta) {
-    console.log('State updated:', Object.keys(event.actions.stateDelta));
-  }
+if (result.success) {
+  console.log('Rapport généré:', result.reportFilename);
+  console.log('Score santé:', result.summary.healthScore);
+  console.log('Valorisation:', result.summary.valorisation);
+  console.log('Verdict:', result.summary.verdict);
+  console.log('Confiance:', result.summary.confidence);
+
+  // Download report
+  window.open(`/data/financial-reports/${result.reportFilename}`, '_blank');
 }
+```
+
+### Server-side Setup (Express Endpoint)
+
+The endpoint is already configured in `server.js`:
+
+```javascript
+import { createFinancialOrchestrator } from './server/adk/financial/index.js';
+import { Runner, InMemorySessionService } from '@google/adk';
+
+app.post('/api/analyze-financial', async (req, res) => {
+  const { documents, businessInfo, options } = req.body;
+
+  // Convert base64 to Buffer
+  const processedDocuments = documents.map(doc => {
+    if (doc.content && typeof doc.content === 'string') {
+      const base64Data = doc.content.replace(/^data:application\/pdf;base64,/, '');
+      return { ...doc, content: Buffer.from(base64Data, 'base64') };
+    }
+    return doc;
+  });
+
+  // Create orchestrator
+  const orchestrator = createFinancialOrchestrator();
+
+  // Create runner
+  const runner = new Runner({
+    appName: 'financial',
+    agent: orchestrator,
+    sessionService: new InMemorySessionService()
+  });
+
+  // Run pipeline
+  const userId = `user-${Date.now()}`;
+  const sessionId = `session-${Date.now()}`;
+
+  for await (const event of runner.runAsync({
+    userId,
+    sessionId,
+    stateDelta: {
+      documents: processedDocuments,
+      businessInfo,
+      options
+    }
+  })) {
+    // Auto-parse JSON strings to objects
+    if (event.actions?.stateDelta) {
+      Object.keys(event.actions.stateDelta).forEach(key => {
+        const value = event.actions.stateDelta[key];
+        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+          try {
+            event.actions.stateDelta[key] = JSON.parse(value);
+          } catch (e) {
+            // Keep as string if parsing fails
+          }
+        }
+      });
+    }
+  }
+
+  // Return success with report path and summary
+  res.json({
+    success: true,
+    reportPath: finalState.financialReport.filepath,
+    reportFilename: finalState.financialReport.filename,
+    summary: {
+      healthScore: finalState.comptable.healthScore.overall,
+      valorisation: finalState.valorisation.synthese,
+      verdict: finalState.financialReport.verdict,
+      confidence: finalState.financialValidation.confidenceScore.overall
+    },
+    executionTime,
+    agentsExecuted: 6
+  });
+});
 ```

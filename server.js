@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import multer from 'multer';
 import { Runner, InMemorySessionService } from '@google/adk';
 import logger from './logger.js';
 import { getBusinessDetails, fetchGoogleAssets, scorePlaceByAddress } from './server/services/placesService.js';
@@ -11,6 +13,7 @@ import { generateBusinessContext } from './server/services/enrichmentService.js'
 import { reconcileIdentity } from './server/services/identityService.js';
 import { analyzeLocality } from './server/services/intelligenceService.js';
 import { createMainOrchestrator } from './server/adk/agents/MainOrchestrator.js';
+import { createFinancialOrchestrator } from './server/adk/financial/index.js';
 
 dotenv.config();
 
@@ -20,6 +23,52 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Configuration Multer pour upload documents PDF
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DOCUMENTS_DIR = path.join(__dirname, 'data', 'documents');
+const TEMP_DIR = path.join(__dirname, 'data', 'documents', 'temp');
+
+// Créer le répertoire temporaire au démarrage
+await fs.mkdir(TEMP_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+        // Sauvegarder temporairement dans le dossier temp
+        // Le fichier sera déplacé vers le bon dossier après l'upload
+        cb(null, TEMP_DIR);
+    },
+    filename: (req, file, cb) => {
+        const sanitized = file.originalname
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/_{2,}/g, '_');
+
+        const timestamp = Date.now();
+        const filename = `${timestamp}_${sanitized}`;
+        cb(null, filename);
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    const allowedMimes = ['application/pdf'];
+    const allowedExts = ['.pdf'];
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Seuls les fichiers PDF sont autorisés'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10 MB
+    }
+});
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -136,7 +185,7 @@ Format de réponse attendu :
 });
 
 // Storage Service Imports
-import { getNotes, saveNote, getCart, addToCart, removeFromCart } from './server/services/storageService.js';
+import { getNotes, saveNote, getCart, addToCart, removeFromCart, getDocuments, saveDocument, deleteDocument, getBusinessDocuments } from './server/services/storageService.js';
 
 // ... existing endpoints ...
 
@@ -371,6 +420,141 @@ app.delete('/api/cart/:id', async (req, res) => {
     } catch (error) {
         logger.error('Error removing from cart', { error: error.message });
         res.status(500).json({ error: 'Failed to remove from cart' });
+    }
+});
+
+// ============================================
+// DOCUMENTS ENDPOINTS
+// ============================================
+
+app.get('/api/documents/:siret', async (req, res) => {
+    try {
+        const { siret } = req.params;
+        const documents = await getBusinessDocuments(siret);
+        res.json(documents);
+    } catch (error) {
+        logger.error('Error fetching documents', { error: error.message, siret: req.params.siret });
+        res.status(500).json({ error: 'Erreur lors de la récupération des documents' });
+    }
+});
+
+app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Aucun fichier fourni' });
+        }
+
+        const { siret, businessName } = req.body;
+
+        if (!siret) {
+            await fs.unlink(req.file.path);
+            return res.status(400).json({ error: 'SIRET manquant' });
+        }
+
+        // Créer le répertoire du commerce
+        const businessDir = path.join(DOCUMENTS_DIR, siret);
+        await fs.mkdir(businessDir, { recursive: true });
+
+        // Déplacer le fichier du dossier temp vers le dossier du commerce
+        const finalPath = path.join(businessDir, req.file.filename);
+        await fs.rename(req.file.path, finalPath);
+
+        const documentMetadata = {
+            id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            filename: req.file.originalname,
+            storedFilename: req.file.filename,
+            path: finalPath,
+            size: req.file.size,
+            mimeType: req.file.mimetype,
+            uploadDate: new Date().toISOString(),
+            uploadedBy: 'user',
+            businessName: businessName || 'Commerce inconnu'
+        };
+
+        const updatedDocuments = await saveDocument(siret, documentMetadata);
+
+        logger.info('Document uploaded successfully', {
+            siret,
+            filename: req.file.originalname,
+            size: req.file.size
+        });
+
+        res.json({
+            success: true,
+            document: documentMetadata,
+            documents: updatedDocuments
+        });
+
+    } catch (error) {
+        logger.error('Error uploading document', { error: error.message });
+
+        if (req.file?.path) {
+            try {
+                await fs.unlink(req.file.path);
+            } catch (unlinkError) {
+                logger.error('Error deleting file after failed upload', { error: unlinkError.message });
+            }
+        }
+
+        res.status(500).json({ error: error.message || 'Erreur lors de l\'upload' });
+    }
+});
+
+app.get('/api/documents/download/:siret/:documentId', async (req, res) => {
+    try {
+        const { siret, documentId } = req.params;
+        const documents = await getBusinessDocuments(siret);
+
+        const document = documents.find(d => d.id === documentId);
+
+        if (!document) {
+            return res.status(404).json({ error: 'Document non trouvé' });
+        }
+
+        try {
+            await fs.access(document.path);
+        } catch {
+            logger.error('Document file not found on disk', { path: document.path });
+            return res.status(404).json({ error: 'Fichier introuvable sur le serveur' });
+        }
+
+        res.download(document.path, document.filename);
+
+    } catch (error) {
+        logger.error('Error downloading document', { error: error.message });
+        res.status(500).json({ error: 'Erreur lors du téléchargement' });
+    }
+});
+
+app.delete('/api/documents/:siret/:documentId', async (req, res) => {
+    try {
+        const { siret, documentId } = req.params;
+
+        const { deletedDoc, remainingDocuments } = await deleteDocument(siret, documentId);
+
+        try {
+            await fs.unlink(deletedDoc.path);
+            logger.info('Document deleted successfully', {
+                siret,
+                documentId,
+                filename: deletedDoc.filename
+            });
+        } catch (unlinkError) {
+            logger.warn('Document metadata deleted but file removal failed', {
+                path: deletedDoc.path,
+                error: unlinkError.message
+            });
+        }
+
+        res.json({
+            success: true,
+            deletedDocument: deletedDoc,
+            documents: remainingDocuments
+        });
+
+    } catch (error) {
+        logger.error('Error deleting document', { error: error.message });
+        res.status(500).json({ error: error.message || 'Erreur lors de la suppression' });
     }
 });
 
@@ -723,6 +907,246 @@ The business data is also available in state.business for all agents.`
         res.status(500).json({
             success: false,
             error: 'Analysis failed',
+            message: error.message,
+            duration
+        });
+    }
+});
+
+/**
+ * Endpoint pour analyse financière ADK (pipeline TypeScript indépendant)
+ * POST /api/analyze-financial
+ * Body: { documents: Array, businessInfo: Object, options?: Object }
+ * Returns: { success: boolean, reportPath: string, summary: Object }
+ */
+app.post('/api/analyze-financial', async (req, res) => {
+    const startTime = Date.now();
+
+    try {
+        const { documents, businessInfo, options = {} } = req.body;
+
+        if (!documents || !Array.isArray(documents) || documents.length === 0) {
+            return res.status(400).json({ error: 'Missing documents parameter (must be non-empty array)' });
+        }
+
+        if (!businessInfo || !businessInfo.name) {
+            return res.status(400).json({ error: 'Missing businessInfo parameter (must include name)' });
+        }
+
+        logger.info('Starting Financial ADK analysis', {
+            siret: businessInfo.siret || 'N/A',
+            name: businessInfo.name,
+            documentsCount: documents.length
+        });
+
+        // Configuration session ADK
+        const appName = 'searchcommerce-financial';
+        const userId = 'system';
+        const sessionId = `financial-${businessInfo.siret || Date.now()}`;
+
+        // 1. Créer session service
+        const sessionService = new InMemorySessionService();
+
+        // 2. Convertir les documents base64 en Buffer si nécessaire
+        const processedDocuments = documents.map(doc => {
+            if (doc.content && typeof doc.content === 'string') {
+                // Supprimer le préfixe data:application/pdf;base64, si présent
+                const base64Data = doc.content.replace(/^data:application\/pdf;base64,/, '');
+                return {
+                    ...doc,
+                    content: Buffer.from(base64Data, 'base64')
+                };
+            }
+            return doc;
+        });
+
+        // 3. État initial
+        const initialState = {
+            documents: processedDocuments,
+            businessInfo: {
+                name: businessInfo.name,
+                siret: businessInfo.siret || '',
+                nafCode: businessInfo.nafCode || '',
+                activity: businessInfo.activity || ''
+            },
+            options: {
+                prixAffiche: options.prixAffiche || null,
+                includeImmobilier: options.includeImmobilier !== false // true par défaut
+            },
+            metadata: {
+                startTime,
+                siret: businessInfo.siret || 'N/A',
+                pipelineVersion: '1.0.0-Financial'
+            }
+        };
+
+        // 4. Créer session
+        await sessionService.createSession({
+            appName,
+            userId,
+            sessionId
+        });
+
+        // 5. Créer orchestrateur SequentialAgent
+        const orchestrator = createFinancialOrchestrator();
+
+        // 6. Créer Runner
+        const runner = new Runner({
+            appName,
+            agent: orchestrator,
+            sessionService
+        });
+
+        // 7. Exécuter pipeline et collecter state
+        let finalState = { ...initialState };
+        let lastAgentAuthor = null;
+
+        logger.info('Starting Financial ADK pipeline', {
+            siret: businessInfo.siret || 'N/A',
+            name: businessInfo.name
+        });
+
+        for await (const event of runner.runAsync({
+            userId,
+            sessionId,
+            newMessage: {
+                role: 'user',
+                parts: [{
+                    text: `Start financial analysis pipeline
+
+Documents: ${documents.length} file(s)
+Business: ${businessInfo.name}
+
+The documents and business info are available in state for all agents.`
+                }]
+            },
+            stateDelta: initialState
+        })) {
+            // Détecter mise à jour du state
+            if (event.actions?.stateDelta && Object.keys(event.actions.stateDelta).length > 0) {
+                const deltaKeys = Object.keys(event.actions.stateDelta);
+
+                logger.info('State update detected:', {
+                    siret: businessInfo.siret || 'N/A',
+                    keys: deltaKeys,
+                    author: event.author
+                });
+
+                // AUTO-PARSING JSON STRINGS → OBJECTS
+                deltaKeys.forEach(key => {
+                    const value = event.actions.stateDelta[key];
+
+                    if (typeof value === 'string' && value.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(value);
+                            event.actions.stateDelta[key] = parsed;
+
+                            logger.info(`JSON string auto-parsed for state.${key}`, {
+                                siret: businessInfo.siret || 'N/A',
+                                originalType: 'string',
+                                parsedType: typeof parsed
+                            });
+                        } catch (e) {
+                            logger.warn(`Failed to auto-parse JSON for state.${key}`, {
+                                siret: businessInfo.siret || 'N/A',
+                                error: e.message
+                            });
+                        }
+                    }
+                });
+
+                Object.assign(finalState, event.actions.stateDelta);
+            }
+
+            // Détecter changement d'agent
+            if (event.author && event.author !== 'user' && event.invocationId) {
+                const isNewAgent = !lastAgentAuthor || lastAgentAuthor !== event.author;
+                if (isNewAgent) {
+                    console.log('\n' + '='.repeat(80));
+                    console.log(`🚀 FINANCIAL AGENT STARTED: ${event.author}`);
+                    console.log('='.repeat(80));
+                    lastAgentAuthor = event.author;
+                }
+            }
+        }
+
+        // 8. Finaliser metadata
+        const totalDuration = Date.now() - startTime;
+        finalState.metadata = {
+            ...finalState.metadata,
+            endTime: Date.now(),
+            duration: totalDuration
+        };
+
+        logger.info('Financial ADK pipeline completed', {
+            siret: businessInfo.siret || 'N/A',
+            duration: totalDuration,
+            reportGenerated: !!finalState.financialReport?.generated,
+            healthScore: finalState.comptable?.healthScore?.overall,
+            confidence: finalState.financialValidation?.confidenceScore?.overall
+        });
+
+        // 9. Extraire summary
+        const healthScore = finalState.comptable?.healthScore?.overall || 0;
+        const confidenceScore = finalState.financialValidation?.confidenceScore?.overall || 0;
+
+        // Déterminer le verdict
+        let verdict = 'DÉFAVORABLE';
+        if (healthScore >= 70 && confidenceScore >= 70) {
+            verdict = 'FAVORABLE';
+        } else if (healthScore >= 50 && confidenceScore >= 50) {
+            verdict = 'FAVORABLE AVEC RÉSERVES';
+        }
+
+        const summary = {
+            healthScore,
+            valorisation: {
+                min: finalState.valorisation?.synthese?.fourchette_basse || 0,
+                median: finalState.valorisation?.synthese?.valeur_recommandee || finalState.valorisation?.synthese?.fourchette_mediane || 0,
+                max: finalState.valorisation?.synthese?.fourchette_haute || 0
+            },
+            verdict,
+            confidence: confidenceScore
+        };
+
+        // 10. Réponse
+        res.json({
+            success: true,
+            reportPath: finalState.financialReport?.filepath || null,
+            reportFilename: finalState.financialReport?.filename || null,
+            summary,
+            executionTime: totalDuration,
+            agentsExecuted: 6,
+            state: {
+                comptable: finalState.comptable ? {
+                    healthScore: finalState.comptable.healthScore,
+                    evolution: finalState.comptable.evolution,
+                    synthese: finalState.comptable.synthese
+                } : null,
+                valorisation: finalState.valorisation ? {
+                    synthese: finalState.valorisation.synthese,
+                    comparaisonPrix: finalState.valorisation.comparaisonPrix
+                } : null,
+                validation: finalState.financialValidation ? {
+                    confidenceScore: finalState.financialValidation.confidenceScore,
+                    niveauConfiance: finalState.financialValidation.synthese?.niveauConfiance
+                } : null
+            }
+        });
+
+    } catch (error) {
+        const duration = Date.now() - startTime;
+
+        logger.error('Financial ADK pipeline failed', {
+            siret: req.body.businessInfo?.siret || 'N/A',
+            error: error.message,
+            stack: error.stack,
+            duration
+        });
+
+        res.status(500).json({
+            success: false,
+            error: 'Financial analysis failed',
             message: error.message,
             duration
         });

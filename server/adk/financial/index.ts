@@ -17,22 +17,20 @@ import { ComptableAgent } from './agents/ComptableAgent';
 import { ValorisationAgent } from './agents/ValorisationAgent';
 import { ImmobilierAgent } from './agents/ImmobilierAgent';
 import { FinancialValidationAgent } from './agents/FinancialValidationAgent';
+import { FinancialReportAgent } from './agents/FinancialReportAgent';
 
 /**
- * Financial Orchestrator (placeholder)
+ * Financial Orchestrator
  *
- * À implémenter: SequentialAgent orchestrant 6 agents
+ * SequentialAgent orchestrant 6 agents spécialisés :
  * 1. DocumentExtractionAgent - Extraction données PDF ✅ IMPLEMENTED
  * 2. ComptableAgent - Analyse comptable ratios ✅ IMPLEMENTED
  * 3. ValorisationAgent - Valorisation entreprise ✅ IMPLEMENTED
  * 4. ImmobilierAgent - Analyse immobilier pro ✅ IMPLEMENTED
  * 5. FinancialValidationAgent - Validation cohérence ✅ IMPLEMENTED
- * 6. FinancialReportAgent - Génération rapport HTML
+ * 6. FinancialReportAgent - Génération rapport HTML ✅ IMPLEMENTED
  */
-export function createFinancialOrchestrator(): SequentialAgent {
-  // Placeholder - sera implémenté avec les agents
-  throw new Error('FinancialOrchestrator not yet implemented - structure ready for agent implementation');
-}
+export { createFinancialOrchestrator, FinancialOrchestrator } from './orchestrator/FinancialOrchestrator';
 
 // Export agents
 export { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
@@ -40,6 +38,7 @@ export { ComptableAgent } from './agents/ComptableAgent';
 export { ValorisationAgent } from './agents/ValorisationAgent';
 export { ImmobilierAgent } from './agents/ImmobilierAgent';
 export { FinancialValidationAgent } from './agents/FinancialValidationAgent';
+export { FinancialReportAgent } from './agents/FinancialReportAgent';
 
 // Export types
 export type FinancialInput = {
