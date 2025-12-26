@@ -1,7 +1,21 @@
 import { fetchRawBodaccData } from './bodaccService';
 import { validateBodaccRecordsBatch } from './geminiService';
-import { cacheService } from './cacheService';
+import { cacheService, SHORT_TTL } from './cacheService';
 import { NAF_CODES } from '../data/nafCodes';
+
+/**
+ * Normalize address for consistent cache keys
+ * @param {string} address - Raw address string
+ * @returns {string} Normalized address key
+ */
+export const normalizeAddressKey = (address) => {
+    if (!address) return '';
+    return address
+        .toUpperCase()
+        .trim()
+        .replace(/\s+/g, ' ')  // Normalize multiple spaces to single space
+        .replace(/[.,]/g, ''); // Remove punctuation
+};
 
 /**
  * Get activity label from NAF code
@@ -60,13 +74,18 @@ export const enrichWithBodacc = async (businesses, nafCode) => {
     // Let's do parallel requests with a concurrency limit if needed, but for <50 items Promise.all is fine.
 
     await Promise.all(uniqueAddresses.map(async (address) => {
+        // Normalize address for consistent caching
+        const addressKey = normalizeAddressKey(address);
+
         // Check cache first
-        const cachedData = cacheService.getBodaccData(address);
+        const cachedData = cacheService.getBodaccData(addressKey);
         if (cachedData) {
             // If cached, we assume these are already validated/processed records
+            console.log(`✅ Cache HIT for address: ${address} (normalized: ${addressKey})`);
             recordsByAddress.set(address, cachedData);
             return;
         }
+        console.log(`❌ Cache MISS for address: ${address} (normalized: ${addressKey})`);
 
         // If not cached, fetch raw data
         const business = addressMap.get(address)[0];
@@ -90,8 +109,8 @@ export const enrichWithBodacc = async (businesses, nafCode) => {
                 });
             });
         } else {
-            // Cache empty result to avoid re-fetching
-            cacheService.setBodaccData(address, []);
+            // Cache empty result with SHORT TTL to allow retries
+            cacheService.setBodaccData(addressKey, [], SHORT_TTL);
             recordsByAddress.set(address, []);
         }
     }));
@@ -113,8 +132,9 @@ export const enrichWithBodacc = async (businesses, nafCode) => {
                 // Filter records for this address based on validIds
                 const validatedRecords = rawRecords.filter(record => validIds.includes(record.id));
 
-                // Update cache with ONLY validated records
-                cacheService.setBodaccData(address, validatedRecords);
+                // Update cache with ONLY validated records (use normalized key)
+                const addressKey = normalizeAddressKey(address);
+                cacheService.setBodaccData(addressKey, validatedRecords);
 
                 // Update local map for return value
                 recordsByAddress.set(address, validatedRecords);

@@ -55,8 +55,16 @@ WORKFLOW:
    - Si null ou invalide: retourner erreur
 
 2. **RECHERCHE POI CONCURRENTS**
-   Appeler nearbySearch(coordinates, radius=500)
-   - Recherche dans rayon 500m (zone de chalandise piéton)
+   Appeler nearbySearch(coordinates, radius=200, includedTypes=[
+     "store", "convenience_store", "supermarket", "grocery_store",
+     "bakery", "cafe", "restaurant", "meal_takeaway",
+     "clothing_store", "shoe_store", "jewelry_store",
+     "book_store", "florist", "furniture_store", "home_goods_store",
+     "electronics_store", "hardware_store", "pet_store",
+     "beauty_salon", "hair_care", "spa", "gym"
+   ])
+   - Recherche dans rayon 200m (zone de passage client direct)
+   - Filtre UNIQUEMENT commerces de détail et services de proximité
    - Retourne nearby_poi, total_competitors, by_type, density_level
 
 3. **ANALYSE DISTANCES** (si concurrents trouvés)

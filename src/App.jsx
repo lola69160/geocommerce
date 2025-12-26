@@ -131,6 +131,16 @@ function App() {
     return true;
   });
 
+  const handleRemoveFromCart = async (businessId) => {
+    try {
+      const updatedCart = await storageService.removeFromCart(businessId);
+      setCart(updatedCart);
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      alert('Erreur lors de la suppression du panier');
+    }
+  };
+
   return (
     <>
       <Layout
@@ -167,7 +177,9 @@ function App() {
       />
 
       <CartWidget
-        cartCount={Object.keys(cart).length}
+        cart={cart}
+        notes={notes}
+        onRemoveFromCart={handleRemoveFromCart}
         onGenerateReport={handleGenerateReport}
       />
 

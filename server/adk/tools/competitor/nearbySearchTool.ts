@@ -23,7 +23,7 @@ import axios from 'axios';
 
 const NearbySearchInputSchema = z.object({
   // coordinates lu depuis state.preparation.coordinates via ToolContext
-  radius: z.number().default(500).describe('Rayon de recherche en mètres'),
+  radius: z.number().default(200).describe('Rayon de recherche en mètres (standard retail: 200m)'),
   includedTypes: z.array(z.string()).optional().describe('Types de commerces spécifiques (ex: ["bakery", "restaurant"])')
 });
 

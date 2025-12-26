@@ -45,27 +45,51 @@ const simplifyStreetName = (street) => {
 };
 
 /**
- * Extract amount using Regex
+ * Extract amount using Regex (Enhanced with multiple patterns)
  */
 const extractAmount = (text) => {
     if (!text) return null;
 
-    // Regex to find price
-    // Matches: "prix stipulé de 305000 EUR", "moyennant le prix de 10.000 euros"
-    // We look for digits possibly separated by spaces or dots, followed by EUR or euros
-    const priceRegex = /(?:prix|montant).*?([\d\s\.,]+)\s*(?:euros|EUR|€)/i;
+    // Try multiple patterns to catch more variations
+    const patterns = [
+        // Pattern 1: "prix de X euros" / "montant de X EUR"
+        /(?:prix|montant|somme)[\s:]+(?:de\s+)?([\d\s\.,]+)\s*(?:euros|EUR|€)/i,
 
-    const match = text.match(priceRegex);
-    if (match && match[1]) {
-        // Clean the number string (remove spaces, dots if they are thousands separators)
-        let cleanNum = match[1].replace(/\s/g, ''); // Remove spaces
-        cleanNum = cleanNum.replace(',', '.');
-        const value = parseFloat(cleanNum);
-        if (!isNaN(value)) {
-            return value;
+        // Pattern 2: "cédé pour X euros" / "vendu pour la somme de X"
+        /(?:cédé|vendu|acquis|acheté)[\s\w]*?(?:pour|à)[\s\w]*?([\d\s\.,]+)\s*(?:euros|EUR|€)/i,
+
+        // Pattern 3: "somme de X euros"
+        /somme\s+(?:de\s+)?([\d\s\.,]+)\s*(?:euros|EUR|€)/i,
+
+        // Pattern 4: Formats avec ":" comme "Prix: X EUR"
+        /(?:prix|montant|somme)\s*:\s*([\d\s\.,]+)\s*(?:euros|EUR|€)/i,
+
+        // Pattern 5: Montant entre parenthèses "(X EUR)"
+        /\(([\d\s\.,]+)\s*(?:euros|EUR|€)\)/i,
+
+        // Pattern 6: Fallback large - any number followed by currency
+        /([\d\s\.,]{3,})\s*(?:euros|EUR|€)/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            // Clean and parse the number
+            const cleanNum = match[1]
+                .replace(/\s/g, '')        // Remove spaces
+                .replace(/\./g, '')        // Remove thousand separators (dots)
+                .replace(',', '.');        // Decimal comma to dot
+
+            const num = parseFloat(cleanNum);
+
+            // Validate: amount should be reasonable (between 100 and 10,000,000 euros)
+            if (!isNaN(num) && num >= 100 && num <= 10000000) {
+                return num;
+            }
         }
     }
-    return null;
+
+    return null; // No valid amount found
 };
 
 /**
@@ -106,12 +130,16 @@ const parseRecord = (record) => {
 
         amount = extractAmount(contentToSearch);
 
-        if (!amount) return null; // If no amount found, it might not be a relevant sale record
+        // KEEP THIS CHECK - Amount is REQUIRED for BODACC data
+        if (!amount) {
+            console.warn(`⚠️ BODACC record ${record.id} filtered: no valid amount found`);
+            return null;
+        }
 
         return {
             id: record.id,
             date: record.dateparution,
-            amount: amount,
+            amount: amount, // Required field
             description: contentToSearch,
             parution: record.parution,
             type: record.typeavis_lib
@@ -181,9 +209,16 @@ export const fetchRawBodaccData = async (address, postalCode, city) => {
         }
 
         // Parse all records
-        return response.data.results
-            .map(record => parseRecord(record))
-            .filter(record => record !== null);
+        const totalRecords = response.data.results.length;
+        const parsedRecords = response.data.results.map(record => parseRecord(record));
+        const validRecords = parsedRecords.filter(record => record !== null);
+        const filteredCount = totalRecords - validRecords.length;
+
+        if (filteredCount > 0) {
+            console.log(`ℹ️ BODACC: ${filteredCount}/${totalRecords} records filtered out (no valid amount found)`);
+        }
+
+        return validRecords;
 
     } catch (error) {
         console.error('Error fetching raw BODACC data:', error);

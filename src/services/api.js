@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getBusinessLocation, parseOpeningHours } from './placesService';
+import { findBusinessOnGooglePlaces } from './placesEnrichmentService';
 
 const ENTREPRISE_API_URL = 'https://recherche-entreprises.api.gouv.fr';
 const GEO_API_URL = 'https://api-adresse.data.gouv.fr/search/';
@@ -133,33 +134,35 @@ export const searchBusinesses = async (nafCode, location, radius = 5, limit = 10
 
     console.log(`After address/activity deduplication: ${finalResults.length} unique businesses`);
 
-    // Enrich with Google Places data (Coordinates & Hours)
-    console.log('Enriching results with Google Places API...');
+    // Enrich with Google Places data (NOUVELLE STRATÉGIE MULTI-NIVEAUX)
+    console.log('Enriching results with Google Places API (multi-level strategy)...');
 
     // Process in parallel but with care not to overwhelm if list is huge (though limit is small here)
     const fullyEnrichedResults = await Promise.all(
       finalResults.map(async (business) => {
         try {
-          const name = business.nom_complet || business.enseigne || business.nom_raison_sociale;
-          const address = business.adresse;
+          // NOUVELLE APPROCHE: Stratégie multi-niveaux
+          const placesData = await findBusinessOnGooglePlaces(business);
 
-          if (name && address) {
-            const placesData = await getBusinessLocation(name, address);
-
-            if (placesData && placesData.found) {
-              // Add new fields
-              const structuredHours = parseOpeningHours(placesData.hours);
-              return {
-                ...business,
-                // Use Places coordinates if available, otherwise keep original
-                lat: placesData.latitude || business.lat,
-                lon: placesData.longitude || business.lon,
-                openingHours: placesData.hours,
-                closedDays: structuredHours.closedDays, // For filtering
-                googlePlaceName: placesData.name,
-                geoSource: 'PLACES'
-              };
+          if (placesData && placesData.found) {
+            // Log if opening hours are missing
+            if (!placesData.openingHours || !Array.isArray(placesData.openingHours) || placesData.openingHours.length === 0) {
+              console.warn(`⚠️ No opening hours available for: ${placesData.name}`);
             }
+
+            // Add new fields
+            const structuredHours = parseOpeningHours(placesData.openingHours);
+            return {
+              ...business,
+              // Use Places coordinates if available, otherwise keep original
+              lat: placesData.latitude || business.lat,
+              lon: placesData.longitude || business.lon,
+              openingHours: placesData.openingHours,
+              closedDays: structuredHours.closedDays, // For filtering
+              googlePlaceName: placesData.name,
+              googlePlaceId: placesData.placeId,
+              geoSource: 'PLACES'
+            };
           }
         } catch (err) {
           console.warn(`Failed to enrich business ${business.siren}:`, err);

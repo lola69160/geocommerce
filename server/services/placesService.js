@@ -267,3 +267,64 @@ export const fetchGoogleAssets = async (placeId) => {
         return { photos: [], reviews: [], rating: null, user_rating_total: 0 };
     }
 };
+
+/**
+ * Search for nearby places by type (for competitor mapping)
+ * @param {Object} location - { lat, lon } GPS coordinates
+ * @param {number} radius - Search radius in meters
+ * @param {string} type - Google Place type (restaurant, cafe, bakery, etc.)
+ * @returns {Promise<Array>} - Array of places matching the type
+ */
+export const nearbySearchByType = async (location, radius, type) => {
+    const PLACE_API_KEY = process.env.PLACE_API_KEY;
+
+    if (!PLACE_API_KEY) {
+        logger.warn('PLACE_API_KEY not configured');
+        return [];
+    }
+
+    try {
+        logger.debug(`Nearby search: type="${type}", radius=${radius}m, location=(${location.lat}, ${location.lon})`);
+
+        const response = await axios.post(
+            'https://places.googleapis.com/v1/places:searchNearby',
+            {
+                locationRestriction: {
+                    circle: {
+                        center: {
+                            latitude: location.lat,
+                            longitude: location.lon
+                        },
+                        radius
+                    }
+                },
+                includedTypes: [type],
+                languageCode: 'fr',
+                maxResultCount: 20
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': PLACE_API_KEY,
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.id'
+                },
+                timeout: 10000 // 10s timeout
+            }
+        );
+
+        const places = response.data.places || [];
+
+        logger.info(`Nearby search found ${places.length} places of type "${type}"`);
+
+        return places;
+
+    } catch (error) {
+        logger.error('Nearby search failed', {
+            type,
+            radius,
+            error: error.message,
+            status: error.response?.status
+        });
+        return [];
+    }
+};

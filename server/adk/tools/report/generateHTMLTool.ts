@@ -258,7 +258,10 @@ function generateOpeningHoursTable(places: any): string {
   };
 
   const rows = places.openingHours.weekdayDescriptions.map((desc: string) => {
-    const [dayEN, hours] = desc.split(':').map((s: string) => s.trim());
+    // Split uniquement sur le PREMIER colon pour gérer les horaires avec plusieurs ":"
+    const colonIndex = desc.indexOf(':');
+    const dayEN = colonIndex > -1 ? desc.substring(0, colonIndex).trim() : desc;
+    const hours = colonIndex > -1 ? desc.substring(colonIndex + 1).trim() : '';
     const dayFR = dayTranslation[dayEN] || dayEN;
     const isClosed = !hours || hours.toLowerCase().includes('closed') || hours.toLowerCase().includes('fermé');
 
@@ -297,7 +300,7 @@ function generateOpeningHoursTable(places: any): string {
  * Génère le tableau BODACC des rachats
  */
 function generateBODACCTable(business: any): string {
-  if (!business?.bodacc || !Array.isArray(business.bodacc) || business.bodacc.length === 0) {
+  if (!business?.bodaccData || !Array.isArray(business.bodaccData) || business.bodaccData.length === 0) {
     return `
       <h2>💼 Historique des Rachats (BODACC)</h2>
       <p class="no-data">Aucun historique BODACC trouvé pour ce commerce</p>
@@ -340,7 +343,7 @@ function generateBODACCTable(business: any): string {
   };
 
   // Trier par date décroissante (plus récent en premier)
-  const sortedRecords = [...business.bodacc].sort((a: any, b: any) => {
+  const sortedRecords = [...business.bodaccData].sort((a: any, b: any) => {
     const dateA = parseDate(a.date).getTime();
     const dateB = parseDate(b.date).getTime();
     return dateB - dateA;
@@ -493,11 +496,20 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
   // Récupérer données Tavily
   const tavilyData = await fetchCommuneDataWithTavily(commune);
 
-  // Générer URL Google Maps Static
+  // Générer URL Google Maps Static avec error handling
   const PLACE_API_KEY = process.env.PLACE_API_KEY;
-  const mapUrl = PLACE_API_KEY && lat && lon
-    ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&maptype=roadmap&markers=color:red|${lat},${lon}&key=${PLACE_API_KEY}`
-    : '';
+  let mapUrl = '';
+  let mapError = '';
+
+  if (lat && lon) {
+    if (PLACE_API_KEY) {
+      mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&maptype=roadmap&markers=color:red|${lat},${lon}&key=${PLACE_API_KEY}`;
+    } else {
+      mapError = 'API key manquante pour Google Maps Static';
+    }
+  } else {
+    mapError = 'Coordonnées GPS non disponibles';
+  }
 
   // Construire description
   const population = demographic?.commune?.population || 'N/A';
@@ -533,11 +545,13 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
 
       ${mapUrl ? `
         <div>
-          <img src="${mapUrl}" alt="Carte de ${commune}" />
+          <img src="${mapUrl}" alt="Carte de ${commune}" style="width: 100%; border-radius: 8px; border: 1px solid #e0e0e0;"
+               onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhcnRlIG5vbiBkaXNwb25pYmxlPC90ZXh0Pjwvc3ZnPg==';
+               this.alt='Carte non disponible';" />
         </div>
       ` : `
-        <div style="background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 200px;">
-          <p class="no-data">Carte non disponible</p>
+        <div style="width: 100%; height: 300px; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">
+          <p class="no-data">Carte non disponible${mapError ? ' - ' + mapError : ''}</p>
         </div>
       `}
     </div>

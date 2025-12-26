@@ -92,9 +92,10 @@ Tous les agents utilisent **Gemini 2.5 Flash Lite** (`gemini-2.5-flash-lite`):
    - Tools: `analyzePhotos`
    - Output: `{ analyzed, photos_count, condition, renovation_needed, cost_estimate }`
 
-5. **CompetitorAgent** - Cartographie POI concurrentiels (rayon 500m)
+5. **CompetitorAgent** - Cartographie POI concurrentiels (rayon 200m, commerces uniquement)
    - Tools: `searchNearbyPOI`, `categorizePOI`
    - Output: `{ nearby_poi, total_competitors, density_level, market_assessment }`
+   - **Fix 2025-12-26** : Radius réduit de 500m → 200m + filtrage sur 20+ types commerciaux (exclude parcs, transports, banques)
 
 6. **ValidationAgent** - Validation croisée + détection conflits (6 types)
    - Tools: `crossValidateData`, `detectConflicts`
@@ -135,9 +136,12 @@ Tous les agents utilisent **Gemini 2.5 Flash Lite** (`gemini-2.5-flash-lite`):
   - Timeout : 8 secondes
   - Fallback : Placeholder gris si pas d'image
 - **Carte** : Google Maps Static API avec marker rouge sur commerce
-  - URL : `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&markers=color:red|${lat},${lon}`
+  - URL : `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&markers=color:red|${lat},${lon}&key=${PLACE_API_KEY}`
+  - Error handling : Messages clairs si API key manquante ou coordonnées invalides
+  - Fallback : SVG inline base64 avec `onerror` handler si image ne charge pas
 - **Description** : Combinaison données démographiques + description Tavily (300 caractères)
 - **Layout** : Grille 2 colonnes (photo | carte), responsive mobile 1 colonne
+- **Fix 2025-12-26** : Ajouté error handling robuste avec fallback SVG et messages diagnostics
 
 **📸 Photos du Commerce** (`generatePhotosSection`):
 - **Source** : `places.photos[]` (récupérées par PlacesAgent → fetchAssets)
@@ -150,7 +154,7 @@ Tous les agents utilisent **Gemini 2.5 Flash Lite** (`gemini-2.5-flash-lite`):
 - **CSS** : `.photo-grid`, `.photo-card`, `.photo-badge`, `.photo-annotation`
 
 **💼 Historique BODACC** (`generateBODACCTable`):
-- **Source** : `business.bodacc[]` (enrichi par frontend BODACC service)
+- **Source** : `business.bodaccData[]` (enrichi par frontend BODACC service)
 - **Colonnes** : Date de parution | Montant du rachat
 - **Formatage** :
   - Dates : DD/MM/YYYY (locale française)
@@ -158,14 +162,17 @@ Tous les agents utilisent **Gemini 2.5 Flash Lite** (`gemini-2.5-flash-lite`):
 - **Tri** : Date décroissante (plus récent en premier)
 - **Parsing dates robuste** : Support ISO + DD/MM/YYYY formats
 - **Fallback** : Message "Aucun historique BODACC trouvé"
+- **Fix 2025-12-26** : Corrigé field name `bodacc` → `bodaccData` pour correspondre au frontend
 
 **🕐 Horaires d'Ouverture** (`generateOpeningHoursTable`):
 - **Source** : `places.openingHours.weekdayDescriptions[]`
 - **Format input** : Array de strings `["Monday: 9 AM - 5 PM", ...]`
+- **Parsing** : `indexOf(':')` + `substring()` pour gérer multiple colons (ex: "lundi: 06:30 - 20:00")
 - **Traduction** : Jours EN → FR (Monday → Lundi, etc.)
 - **Détection fermeture** : Keyword matching "closed", "fermé" → Badge rouge
 - **Badge statut** : "Ouvert maintenant" / "Fermé actuellement" si `openNow` disponible
 - **Fallback** : Message "Horaires non disponibles"
+- **Fix 2025-12-26** : Corrigé parsing `split(':')` qui tronquait les horaires à cause des colons dans les heures
 
 ### State Management ADK
 - **Initial State**: Passé via `stateDelta` dans `runner.runAsync()` (server.js:499)

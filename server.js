@@ -2,11 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { Runner, InMemorySessionService } from '@google/adk';
 import logger from './logger.js';
 import { getBusinessDetails, fetchGoogleAssets, scorePlaceByAddress } from './server/services/placesService.js';
 import { generateBusinessContext } from './server/services/enrichmentService.js';
 import { reconcileIdentity } from './server/services/identityService.js';
 import { analyzeLocality } from './server/services/intelligenceService.js';
+import { createMainOrchestrator } from './server/adk/agents/MainOrchestrator.js';
 
 dotenv.config();
 
@@ -367,6 +371,361 @@ app.delete('/api/cart/:id', async (req, res) => {
     } catch (error) {
         logger.error('Error removing from cart', { error: error.message });
         res.status(500).json({ error: 'Failed to remove from cart' });
+    }
+});
+
+/**
+ * Fonction helper pour sauvegarder manuellement le rapport HTML
+ * Utilisée en fallback si le ReportAgent ne sauvegarde pas le fichier
+ */
+async function saveReportManually(html, siret, outputDir = 'data/professional-reports') {
+    try {
+        // Créer répertoire si nécessaire
+        await fs.mkdir(outputDir, { recursive: true });
+
+        // Générer nom de fichier: YYYYMMDD_HHMMSS_SIRET.html
+        const timestamp = new Date()
+            .toISOString()
+            .replace(/[:\-]/g, '')
+            .replace(/\..+/, '')
+            .replace('T', '_');
+
+        const filename = `${timestamp}_${siret}.html`;
+        const filepath = path.join(outputDir, filename);
+
+        // Sauvegarder fichier
+        await fs.writeFile(filepath, html, 'utf8');
+
+        // Vérifier taille fichier
+        const stats = await fs.stat(filepath);
+
+        const absolutePath = path.resolve(filepath);
+
+        logger.info('Report manually saved', {
+            siret,
+            filepath: absolutePath,
+            size_kb: Math.round(stats.size / 1024)
+        });
+
+        return {
+            filepath: absolutePath,
+            filename,
+            size_bytes: stats.size,
+            size_kb: Math.round(stats.size / 1024),
+            saved_at: new Date().toISOString()
+        };
+
+    } catch (error) {
+        logger.error('Failed to save report manually', {
+            siret,
+            error: error.message
+        });
+        return null;
+    }
+}
+
+/**
+ * Endpoint pour analyse professionnelle ADK (pipeline TypeScript officiel)
+ * POST /api/analyze-professional-adk
+ * Body: { business: Object }
+ * Returns: { success: boolean, state: AgentState, report: { filepath, filename } }
+ */
+/**
+ * Endpoint ADK pour analyse professionnelle complète
+ * Pattern ADK officiel: Runner créé au niveau endpoint
+ */
+app.post('/api/analyze-professional-adk', async (req, res) => {
+    const startTime = Date.now();
+
+    try {
+        const { business } = req.body;
+
+        if (!business) {
+            return res.status(400).json({ error: 'Missing business parameter' });
+        }
+
+        logger.info('Starting ADK professional analysis', {
+            siret: business.siret,
+            nom: business.enseigne || business.nom_complet || business.nom_raison_sociale
+        });
+
+        // Configuration session ADK
+        const appName = 'searchcommerce';
+        const userId = 'system';
+        const sessionId = `analysis-${business.siret || Date.now()}`;
+
+        // 1. Créer session service
+        const sessionService = new InMemorySessionService();
+
+        // 2. État initial
+        const initialState = {
+            business,
+            metadata: {
+                startTime,
+                siret: business.siret,
+                pipelineVersion: '2.0.0-ADK'
+            }
+        };
+
+        // 3. Créer session (vide - state sera initialisé par stateDelta)
+        await sessionService.createSession({
+            appName,
+            userId,
+            sessionId
+        });
+
+        // 4. Créer orchestrateur SequentialAgent (état de l'art ADK - pas de wrapper LlmAgent)
+        const orchestrator = createMainOrchestrator();
+
+        // 5. Créer Runner avec SequentialAgent comme root agent (pas de handoff)
+        const runner = new Runner({
+            appName,
+            agent: orchestrator,
+            sessionService
+        });
+
+        // 6. Exécuter pipeline et collecter state
+        let finalState = { ...initialState };
+        let lastAgentAuthor = null; // Track agent changes for logging
+
+        logger.info('Starting ADK pipeline', { siret: business.siret });
+
+        for await (const event of runner.runAsync({
+            userId,
+            sessionId,
+            newMessage: {
+                role: 'user',
+                parts: [{
+                    text: `Start professional analysis pipeline
+
+Business Data:
+${JSON.stringify(business, null, 2)}
+
+The business data is also available in state.business for all agents.`
+                }]
+            },
+            stateDelta: initialState
+        })) {
+            // Détecter mise à jour du state (pattern ADK correct)
+            if (event.actions?.stateDelta && Object.keys(event.actions.stateDelta).length > 0) {
+                const deltaKeys = Object.keys(event.actions.stateDelta);
+
+                logger.info('State update detected:', {
+                    siret: business.siret,
+                    keys: deltaKeys,
+                    author: event.author
+                });
+
+                // AUTO-PARSING JSON STRINGS → OBJECTS
+                deltaKeys.forEach(key => {
+                    const value = event.actions.stateDelta[key];
+
+                    // Détecter si c'est un JSON string
+                    if (typeof value === 'string' && value.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(value);
+                            event.actions.stateDelta[key] = parsed;
+
+                            logger.info(`JSON string auto-parsed for state.${key}`, {
+                                siret: business.siret,
+                                originalType: 'string',
+                                parsedType: typeof parsed,
+                                isObject: typeof parsed === 'object' && !Array.isArray(parsed)
+                            });
+                        } catch (e) {
+                            logger.warn(`Failed to auto-parse JSON for state.${key} - keeping as string`, {
+                                siret: business.siret,
+                                error: e.message,
+                                valueSample: value.substring(0, 100)
+                            });
+                        }
+                    }
+                });
+
+                // Log détaillé de la réponse de chaque agent
+                deltaKeys.forEach(key => {
+                    const value = event.actions.stateDelta[key];
+                    const valueStr = JSON.stringify(value);
+
+                    logger.info(`Agent response [${event.author}] -> ${key}:`, {
+                        siret: business.siret,
+                        dataType: typeof value,
+                        isObject: typeof value === 'object' && !Array.isArray(value),
+                        isArray: Array.isArray(value),
+                        sampleData: valueStr.length > 500
+                            ? valueStr.substring(0, 500) + '... (truncated)'
+                            : valueStr
+                    });
+                });
+
+                Object.assign(finalState, event.actions.stateDelta);
+            }
+
+            // Détecter changement d'agent (nouveau agent démarre)
+            if (event.author && event.author !== 'user' && event.invocationId) {
+                const isNewAgent = !lastAgentAuthor || lastAgentAuthor !== event.author;
+                if (isNewAgent) {
+                    console.log('\n' + '='.repeat(80));
+                    console.log(`🚀 AGENT STARTED: ${event.author}`);
+                    console.log('='.repeat(80));
+                    lastAgentAuthor = event.author;
+                }
+            }
+
+            // Logger les appels d'outils (function calls)
+            if (event.content?.parts) {
+                event.content.parts.forEach(part => {
+                    if (part.functionCall) {
+                        const toolName = part.functionCall.name;
+                        const toolArgs = part.functionCall.args || {};
+
+                        console.log(`\n🔧 TOOL CALLED: ${toolName}`);
+                        console.log(`   Parameters:`, JSON.stringify(toolArgs, null, 2).split('\n').map((line, i) => i === 0 ? line : `   ${line}`).join('\n'));
+                    }
+
+                    if (part.functionResponse) {
+                        const toolName = part.functionResponse.name;
+                        const toolResult = part.functionResponse.response || {};
+                        const resultStr = JSON.stringify(toolResult, null, 2);
+                        const truncated = resultStr.length > 500
+                            ? resultStr.substring(0, 500) + '\n   ... (truncated)'
+                            : resultStr;
+
+                        console.log(`\n✅ TOOL RESULT: ${toolName}`);
+                        console.log(`   Response:`, truncated.split('\n').map((line, i) => i === 0 ? line : `   ${line}`).join('\n'));
+                    }
+                });
+            }
+
+            // Détecter erreurs ADK
+            if (event.errorCode) {
+                logger.error(`ADK Error (${event.errorCode}): ${event.errorMessage}`, {
+                    siret: business.siret,
+                    author: event.author,
+                    errorDetails: event.errorDetails || 'No details provided'
+                });
+            }
+
+            // Log du contenu complet de l'événement pour debug avancé
+            if (event.content?.parts) {
+                const textContent = event.content.parts
+                    .filter(p => p.text)
+                    .map(p => p.text)
+                    .join(' ');
+
+                if (textContent && textContent.length > 0) {
+                    logger.debug(`Agent raw response [${event.author}]:`, {
+                        siret: business.siret,
+                        contentSample: textContent.substring(0, 300)
+                    });
+                }
+            }
+        }
+
+        // 7. Finaliser metadata
+        const totalDuration = Date.now() - startTime;
+        finalState.metadata = {
+            ...finalState.metadata,
+            endTime: Date.now(),
+            duration: totalDuration
+        };
+
+        logger.info('ADK pipeline completed', {
+            siret: business.siret,
+            duration: totalDuration,
+            recommendation: finalState.strategic?.recommendation,
+            score: finalState.gap?.scores?.overall
+        });
+
+        // 7.5. Sauvegarde automatique du rapport
+        if (finalState.report) {
+            // Vérifier si report est un objet (pas une string d'erreur)
+            const isObject = typeof finalState.report === 'object' && !Array.isArray(finalState.report);
+
+            logger.info('Report state after pipeline', {
+                siret: business.siret,
+                reportType: typeof finalState.report,
+                isObject: isObject,
+                hasHtml: isObject && !!finalState.report?.html,
+                hasFilepath: isObject && !!finalState.report?.filepath,
+                reportSample: typeof finalState.report === 'string'
+                    ? finalState.report.substring(0, 200)
+                    : JSON.stringify(finalState.report).substring(0, 200)
+            });
+
+            // Si report est un objet avec HTML mais sans filepath, sauvegarder
+            if (isObject && finalState.report.html && !finalState.report.filepath) {
+                logger.warn('Report HTML generated but not saved - saving manually', {
+                    siret: business.siret
+                });
+
+                const savedReport = await saveReportManually(
+                    finalState.report.html,
+                    business.siret
+                );
+
+                if (savedReport) {
+                    finalState.report = {
+                        ...finalState.report,
+                        ...savedReport
+                    };
+                    logger.info('Report saved successfully', {
+                        siret: business.siret,
+                        filepath: savedReport.filepath
+                    });
+                }
+            } else if (typeof finalState.report === 'string') {
+                // Report est un message d'erreur
+                logger.error('Report generation failed - agent returned error message', {
+                    siret: business.siret,
+                    errorMessage: finalState.report.substring(0, 300)
+                });
+            }
+        } else {
+            logger.warn('No report generated by pipeline', { siret: business.siret });
+        }
+
+        // 8. Réponse
+        res.json({
+            success: true,
+            state: finalState,
+            report: finalState.report ? {
+                filepath: finalState.report.filepath,
+                filename: finalState.report.filename,
+                html: finalState.report.html
+            } : null,
+            summary: {
+                recommendation: finalState.strategic?.recommendation,
+                overall_score: finalState.gap?.scores?.overall,
+                total_risks: finalState.gap?.risk_summary?.total_risks || 0,
+                critical_risks: finalState.gap?.risk_summary?.by_severity?.critical || 0,
+                coherence_score: finalState.validation?.coherence_score
+            },
+            metadata: {
+                siret: business.siret,
+                duration: totalDuration,
+                agents_executed: 10,
+                timestamp: new Date().toISOString(),
+                pipeline_version: '2.0.0-ADK'
+            }
+        });
+
+    } catch (error) {
+        const duration = Date.now() - startTime;
+
+        logger.error('ADK pipeline failed', {
+            siret: req.body.business?.siret,
+            error: error.message,
+            stack: error.stack,
+            duration
+        });
+
+        res.status(500).json({
+            success: false,
+            error: 'Analysis failed',
+            message: error.message,
+            duration
+        });
     }
 });
 

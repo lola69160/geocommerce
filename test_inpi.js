@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import axios from 'axios';
 
 // Configuration
@@ -6,7 +7,7 @@ const PASSWORD = process.env.INPI_PASSWORD;
 // SIREN to test.
 // 883640070 returns no data (empty object) on Production.
 // 443061841 (Google France) returns bilans.
-const SIREN = '493858153';
+const SIREN = '443061841';
 
 // Environment URLs
 // const BASE_URL = 'https://registre-national-entreprises-pprod.inpi.fr/api'; // Test (Currently 503)

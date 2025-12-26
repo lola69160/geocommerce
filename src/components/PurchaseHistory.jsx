@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Loader2, History, X, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { Loader2, History, X, ChevronDown, ChevronUp, Copy, Check, RefreshCw } from 'lucide-react';
 import { getPurchaseHistory } from '../services/bodaccService';
 import { formatDate } from '../utils/businessDisplayUtils';
 import { cacheService } from '../services/cacheService';
+import { normalizeAddressKey } from '../services/enrichmentService';
 
 const PurchaseHistory = ({ business }) => {
     const [loading, setLoading] = useState(false);
@@ -13,11 +14,11 @@ const PurchaseHistory = ({ business }) => {
     const [showDebug, setShowDebug] = useState(false);
     const [copied, setCopied] = useState(false);
 
-    const handleShowHistory = async (e) => {
+    const handleShowHistory = async (e, forceRefresh = false) => {
         e.stopPropagation();
         setShowModal(true);
 
-        if (history) return; // Already loaded in component state
+        if (history && !forceRefresh) return; // Already loaded in component state
 
         setLoading(true);
         setError(null);
@@ -25,16 +26,17 @@ const PurchaseHistory = ({ business }) => {
         try {
             let results = [];
             let raw = [];
+            const addressKey = normalizeAddressKey(business.adresse);
 
-            // Strategy 1: Check if data already enriched on the business object
-            if (business.bodaccData && Array.isArray(business.bodaccData) && business.bodaccData.length > 0) {
+            // Strategy 1: Check if data already enriched on the business object (skip if forceRefresh)
+            if (!forceRefresh && business.bodaccData && Array.isArray(business.bodaccData) && business.bodaccData.length > 0) {
                 console.log('✅ Using pre-enriched BODACC data from business object');
                 results = business.bodaccData;
                 raw = business.bodaccData; // No separate raw data in this case
             }
-            // Strategy 2: Check global cache
-            else {
-                const cachedData = cacheService.getBodaccData(business.adresse);
+            // Strategy 2: Check global cache (skip if forceRefresh)
+            else if (!forceRefresh) {
+                const cachedData = cacheService.getBodaccData(addressKey);
 
                 if (cachedData && Array.isArray(cachedData)) {
                     console.log('✅ Using cached BODACC data from global cache');
@@ -54,9 +56,25 @@ const PurchaseHistory = ({ business }) => {
                     results = response.results;
                     raw = response.rawData;
 
-                    // Cache the results
-                    cacheService.setBodaccData(business.adresse, results);
+                    // Cache the results (using normalized key)
+                    cacheService.setBodaccData(addressKey, results);
                 }
+            }
+            // Force refresh: Always fetch from API
+            else {
+                console.log('🔄 Force refresh: Fetching fresh BODACC data from API...');
+                const response = await getPurchaseHistory(
+                    business.adresse,
+                    business.code_postal,
+                    business.libelle_commune,
+                    business.activite_principale
+                );
+
+                results = response.results;
+                raw = response.rawData;
+
+                // Update cache with fresh data
+                cacheService.setBodaccData(addressKey, results);
             }
 
             setHistory(results);
@@ -67,6 +85,18 @@ const PurchaseHistory = ({ business }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleRefresh = (e) => {
+        e.stopPropagation();
+        const addressKey = normalizeAddressKey(business.adresse);
+        // Invalidate cache
+        cacheService.invalidate(addressKey);
+        // Reset component state
+        setHistory(null);
+        setRawData(null);
+        // Fetch fresh data
+        handleShowHistory(e, true);
     };
 
     const handleClose = (e) => {
@@ -156,10 +186,34 @@ const PurchaseHistory = ({ business }) => {
                             <X size={20} />
                         </button>
 
-                        <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <History size={20} />
-                            Historique des cessions
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                            <h3 style={{ margin: 0, color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <History size={20} />
+                                Historique des cessions
+                            </h3>
+                            <button
+                                onClick={handleRefresh}
+                                disabled={loading}
+                                style={{
+                                    background: loading ? '#e5e7eb' : '#3b82f6',
+                                    border: 'none',
+                                    color: 'white',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '500',
+                                    transition: 'background 0.2s'
+                                }}
+                                title="Rafraîchir les données"
+                            >
+                                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                                Rafraîchir
+                            </button>
+                        </div>
 
                         <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '15px', fontStyle: 'italic' }}>
                             {business.adresse}

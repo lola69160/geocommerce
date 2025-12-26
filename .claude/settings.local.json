@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git pull:*)",
+      "Bash(npm run lint)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git clone:*)",
+      "Bash(npm install:*)",
+      "Bash(if [ ! -d \"C:\\\\AI\\\\searchcommerce\\\\data\\\\professional-reports\" ])",
+      "Bash(then echo \"Directory does not exist\")",
+      "Bash(else echo \"Directory exists\")",
+      "Bash(fi)",
+      "Bash(npx ts-node:*)",
+      "Bash(npx tsc:*)",
+      "Bash(find:*)",
+      "Bash(npx tsx:*)",
+      "Bash(cat:*)",
+      "Bash(taskkill:*)",
+      "Bash(for file in *.ts)",
+      "Bash(do sed -i '/responseMimeType: modelConfig.responseMimeType,$/{ N; s/,\\\\n        \\\\n      /\\\\n      /; }' \"$file\")",
+      "Bash(done)",
+      "WebFetch(domain:google.github.io)",
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm run server:*)",
+      "Bash(node test_adk_fix.js:*)",
+      "Bash(dir \"C:\\\\AI\\\\searchcommerce\\\\server\\\\adk\" /s /b)",
+      "Bash(dir \"C:\\\\AI\\\\searchcommerce\\\\server\" /b)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout 30 tail:*)",
+      "Bash(tasklist /FI \"PID eq 13876\")",
+      "Bash(tasklist:*)",
+      "Bash(del nul)"
+    ]
+  }
+}
