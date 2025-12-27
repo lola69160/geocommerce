@@ -1,0 +1,14 @@
+{
+  "chiffreAffaires": 450000,
+  "achatsConsommes": 270000,
+  "autresAchatsExternes": 35000,
+  "impotsTaxes": 8000,
+  "chargesPersonnel": 62000,
+  "dotationsAmortissements": 12000,
+  "autresChargesExploitation": 3000,
+  "produitsFinanciers": 500,
+  "chargesFinancieres": 4500,
+  "produitsExceptionnels": 2000,
+  "chargesExceptionnelles": 1000,
+  "impotsSurBenefices": 11000
+}

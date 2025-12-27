@@ -163,7 +163,9 @@ export const calculateSigTool = new FunctionTool({
 
 /**
  * Extrait les valeurs comptables depuis les documents d'une année.
- * Utilise des heuristiques pour identifier les postes comptables dans les tableaux extraits.
+ *
+ * PRIORITÉ 1: Utilise key_values de Vision extraction (direct, précis)
+ * PRIORITÉ 2: Parse les tableaux avec heuristiques (fallback)
  */
 function extractAccountingValues(yearDocs: any[]): {
   chiffre_affaires: number;
@@ -183,6 +185,45 @@ function extractAccountingValues(yearDocs: any[]): {
   resultat_exceptionnel: number;
   impots_societes: number;
 } {
+  // PRIORITÉ 1: Utiliser key_values de Vision si disponible
+  for (const doc of yearDocs) {
+    if (doc.extractedData?.key_values && Object.keys(doc.extractedData.key_values).length > 0) {
+      const kv = doc.extractedData.key_values;
+
+      // Si key_values contient au moins CA ou EBE, c'est une extraction Vision réussie
+      if (kv.chiffre_affaires || kv.ebe) {
+        console.log('[calculateSig] Using Vision key_values (priority 1):', {
+          ca: kv.chiffre_affaires,
+          ebe: kv.ebe,
+          rn: kv.resultat_net,
+          keysCount: Object.keys(kv).length
+        });
+
+        return {
+          chiffre_affaires: kv.chiffre_affaires || 0,
+          ventes_marchandises: kv.chiffre_affaires || 0, // Use CA as fallback
+          achats_marchandises: kv.achats_marchandises || 0,
+          production_vendue: 0,
+          production_stockee: 0,
+          production_immobilisee: 0,
+          consommations_externes: kv.consommations_externes || 0,
+          subventions: 0,
+          impots_taxes: 0,
+          charges_personnel: kv.charges_personnel || 0,
+          dotations_amortissements: kv.dotations_amortissements || 0,
+          autres_produits: 0,
+          autres_charges: 0,
+          resultat_financier: 0,
+          resultat_exceptionnel: 0,
+          impots_societes: 0
+        };
+      }
+    }
+  }
+
+  console.log('[calculateSig] No Vision key_values found, falling back to table parsing (priority 2)');
+
+  // PRIORITÉ 2: Parser les tableaux avec heuristiques (logique existante)
   const values = {
     chiffre_affaires: 0,
     ventes_marchandises: 0,

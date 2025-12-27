@@ -1,0 +1,14 @@
+{
+  "name": "LE TABAC DE LA PLACE",
+  "siret": "85123456789012",
+  "nafCode": "47.26Z",
+  "activity": "Commerce de détail de produits à base de tabac en magasin spécialisé",
+  "address": "12 Place de la République",
+  "city": "Lyon",
+  "postalCode": "69002",
+  "creationDate": "2018-06-15",
+  "legalForm": "SARL",
+  "capital": 15000,
+  "employees": 3,
+  "status": "active"
+}

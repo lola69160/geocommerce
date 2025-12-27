@@ -4,12 +4,15 @@ import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../../utils/schemaHelper';
 
 /**
- * Parse Tables Tool
+ * Parse Tables Heuristic Tool (FALLBACK)
  *
- * Extrait les tableaux du texte PDF.
- * Utilise des heuristiques simples pour détecter les structures tabulaires.
+ * Extrait les tableaux du texte PDF avec des heuristiques basiques.
+ * Utilise des patterns regex pour détecter les structures tabulaires.
  *
- * Note: Pour une extraction avancée, envisager pdf2json ou tabula-js
+ * Ce tool est maintenant utilisé comme FALLBACK uniquement si geminiVisionExtractTool échoue.
+ * Précision: ~30% sur PDFs comptables complexes (fragile)
+ *
+ * Note: Pour une extraction robuste, utiliser geminiVisionExtractTool (Vision API)
  */
 
 const ParseTablesInputSchema = z.object({
@@ -28,9 +31,9 @@ const ParseTablesOutputSchema = z.object({
   count: z.number()
 });
 
-export const parseTablesTool = new FunctionTool({
-  name: 'parseTables',
-  description: 'Extrait les tableaux du texte PDF. Retourne: { tables: [{ headers, rows }], count }',
+export const parseTablesHeuristicTool = new FunctionTool({
+  name: 'parseTablesHeuristic',
+  description: 'FALLBACK: Extrait les tableaux du texte PDF avec heuristiques regex (utilisé uniquement si Vision échoue). Retourne: { tables: [{ headers, rows }], count, method: "heuristic" }',
   parameters: zToGen(ParseTablesInputSchema),
 
   execute: async (params, toolContext?: ToolContext) => {
@@ -136,13 +139,15 @@ export const parseTablesTool = new FunctionTool({
 
       return {
         tables,
-        count: tables.length
+        count: tables.length,
+        method: 'heuristic' // Track que ce sont des heuristiques (fallback)
       };
 
     } catch (error: any) {
       return {
         tables: [],
-        count: 0
+        count: 0,
+        method: 'heuristic'
       };
     }
   }

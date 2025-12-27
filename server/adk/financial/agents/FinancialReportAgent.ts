@@ -33,10 +33,10 @@ import type { FinancialState } from '../index';
  */
 export class FinancialReportAgent extends LlmAgent {
   constructor() {
-    // Configuration Gemini
+    // Configuration Gemini - aligner avec MODEL_DEFAULTS
     const modelConfig = {
-      name: 'gemini-2.0-flash-exp',
-      temperature: 0.3, // Créativité modérée pour formatage et présentation
+      name: 'gemini-3-flash-preview', // Same as other agents
+      temperature: 0.4, // Match MODEL_DEFAULTS from models.ts
       topP: 0.95,
       topK: 40,
       maxOutputTokens: 8192

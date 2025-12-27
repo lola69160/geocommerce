@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "total_documents": 3,
+    "years_covered": [2021, 2022, 2023],
+    "document_types": ["bilan", "compte_de_resultat"],
+    "missing_documents": []
+  },
+  "documents": [
+    {
+      "filename": "COMPTA_BILAN_30_NOVEMBRE_2023.PDF",
+      "documentType": "bilan",
+      "year": 2023,
+      "confidence": 0.95,
+      "extractedData": {
+        "tables": [
+          {
+            "name": "actif",
+            "rows": [
+              ["Immobilisations corporelles", "50000", "45000"],
+              ["Stocks", "85000", "78000"],
+              ["Créances clients", "42000", "38000"],
+              ["Disponibilités", "28000", "25000"]
+            ]
+          },
+          {
+            "name": "passif",
+            "rows": [
+              ["Capital social", "15000", "15000"],
+              ["Résultat de l'exercice", "32000", "28000"],
+              ["Dettes fournisseurs", "95000", "88000"],
+              ["Emprunts bancaires", "63000", "55000"]
+            ]
+          }
+        ],
+        "metadata": {
+          "exercice": "2023",
+          "dateClôture": "30/11/2023"
+        }
+      }
+    },
+    {
+      "filename": "bilan_30.11.2022.PDF",
+      "documentType": "bilan",
+      "year": 2022,
+      "confidence": 0.92,
+      "extractedData": {
+        "tables": [
+          {
+            "name": "actif",
+            "rows": [
+              ["Immobilisations corporelles", "45000", "42000"],
+              ["Stocks", "78000", "72000"],
+              ["Créances clients", "38000", "35000"],
+              ["Disponibilités", "25000", "22000"]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "filename": "bilan_30_novembre_2021.PDF",
+      "documentType": "bilan",
+      "year": 2021,
+      "confidence": 0.90,
+      "extractedData": {
+        "tables": [
+          {
+            "name": "actif",
+            "rows": [
+              ["Immobilisations corporelles", "42000", "40000"],
+              ["Stocks", "72000", "68000"],
+              ["Créances clients", "35000", "32000"],
+              ["Disponibilités", "22000", "20000"]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

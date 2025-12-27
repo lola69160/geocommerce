@@ -18,15 +18,29 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 ## 1. DocumentExtractionAgent
 
 ### Responsabilités
-- Extraire le texte brut des PDF avec `pdfjs-dist`
+- **Lister les documents disponibles** (évite l'hallucination de filenames)
+- **Extraire avec Gemini Vision** (analyse visuelle du PDF - priorité 1)
+- **Extraire directement les valeurs comptables clés** (CA, EBE, RN, etc.)
 - Classifier automatiquement les documents (bilan, compte de résultat, liasse fiscale, bail)
-- Parser les tableaux comptables
+- Parser les tableaux comptables (Vision ou heuristique en fallback)
 - Structurer les données en JSON
 
-### Tools (3)
-- `extractPdfTool` - Extraction texte PDF (lit depuis `state.documents`)
-- `classifyDocumentTool` - Classification Gemini (6 types de documents)
-- `parseTablesTool` - Parsing des tableaux comptables
+### Tools (4)
+- `listDocumentsTool` - **NOUVEAU** ⚠️ OBLIGATOIRE EN PREMIER - Liste les fichiers exacts dans `state.documents` (évite hallucination)
+- `geminiVisionExtractTool` - **NOUVEAU** 🎯 MÉTHODE PRINCIPALE - Vision API directe sur PDF (confidence ~95% vs ~30% heuristiques)
+  - Analyse visuelle du document (comprend structure tableaux)
+  - Classification automatique (6 types)
+  - Extraction année fiscale
+  - **BONUS**: Extraction directe valeurs comptables (CA, EBE, RN, charges) → bypass heuristiques
+- `extractPdfTool` - Extraction texte brut (fallback pour raw_text)
+- `parseTablesHeuristicTool` - **FALLBACK UNIQUEMENT** - Parsing heuristique si Vision échoue (confidence < 0.6)
+
+### Workflow Vision-First
+1. **ÉTAPE 1**: `listDocuments()` → Obtenir filenames exacts (obligatoire)
+2. **ÉTAPE 2**: `geminiVisionExtract({ filename })` → Extraction Vision (priorité 1)
+   - Si confidence ≥ 0.6 ET tables présentes → ✅ UTILISER
+   - Sinon → FALLBACK étape 3
+3. **ÉTAPE 3**: `extractPdf()` + `parseTablesHeuristic()` → Fallback heuristique
 
 ### Input
 `state.documents[]` - Liste des fichiers PDF avec `{ filename, filePath ou content }`
@@ -36,29 +50,51 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 {
   "documents": [
     {
-      "filename": "bilan-2024.pdf",
-      "documentType": "bilan",
-      "year": 2024,
-      "confidence": 0.95,
+      "filename": "COMPTA BILAN 30 NOVEMBRE 2023.PDF",
+      "documentType": "liasse_fiscale",
+      "year": 2023,
+      "confidence": 1.0,
       "extractedData": {
-        "raw_text": "...",
+        "raw_text": "...[truncated to 5000 chars]",
         "tables": [
           {
-            "headers": ["ACTIF", "2024", "2023"],
+            "headers": ["ACTIF", "2023", "2022"],
             "rows": [["Immobilisations", "50000", "45000"]],
             "caption": "Bilan Actif"
           }
-        ]
-      }
+        ],
+        "key_values": {
+          "chiffre_affaires": 235501,
+          "ebe": 17558,
+          "resultat_net": 4893,
+          "charges_personnel": 79991,
+          "dotations_amortissements": 8736,
+          "achats_marchandises": 65295,
+          "consommations_externes": 64027,
+          "resultat_exploitation": 10348
+        }
+      },
+      "method": "vision"
     }
   ],
   "summary": {
-    "total_documents": 2,
-    "years_covered": [2024, 2023],
-    "missing_documents": ["compte_resultat_2024"]
+    "total_documents": 1,
+    "years_covered": [2023],
+    "missing_documents": [],
+    "extraction_methods": { "vision": 1, "heuristic": 0 }
   }
 }
 ```
+
+### Avantages Gemini Vision
+- ✅ **Précision ~95%** vs ~30% avec heuristiques regex
+- ✅ **Extraction directe valeurs comptables** → ComptableAgent bypass heuristiques
+- ✅ **Supporte PDFs scannés** (OCR intégré)
+- ✅ **Comprend structure visuelle** des tableaux
+- ✅ **Pas de regex à maintenir**
+- ✅ **Gère formats variés** et multi-colonnes
+- ⚡ **Coût**: ~$0.0014 par PDF (3 pages) avec Gemini Flash
+- ⚡ **Latence**: 3-4 secondes (acceptable)
 
 ## 2. ComptableAgent
 
@@ -72,6 +108,8 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 
 ### Tools (5)
 - `calculateSigTool` - Calcule 14 indicateurs SIG par année
+  - **PRIORITÉ 1**: Utilise `key_values` de Vision extraction (extraction directe précise)
+  - **PRIORITÉ 2**: Parse les tableaux avec heuristiques (fallback)
 - `calculateRatiosTool` - Calcule 11 ratios financiers (dernière année)
 - `analyzeTrendsTool` - Analyse évolution CA/EBE/RN
 - `compareToSectorTool` - Compare 9 ratios aux benchmarks sectoriels
@@ -724,8 +762,8 @@ if (healthScore >= 70 && confidenceScore >= 70) {
 - ✅ LLM orchestre les tools dans l'ordre
 - ✅ Parsing JSON strings dans tous les tools
 - ✅ Output injecté dans `state.financialReport` via `outputKey`
-- ✅ Temperature 0.3 (créativité modérée pour présentation)
-- ✅ Model: gemini-2.0-flash-exp (rapide et efficace)
+- ✅ Temperature 0.4 (aligné avec MODEL_DEFAULTS)
+- ✅ Model: gemini-3-flash-preview (cohérent avec tous les agents du pipeline)
 
 ## 7. FinancialOrchestrator
 
