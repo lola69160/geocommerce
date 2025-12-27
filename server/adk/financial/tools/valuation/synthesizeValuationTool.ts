@@ -19,6 +19,22 @@ import { zToGen } from '../../../utils/schemaHelper';
  */
 
 const SynthesizeValuationInputSchema = z.object({
+  methodeEBE: z.object({
+    ebe_reference: z.number(),
+    ebe_retraite: z.number(),
+    valeur_basse: z.number(),
+    valeur_mediane: z.number(),
+    valeur_haute: z.number()
+  }).optional().describe('Résultat de calculateEbeValuation (sera lu depuis state.valorisation si non fourni)'),
+  methodeCA: z.object({
+    valeur_basse: z.number(),
+    valeur_mediane: z.number(),
+    valeur_haute: z.number()
+  }).optional().describe('Résultat de calculateCaValuation (sera lu depuis state.valorisation si non fourni)'),
+  methodePatrimoniale: z.object({
+    actif_net_comptable: z.number(),
+    valeur_estimee: z.number()
+  }).optional().describe('Résultat de calculatePatrimonial (sera lu depuis state.valorisation si non fourni)'),
   prix_affiche: z.number().optional().describe('Prix affiché par le vendeur (si connu)'),
   context_notes: z.string().optional().describe('Notes contextuelles pour affiner la recommandation')
 });
@@ -54,32 +70,53 @@ export const synthesizeValuationTool = new FunctionTool({
 
   execute: async (params, toolContext?: ToolContext) => {
     try {
-      // Lire valorisation depuis state (doit contenir les 3 méthodes déjà calculées)
-      let valorisation = toolContext?.state.get('valorisation') as any;
+      // PRIORITÉ 1: Utiliser les méthodes passées en paramètres (nouveau pattern)
+      // FALLBACK: Lire depuis state.valorisation (ancien pattern, backward compat)
 
-      // Parser JSON string si nécessaire
-      if (typeof valorisation === 'string') {
-        try {
-          valorisation = JSON.parse(valorisation);
-        } catch (e) {
-          return {
-            synthese: {
-              fourchette_basse: 0,
-              fourchette_mediane: 0,
-              fourchette_haute: 0,
-              methode_privilegiee: 'EBE' as const,
-              raison_methode: 'Erreur parsing données',
-              valeur_recommandee: 0
-            },
-            argumentsNegociation: {
-              pour_acheteur: [],
-              pour_vendeur: []
-            },
-            confidence: 0,
-            limitations: ['Erreur parsing des données de valorisation'],
-            error: 'Failed to parse valorisation state (invalid JSON)'
-          };
+      let methodeEBE = params.methodeEBE;
+      let methodeCA = params.methodeCA;
+      let methodePatrimoniale = params.methodePatrimoniale;
+
+      // Si les méthodes ne sont pas en paramètres, essayer de lire depuis le state
+      if (!methodeEBE || !methodeCA || !methodePatrimoniale) {
+        let valorisation = toolContext?.state.get('valorisation') as any;
+
+        // Parser JSON string si nécessaire
+        if (typeof valorisation === 'string') {
+          try {
+            valorisation = JSON.parse(valorisation);
+          } catch (e) {
+            // Ignorer l'erreur et continuer avec les paramètres (si fournis)
+          }
         }
+
+        // Fallback vers le state (backward compatibility)
+        if (valorisation) {
+          methodeEBE = methodeEBE || valorisation.methodeEBE;
+          methodeCA = methodeCA || valorisation.methodeCA;
+          methodePatrimoniale = methodePatrimoniale || valorisation.methodePatrimoniale;
+        }
+      }
+
+      // Vérifier qu'on a bien les 3 méthodes (depuis params OU state)
+      if (!methodeEBE || !methodeCA || !methodePatrimoniale) {
+        return {
+          synthese: {
+            fourchette_basse: 0,
+            fourchette_mediane: 0,
+            fourchette_haute: 0,
+            methode_privilegiee: 'EBE' as const,
+            raison_methode: 'Données de valorisation manquantes',
+            valeur_recommandee: 0
+          },
+          argumentsNegociation: {
+            pour_acheteur: [],
+            pour_vendeur: []
+          },
+          confidence: 0,
+          limitations: ['Les 3 méthodes de valorisation doivent être calculées avant la synthèse'],
+          error: 'Missing valuation methods (not in params nor in state.valorisation)'
+        };
       }
 
       // Lire comptable depuis state (pour contexte)
@@ -93,27 +130,22 @@ export const synthesizeValuationTool = new FunctionTool({
         }
       }
 
-      if (!valorisation?.methodeEBE || !valorisation?.methodeCA || !valorisation?.methodePatrimoniale) {
-        return {
-          synthese: {
-            fourchette_basse: 0,
-            fourchette_mediane: 0,
-            fourchette_haute: 0,
-            methode_privilegiee: 'EBE' as const,
-            raison_methode: 'Données de valorisation incomplètes',
-            valeur_recommandee: 0
-          },
-          argumentsNegociation: {
-            pour_acheteur: [],
-            pour_vendeur: []
-          },
-          confidence: 0,
-          limitations: ['Les 3 méthodes de valorisation doivent être calculées avant la synthèse'],
-          error: 'Missing valuation methods in state.valorisation'
-        };
+      // NOUVEAU: Lire documentExtraction pour transactionCosts
+      let documentExtraction = toolContext?.state.get('documentExtraction') as any;
+
+      if (typeof documentExtraction === 'string') {
+        try {
+          documentExtraction = JSON.parse(documentExtraction);
+        } catch (e) {
+          // Pas critique
+        }
       }
 
-      const { methodeEBE, methodeCA, methodePatrimoniale } = valorisation;
+      // Si prix_affiche non fourni en params, utiliser transactionCosts.prix_fonds
+      let prixAffiche = params.prix_affiche;
+      if (!prixAffiche && documentExtraction?.transactionCosts?.prix_fonds) {
+        prixAffiche = documentExtraction.transactionCosts.prix_fonds;
+      }
 
       // Déterminer la méthode privilégiée
       let methodePrivilegiee: 'EBE' | 'CA' | 'Patrimoniale' = 'EBE';
@@ -184,11 +216,11 @@ export const synthesizeValuationTool = new FunctionTool({
       // Valeur recommandée = médiane
       const valeurRecommandee = fourchetteMediane;
 
-      // Comparaison avec prix affiché (si fourni)
+      // Comparaison avec prix affiché (si fourni en params ou depuis transactionCosts)
       let comparaisonPrix: any = undefined;
 
-      if (params.prix_affiche && params.prix_affiche > 0) {
-        const ecartPct = Math.round(((params.prix_affiche - valeurRecommandee) / valeurRecommandee) * 100);
+      if (prixAffiche && prixAffiche > 0) {
+        const ecartPct = Math.round(((prixAffiche - valeurRecommandee) / valeurRecommandee) * 100);
 
         let appreciation: 'sous-evalue' | 'prix_marche' | 'sur-evalue' = 'prix_marche';
 
@@ -199,10 +231,10 @@ export const synthesizeValuationTool = new FunctionTool({
         }
 
         // Marge de négociation = différence entre prix affiché et fourchette médiane
-        const margeNegociation = params.prix_affiche - fourchetteMediane;
+        const margeNegociation = prixAffiche - fourchetteMediane;
 
         comparaisonPrix = {
-          prix_affiche: params.prix_affiche,
+          prix_affiche: prixAffiche,
           ecart_vs_estimation_pct: ecartPct,
           appreciation,
           marge_negociation: margeNegociation

@@ -78,6 +78,10 @@ Les données sont passées via state (accessible dans les tools) :
   - photo.condition : État du local
   - photo.renovation_needed : Travaux identifiés par IA
   - photo.cost_estimate : Estimation coût travaux
+- state.userComments : Commentaires de l'utilisateur (NOUVEAU)
+  - userComments.loyer.futur_loyer_commercial : Futur loyer commercial mensuel (€)
+  - userComments.loyer.loyer_logement_perso : Part logement personnel mensuel (€)
+  - userComments.loyer.commentaire : Commentaire libre sur le loyer
 
 IMPORTANT: Les tools font tous les calculs automatiquement - ne calcule PAS manuellement.
 Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
@@ -156,6 +160,7 @@ Après avoir appelé les 4 tools, analyser les résultats et générer :
      * Appreciation "desavantageux" : +10
      * Durée restante > 5 ans : +10
      * Type commercial 3-6-9 : +5
+     * 🆕 BONUS NÉGOCIATION UTILISATEUR : +10 si bail.negociation_utilisateur_favorable === true
 
    - Travaux (30 points):
      * État "bon" : +30

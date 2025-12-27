@@ -76,6 +76,9 @@ Les données sont passées via state (accessible dans les tools) :
   - businessInfo.siret : SIRET
   - businessInfo.nafCode : Code NAF (pour benchmark sectoriel)
   - businessInfo.activity : Activité
+- state.userComments : Commentaires de l'utilisateur (NOUVEAU)
+  - userComments.loyer.loyer_logement_perso : Part logement personnel mensuel (€)
+    → Si présent, représente un avantage en nature qui doit être retraité dans l'EBE
 
 IMPORTANT: Les tools font tous les calculs automatiquement - ne calcule PAS manuellement.
 Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
@@ -113,9 +116,23 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
    Le tool calcule un score global 0-100 basé sur 4 dimensions.
 
-ÉTAPE 6 : GÉNÉRER ALERTES ET POINTS DE VIGILANCE
+ÉTAPE 6 : GÉNÉRER RETRAITEMENTS (basés sur userComments)
 
-Après avoir appelé les 5 tools, analyser les résultats et identifier :
+Si state.userComments.loyer.loyer_logement_perso est fourni :
+- Calculer montant annuel = loyer_logement_perso × 12
+- Ajouter dans retraitements[] :
+  {
+    "type": "loyer_logement_personnel",
+    "description": "Loyer logement personnel inclus dans charges (avantage en nature gérant)",
+    "montant_mensuel": <loyer_logement_perso>,
+    "montant_annuel": <loyer_logement_perso × 12>,
+    "impact_ebe": "+<montant_annuel>",
+    "commentaire": "Économie réalisée par le gérant - à réintégrer dans l'EBE retraité"
+  }
+
+ÉTAPE 7 : GÉNÉRER ALERTES ET POINTS DE VIGILANCE
+
+Après avoir appelé les 5 tools et généré les retraitements, analyser les résultats et identifier :
 - Alertes critiques (seuil -10% vs secteur, marges négatives, endettement >200%)
 - Alertes warning (seuil -5% vs secteur, tendance déclin)
 - Points positifs (seuil +10% vs secteur, croissance >15%)
@@ -221,6 +238,17 @@ FORMAT DE SORTIE JSON (STRICT) :
     },
     "interpretation": "Bonne santé financière. L'entreprise est performante avec quelques points d'amélioration possibles."
   },
+
+  "retraitements": [  // NOUVEAU - Retraitements basés sur userComments
+    {
+      "type": "loyer_logement_personnel",
+      "description": "Loyer logement personnel inclus dans charges (avantage en nature gérant)",
+      "montant_mensuel": 600,
+      "montant_annuel": 7200,
+      "impact_ebe": "+7200",
+      "commentaire": "Économie réalisée par le gérant - à réintégrer dans l'EBE retraité"
+    }
+  ],
 
   "synthese": "L'entreprise affiche une croissance solide (+12.5% CA) avec une rentabilité correcte (marge nette 11%). Le score de santé financière (72/100) témoigne d'une bonne situation globale. Points de vigilance : délai clients à optimiser et marge EBE légèrement sous la moyenne sectorielle. La structure financière est saine avec un endettement maîtrisé (85%)."
 }

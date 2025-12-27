@@ -20,19 +20,25 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Configuration Multer pour upload documents PDF
+// Configuration paths (must be before middleware that uses __dirname)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DOCUMENTS_DIR = path.join(__dirname, 'data', 'documents');
 const TEMP_DIR = path.join(__dirname, 'data', 'documents', 'temp');
 
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '50mb' })); // Increase limit for PDF uploads in base64
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve static files for generated reports
+app.use('/data/financial-reports', express.static(path.join(__dirname, 'data', 'financial-reports')));
+app.use('/data/professional-reports', express.static(path.join(__dirname, 'data', 'professional-reports')));
+
 // Créer le répertoire temporaire au démarrage
 await fs.mkdir(TEMP_DIR, { recursive: true });
 
+// Configuration Multer pour upload documents PDF
 const storage = multer.diskStorage({
     destination: async (req, file, cb) => {
         // Sauvegarder temporairement dans le dossier temp
@@ -923,7 +929,7 @@ app.post('/api/analyze-financial', async (req, res) => {
     const startTime = Date.now();
 
     try {
-        const { documents, businessInfo, options = {} } = req.body;
+        const { documents, businessInfo, userComments, options = {} } = req.body;
 
         if (!documents || !Array.isArray(documents) || documents.length === 0) {
             return res.status(400).json({ error: 'Missing documents parameter (must be non-empty array)' });
@@ -969,6 +975,7 @@ app.post('/api/analyze-financial', async (req, res) => {
                 nafCode: businessInfo.nafCode || '',
                 activity: businessInfo.activity || ''
             },
+            userComments: userComments || {},
             options: {
                 prixAffiche: options.prixAffiche || null,
                 includeImmobilier: options.includeImmobilier !== false // true par défaut
@@ -1036,6 +1043,13 @@ The documents and business info are available in state for all agents.`
                 deltaKeys.forEach(key => {
                     const value = event.actions.stateDelta[key];
 
+                    // DEBUG: Log raw value before parsing
+                    if (key === 'comptable' || key === 'financialReport') {
+                        console.log(`\n📋 RAW OUTPUT from ${key}:`);
+                        console.log(typeof value === 'string' ? value.substring(0, 500) + '...' : JSON.stringify(value, null, 2).substring(0, 500) + '...');
+                        console.log('');
+                    }
+
                     if (typeof value === 'string' && value.trim().startsWith('{')) {
                         try {
                             const parsed = JSON.parse(value);
@@ -1046,6 +1060,41 @@ The documents and business info are available in state for all agents.`
                                 originalType: 'string',
                                 parsedType: typeof parsed
                             });
+
+                            // DEBUG: Log parsed structure for comptable
+                            if (key === 'comptable') {
+                                console.log(`\n✅ PARSED COMPTABLE STRUCTURE:`);
+                                console.log('  - sig:', parsed.sig ? Object.keys(parsed.sig) : 'MISSING');
+                                console.log('  - healthScore:', parsed.healthScore);
+                                console.log('  - ratios:', parsed.ratios ? 'PRESENT' : 'MISSING');
+                                console.log('');
+                            }
+
+                            // DEBUG: Log extraction methods used for documentExtraction
+                            if (key === 'documentExtraction') {
+                                const docs = parsed.documents || [];
+                                const methods = docs.reduce((acc, doc) => {
+                                    acc[doc.method || 'unknown'] = (acc[doc.method || 'unknown'] || 0) + 1;
+                                    return acc;
+                                }, {});
+
+                                console.log(`\n📊 EXTRACTION METHODS USED:`);
+                                console.log('  Vision:', methods.vision || 0);
+                                console.log('  Heuristic:', methods.heuristic || 0);
+                                console.log('  Failed:', methods.vision_failed || 0);
+                                console.log('');
+
+                                docs.forEach(doc => {
+                                    console.log(`📄 Document: ${doc.filename}`);
+                                    console.log(`   Method: ${doc.method}`);
+                                    console.log(`   Type: ${doc.documentType}`);
+                                    console.log(`   Year: ${doc.year}`);
+                                    console.log(`   Confidence: ${doc.confidence}`);
+                                    console.log(`   Tables: ${doc.extractedData?.tables?.length || 0}`);
+                                    console.log(`   Key Values: ${Object.keys(doc.extractedData?.key_values || {}).length}`);
+                                    console.log('');
+                                });
+                            }
                         } catch (e) {
                             logger.warn(`Failed to auto-parse JSON for state.${key}`, {
                                 siret: businessInfo.siret || 'N/A',
@@ -1085,6 +1134,22 @@ The documents and business info are available in state for all agents.`
             healthScore: finalState.comptable?.healthScore?.overall,
             confidence: finalState.financialValidation?.confidenceScore?.overall
         });
+
+        // DEBUG: Log full finalState to understand what's happening
+        console.log('\n' + '='.repeat(80));
+        console.log('🔍 FINAL STATE DEBUG');
+        console.log('='.repeat(80));
+        console.log('documentExtraction:', finalState.documentExtraction ? 'PRESENT' : 'MISSING');
+        console.log('comptable:', finalState.comptable ? 'PRESENT' : 'MISSING');
+        if (finalState.comptable) {
+            console.log('  - healthScore:', finalState.comptable.healthScore);
+            console.log('  - sig:', finalState.comptable.sig ? Object.keys(finalState.comptable.sig) : 'MISSING');
+        }
+        console.log('valorisation:', finalState.valorisation ? 'PRESENT' : 'MISSING');
+        console.log('immobilier:', finalState.immobilier ? 'PRESENT' : 'MISSING');
+        console.log('financialValidation:', finalState.financialValidation ? 'PRESENT' : 'MISSING');
+        console.log('financialReport:', finalState.financialReport ? JSON.stringify(finalState.financialReport, null, 2) : 'MISSING');
+        console.log('='.repeat(80) + '\n');
 
         // 9. Extraire summary
         const healthScore = finalState.comptable?.healthScore?.overall || 0;

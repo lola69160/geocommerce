@@ -31,62 +31,128 @@ const VISION_EXTRACTION_PROMPT = `Tu es un expert-comptable français spécialis
 
 Analyse ce document PDF et extrait TOUTES les informations comptables structurées.
 
-DOCUMENT TYPE DETECTION:
-- "bilan" : Présente ACTIF (immobilisations, stocks, créances) et PASSIF (capitaux propres, dettes)
-- "compte_resultat" : Présente PRODUITS (ventes, prestations) et CHARGES (achats, personnel, dotations)
-- "liasse_fiscale" : Formulaires Cerfa 2050-2059 (déclaration fiscale annuelle)
+DOCUMENT TYPE DETECTION (analyser le CONTENU, pas seulement le titre):
+- "bilan" : Contient UNIQUEMENT un tableau ACTIF + PASSIF (immobilisations, stocks, créances / capitaux propres, dettes)
+- "compte_resultat" : Contient UNIQUEMENT un tableau PRODUITS + CHARGES (ventes, prestations / achats, personnel, dotations)
+- "liasse_fiscale" : Document COMPLET contenant PLUSIEURS sections :
+  * BILAN (ACTIF + PASSIF)
+  * COMPTE DE RÉSULTAT (PRODUITS + CHARGES)
+  * Souvent aussi : SIG, annexes, tableaux détaillés
+  * Peut être formulaires Cerfa 2050-2059 ou liasse expert-comptable
+  * Critère clé : présence de BILAN ET COMPTE DE RÉSULTAT dans le même document
 - "bail" : Contrat de location commerciale 3-6-9
 - "projet_vente" : Proposition de cession de fonds de commerce
+- "cout_transaction" : Document détaillant coûts acquisition (prix fonds, honoraires, frais, stock, financement)
 - "autre" : Non identifié
+
+RÈGLE IMPORTANTE: Si le document contient BILAN + COMPTE DE RÉSULTAT → type = "liasse_fiscale"
+                  Sinon, utiliser "bilan" ou "compte_resultat" selon le contenu dominant.
 
 YEAR EXTRACTION:
 - Chercher "Exercice clos le DD/MM/YYYY" ou "Période du DD/MM/YYYY au DD/MM/YYYY"
 - Format de sortie: YYYY (nombre entier)
 - Si plusieurs années présentes dans les colonnes, prendre la plus récente
 
+EXTRACTION PRIORITAIRE (par ordre d'importance):
+
+1. BILAN COMPTABLE (ACTIF + PASSIF) - CRITIQUE si présent
+   Extraire TOUS les postes du bilan :
+   - ACTIF IMMOBILISÉ :
+     * Immobilisations incorporelles (fonds de commerce, logiciels)
+     * Immobilisations corporelles (installations, matériel, mobilier, agencements)
+     * Immobilisations financières
+   - ACTIF CIRCULANT :
+     * Stocks et en-cours
+     * Créances clients
+     * Disponibilités (banque, caisse)
+     * Charges constatées d'avance
+   - PASSIF :
+     * Capitaux propres (capital, réserves, report à nouveau, résultat)
+     * Provisions pour risques et charges
+     * Dettes fournisseurs
+     * Dettes fiscales et sociales
+     * Dettes financières (emprunts)
+     * Produits constatés d'avance
+
+2. COMPTE DE RÉSULTAT - CRITIQUE si présent
+   Extraire TOUS les postes :
+   - PRODUITS D'EXPLOITATION :
+     * Ventes de marchandises
+     * Production vendue (services, biens produits)
+     * Subventions d'exploitation
+     * Autres produits d'exploitation
+   - ACHATS ET CHARGES EXTERNES :
+     * Achats de marchandises
+     * Variation de stocks
+     * Achats de matières premières
+     * Loyers et charges locatives
+     * Assurances
+     * Honoraires et services extérieurs
+     * Publicité
+   - CHARGES DE PERSONNEL :
+     * Salaires bruts
+     * Charges sociales
+   - DOTATIONS ET PROVISIONS :
+     * Dotations aux amortissements
+     * Dotations aux provisions
+   - RÉSULTATS :
+     * Résultat d'exploitation
+     * Résultat financier (produits - charges financières)
+     * Résultat exceptionnel
+     * Impôts sur les bénéfices
+     * Résultat net
+
+3. SIG (SOLDES INTERMÉDIAIRES DE GESTION) - IMPORTANT si présent
+   Extraire si présents :
+   - Chiffre d'affaires
+   - Marge commerciale
+   - Valeur ajoutée
+   - EBE (Excédent Brut d'Exploitation)
+   - Résultat d'exploitation
+   - Résultat courant avant impôts
+   - Résultat net
+
+4. ANNEXES & DÉTAILS - UTILE si présent
+   Extraire si présents :
+   - Détail des immobilisations et amortissements
+   - État des échéances des créances et dettes (< 1 mois, 1-3 mois, 3-6 mois, > 6 mois)
+   - Détail des provisions
+   - Rémunération des dirigeants
+   - Effectifs (nombre de salariés)
+   - Engagements hors bilan (cautions, crédit-bail)
+   - Détail des charges exceptionnelles
+
+RÈGLES D'EXTRACTION:
+- Extraire TOUTES les valeurs numériques trouvées (même si certaines semblent redondantes)
+- Pour chaque tableau, capturer l'année fiscale (ex: 2023, 2022, 2021)
+- Convertir TOUS les montants en NOMBRES (pas de strings)
+  * Format français : "50 000" → 50000, "1,5" → 1.5
+  * Nettoyer symboles € et espaces
+  * Gérer négatifs (pertes) : utiliser nombres négatifs
+- Si un poste n'est pas présent, ne pas l'inventer (retourner null ou omettre)
+- Conserver la structure hiérarchique (ex: ACTIF IMMOBILISÉ > Immobilisations corporelles > Installations techniques)
+- Pour tableaux multi-années (colonnes N, N-1, N-2), extraire TOUTES les colonnes
+
 TABLE EXTRACTION:
-- Extraire TOUS les tableaux avec leurs en-têtes et lignes
-- Préserver les montants EXACTS (ne pas arrondir)
-- Format français: espaces pour milliers (50 000 €), virgule pour décimales (1,5)
-- Nettoyer les symboles € et espaces dans les montants
-- Convertir en nombres (pas de strings pour les montants)
-- Inclure le caption/titre de chaque tableau (ex: "ACTIF", "PASSIF", "CHARGES")
-
-ACCOUNTING VALUES EXTRACTION (BONUS - TRÈS IMPORTANT):
-Si le document est un bilan ou compte de résultat, extraire directement ces valeurs clés:
-
-PRODUITS:
-- Chiffre d'affaires (CA, ventes, prestations de services)
-- Production vendue
-- Autres produits d'exploitation
-
-CHARGES:
-- Achats de marchandises
-- Consommations externes (loyers, assurances, fournitures)
-- Charges de personnel (salaires, cotisations sociales)
-- Dotations aux amortissements
-
-RÉSULTATS:
-- EBE (Excédent Brut d'Exploitation)
-- Résultat d'exploitation
-- Résultat financier
-- Résultat net
-
-IMPORTANT:
-- Convertir montants en NOMBRES (pas de string)
-- Gérer montants négatifs (pertes): utiliser nombres négatifs
-- Si donnée manquante, ne pas inventer: null ou omettre le champ
-- Ne pas arrondir les montants (garder précision exacte)
-- Pour les tableaux avec plusieurs années (colonnes N, N-1, N-2), extraire toutes les colonnes
+- Inclure le caption/titre de chaque tableau (ex: "ACTIF", "PASSIF", "COMPTE DE RÉSULTAT")
+- Préserver la structure : headers + rows
+- NE PAS arrondir les montants (garder précision exacte)
 
 CONFIDENCE SCORING:
-- 0.9-1.0 : Document clair, tableaux bien formés, toutes données présentes
-- 0.7-0.9 : Document lisible, quelques imprécisions mineures
+- 0.9-1.0 : Document clair, tableaux bien formés, toutes données présentes, extraction exhaustive
+- 0.7-0.9 : Document lisible, quelques imprécisions mineures, extraction partielle
 - 0.5-0.7 : Document difficile, données incomplètes ou mal structurées
 - <0.5 : Document illisible, scans de mauvaise qualité, ou non comptable
 
 REASONING:
-Explique brièvement pourquoi tu as classifié le document ainsi et quel est ton niveau de confiance.`;
+Explique brièvement :
+1. Pourquoi tu as classifié le document ainsi (bilan/compte_resultat/liasse_fiscale)
+2. Quelles sections tu as trouvées (BILAN, COMPTE DE RÉSULTAT, SIG, ANNEXES)
+3. Ton niveau de confiance et pourquoi
+4. Si des sections sont manquantes ou incomplètes
+
+FORMAT DE SORTIE:
+Retourner un JSON avec TOUS les tableaux identifiés, même s'ils semblent similaires.`;
 
 export const geminiVisionExtractTool = new FunctionTool({
   name: 'geminiVisionExtract',

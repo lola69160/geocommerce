@@ -40,9 +40,13 @@ export const saveFinancialReportTool = new FunctionTool({
       const reportsDir = path.join(process.cwd(), 'data', 'financial-reports');
       await fs.mkdir(reportsDir, { recursive: true });
 
-      // Générer le nom de fichier
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-      const filename = `financial-report-${params.businessId}-${timestamp}.html`;
+      // Générer le nom de fichier avec timestamp au début (format: YYYYMMDD_HHMMSS_)
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:\-]/g, '')
+        .replace(/\..+/, '')
+        .replace('T', '_');
+      const filename = `${timestamp}_financial-report-${params.businessId}.html`;
       const filepath = path.join(reportsDir, filename);
 
       // Écrire le fichier

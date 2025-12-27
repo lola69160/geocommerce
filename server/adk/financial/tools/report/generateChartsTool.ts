@@ -93,9 +93,20 @@ function generateEvolutionChart(comptable: any): any {
   }
 
   const years = Object.keys(comptable.sig).sort();
+
+  // Handle partial data gracefully (1, 2, or 3 years)
+  if (years.length === 0) {
+    return getDefaultChart();
+  }
+
   const ca = years.map(y => comptable.sig[y].chiffre_affaires / 1000); // En milliers d'€
   const ebe = years.map(y => comptable.sig[y].ebe / 1000);
   const rn = years.map(y => comptable.sig[y].resultat_net / 1000);
+
+  // Dynamic title based on available years
+  const chartTitle = years.length >= 3
+    ? 'Évolution Financière sur 3 ans'
+    : `Évolution Financière (${years.length} année${years.length > 1 ? 's' : ''})`;
 
   return {
     type: 'line',
@@ -137,7 +148,7 @@ function generateEvolutionChart(comptable: any): any {
         },
         title: {
           display: true,
-          text: 'Évolution Financière sur 3 ans',
+          text: chartTitle,
           font: { size: 16, weight: 'bold' }
         }
       },
@@ -156,38 +167,52 @@ function generateEvolutionChart(comptable: any): any {
 
 /**
  * Génère le graphique de valorisation (horizontal bar)
+ * Supports both structures: new (valorisation.methodes.ebe) and old (valorisation.methodeEBE)
  */
 function generateValorisationChart(valorisation: any): any {
-  if (!valorisation?.methodes) {
+  if (!valorisation) {
     return getDefaultChart();
   }
+
+  // Support BOTH structures (backward compatibility)
+  const methodes = valorisation.methodes || {
+    ebe: valorisation.methodeEBE,
+    ca: valorisation.methodeCA,
+    patrimoniale: valorisation.methodePatrimoniale
+  };
 
   const labels = [];
   const minValues = [];
   const medianValues = [];
   const maxValues = [];
 
-  if (valorisation.methodes.ebe) {
+  // Only add methods that succeeded (filter out null/undefined)
+  if (methodes.ebe && methodes.ebe.valeur_mediane > 0) {
     labels.push('Méthode EBE');
-    minValues.push((valorisation.methodes.ebe.valeur_basse || 0) / 1000);
-    medianValues.push((valorisation.methodes.ebe.valeur_mediane || 0) / 1000);
-    maxValues.push((valorisation.methodes.ebe.valeur_haute || 0) / 1000);
+    minValues.push((methodes.ebe.valeur_basse || 0) / 1000);
+    medianValues.push((methodes.ebe.valeur_mediane || 0) / 1000);
+    maxValues.push((methodes.ebe.valeur_haute || 0) / 1000);
   }
 
-  if (valorisation.methodes.ca) {
+  if (methodes.ca && methodes.ca.valeur_mediane > 0) {
     labels.push('Méthode CA');
-    const median = (valorisation.methodes.ca.valeur_mediane || 0) / 1000;
+    const median = (methodes.ca.valeur_mediane || 0) / 1000;
     minValues.push(median * 0.9); // ±10%
     medianValues.push(median);
     maxValues.push(median * 1.1);
   }
 
-  if (valorisation.methodes.patrimoniale) {
+  if (methodes.patrimoniale && methodes.patrimoniale.valeur_estimee > 0) {
     labels.push('Méthode Patrimoniale');
-    const value = (valorisation.methodes.patrimoniale.valeur_estimee || 0) / 1000;
+    const value = (methodes.patrimoniale.valeur_estimee || 0) / 1000;
     minValues.push(value * 0.95);
     medianValues.push(value);
     maxValues.push(value * 1.05);
+  }
+
+  // If no methods succeeded, return default chart
+  if (labels.length === 0) {
+    return getDefaultChart();
   }
 
   return {

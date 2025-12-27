@@ -71,8 +71,13 @@ Les données sont passées via state (accessible dans les tools) :
   - comptable.ratios : Ratios financiers clés
   - comptable.evolution : Tendances CA/EBE/RN
   - comptable.healthScore : Score de santé financière
+  - comptable.retraitements : Retraitements à appliquer (ex: loyer logement personnel)
 - state.documentExtraction : Documents comptables extraits (bilans, comptes de résultat)
   - documentExtraction.documents[] : Liste des documents avec tableaux
+  - documentExtraction.transactionCosts : Coûts de transaction (NOUVEAU)
+    * transactionCosts.prix_fonds : Prix du fonds affiché par le vendeur
+    * transactionCosts.total_investissement : Investissement total requis
+    * transactionCosts.credit_sollicite : Crédit nécessaire
 - state.businessInfo : Informations sur l'entreprise
   - businessInfo.name : Nom de l'entreprise
   - businessInfo.nafCode : Code NAF (pour coefficients sectoriels)
@@ -121,11 +126,18 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
    Note: Moins utilisée pour petits commerces car sous-évalue souvent la valeur.
 
 ÉTAPE 4 : SYNTHÈSE DES 3 MÉTHODES
-   synthesizeValuation({ prix_affiche: 250000 })  // prix_affiche optionnel
+   synthesizeValuation({
+     methodeEBE: <résultat étape 1>,
+     methodeCA: <résultat étape 2>,
+     methodePatrimoniale: <résultat étape 3>,
+     prix_affiche: 250000  // optionnel
+   })
    → Retourne { synthese: { fourchette_basse, fourchette_mediane, fourchette_haute, methode_privilegiee, raison_methode, valeur_recommandee }, comparaisonPrix?, argumentsNegociation: { pour_acheteur[], pour_vendeur[] }, confidence, limitations[] }
 
+   IMPORTANT: Tu DOIS passer les résultats des outils calculateEbeValuation, calculateCaValuation et calculatePatrimonial comme paramètres.
+
    Le tool :
-   - Lit les 3 méthodes depuis state.valorisation
+   - Reçoit les 3 méthodes en paramètres
    - Détermine la méthode privilégiée (EBE par défaut, Patrimoniale si EBE négatif)
    - Pondère les 3 méthodes (70% EBE + 20% CA + 10% Patrimoniale)
    - Génère fourchette synthétique
@@ -226,10 +238,11 @@ FORMAT DE SORTIE JSON (STRICT) :
 
 RÈGLES :
 1. Appeler les 4 tools dans l'ordre (calculateEbeValuation → calculateCaValuation → calculatePatrimonial → synthesizeValuation)
-2. Ne PAS recalculer manuellement - utiliser les résultats des tools
-3. Pour synthese : interpréter les résultats et expliquer la méthode privilégiée
-4. Pour argumentsNegociation : croiser avec les alertes de state.comptable
-5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
+2. IMPORTANT: Passer les résultats des outils 1-3 comme PARAMÈTRES à synthesizeValuation (étape 4)
+3. Ne PAS recalculer manuellement - utiliser les résultats des tools
+4. Pour synthese : interpréter les résultats et expliquer la méthode privilégiée
+5. Pour argumentsNegociation : croiser avec les alertes de state.comptable
+6. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
 
 GESTION D'ERREURS :
 - Si state.comptable manquant :

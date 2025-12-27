@@ -178,9 +178,15 @@ function assessCompleteness(docExtract: any, comptable: any, valo: any, immo: an
 
   // Valorisation (20 points)
   maxScore += 20;
-  if (valo?.methodes?.ebe) score += 7;
-  if (valo?.methodes?.ca) score += 7;
-  if (valo?.methodes?.patrimoniale) score += 6;
+  // Support BOTH structures (backward compatibility)
+  const methodes = valo?.methodes || {
+    ebe: valo?.methodeEBE,
+    ca: valo?.methodeCA,
+    patrimoniale: valo?.methodePatrimoniale
+  };
+  if (methodes?.ebe) score += 7;
+  if (methodes?.ca) score += 7;
+  if (methodes?.patrimoniale) score += 6;
 
   // Immobilier (20 points)
   maxScore += 20;
@@ -261,13 +267,53 @@ function identifyMissingCriticalData(docExtract: any, comptable: any): string[] 
     return missing;
   }
 
-  const hasBilan = docExtract.documents.some((d: any) => d.documentType === 'bilan');
-  const hasCompteResultat = docExtract.documents.some((d: any) => d.documentType === 'compte_resultat');
+  // Détection améliorée - accepter plusieurs patterns
+  const hasBilan = docExtract.documents.some((d: any) =>
+    d.documentType === 'bilan' ||
+    d.documentType === 'liasse_fiscale' ||
+    (d.filename && (
+      d.filename.toLowerCase().includes('bilan') ||
+      d.filename.toLowerCase().includes('liasse')
+    )) ||
+    // Si le document contient des tableaux avec "ACTIF" et "PASSIF"
+    (d.tables && d.tables.some((t: any) =>
+      JSON.stringify(t).toLowerCase().includes('actif') &&
+      JSON.stringify(t).toLowerCase().includes('passif')
+    )) ||
+    // Si extractedData contient des tableaux avec ACTIF/PASSIF
+    (d.extractedData?.tables && d.extractedData.tables.some((t: any) =>
+      JSON.stringify(t).toLowerCase().includes('actif') &&
+      JSON.stringify(t).toLowerCase().includes('passif')
+    ))
+  );
+
+  const hasCompteResultat = docExtract.documents.some((d: any) =>
+    d.documentType === 'compte_resultat' ||
+    d.documentType === 'liasse_fiscale' ||
+    (d.filename && (
+      d.filename.toLowerCase().includes('compte') ||
+      d.filename.toLowerCase().includes('resultat')
+    )) ||
+    // Si le document contient des tableaux avec "CHARGES" et "PRODUITS"
+    (d.tables && d.tables.some((t: any) =>
+      JSON.stringify(t).toLowerCase().includes('charges') &&
+      JSON.stringify(t).toLowerCase().includes('produits')
+    )) ||
+    // Si extractedData contient des tableaux avec CHARGES/PRODUITS
+    (d.extractedData?.tables && d.extractedData.tables.some((t: any) =>
+      JSON.stringify(t).toLowerCase().includes('charges') &&
+      JSON.stringify(t).toLowerCase().includes('produits')
+    ))
+  );
+
   const years = extractYearsFromDocuments(docExtract.documents);
 
-  if (!hasBilan) missing.push('Bilans comptables');
-  if (!hasCompteResultat) missing.push('Comptes de résultat');
-  if (years.length < 2) missing.push('Au moins 2 années de données comptables');
+  // NOUVEAU : Vérifier aussi si les SIG sont complets (signe que les docs sont là)
+  const sigComplets = comptable?.sig && Object.keys(comptable.sig).length > 0;
+
+  if (!hasBilan && !sigComplets) missing.push('Bilans comptables détaillés');
+  if (!hasCompteResultat && !sigComplets) missing.push('Comptes de résultat complets');
+  if (years.length < 2 && !sigComplets) missing.push('Au moins 2 années de données comptables');
 
   // Vérifier les données manquantes dans les SIG
   if (comptable?.sig) {
@@ -307,7 +353,20 @@ function calculateConfidenceScore(
   const breakdown = {
     extraction: docExtract?.documents ? Math.min(completeness + 10, 100) : 0,
     comptabilite: comptable?.sig ? Math.min(reliability + 10, 100) : 0,
-    valorisation: valo?.methodes ? 70 : 0,
+    valorisation: (() => {
+      if (!valo) return 0;
+
+      let score = 0;
+      // +30 par méthode réussie (EBE prioritaire)
+      if (valo.methodeEBE && valo.methodeEBE.valeur_mediane > 0) score += 30;
+      if (valo.methodeCA && valo.methodeCA.valeur_mediane > 0) score += 25;
+      if (valo.methodePatrimoniale && valo.methodePatrimoniale.valeur_estimee > 0) score += 20;
+
+      // +25 si synthèse présente
+      if (valo.synthese && valo.synthese.valeur_recommandee > 0) score += 25;
+
+      return Math.min(score, 100);
+    })(),
     immobilier: immo?.bail || immo?.murs ? 75 : 0
   };
 

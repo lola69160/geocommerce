@@ -93,6 +93,17 @@ export const analyzeBailTool = new FunctionTool({
         }
       }
 
+      // Lire userComments depuis state (NOUVEAU - pour ajustements loyer)
+      let userComments = toolContext?.state.get('userComments') as any;
+
+      if (typeof userComments === 'string') {
+        try {
+          userComments = JSON.parse(userComments);
+        } catch (e) {
+          // Pas critique
+        }
+      }
+
       const donneesManquantes: string[] = [];
 
       // ÉTAPE 1 : Chercher le bail dans les documents
@@ -153,15 +164,45 @@ export const analyzeBailTool = new FunctionTool({
         Math.round((dateFin.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30))
       );
 
-      // Calculer loyers
-      const loyerAnnuelHC = bailData.loyer_annuel_hc || 0;
-      const chargesAnnuelles = bailData.charges_annuelles || 0;
-      const loyerTotalAnnuel = loyerAnnuelHC + chargesAnnuelles;
+      // Calculer loyers (avec prise en compte des commentaires utilisateur)
+      let loyerAnnuelHC = bailData.loyer_annuel_hc || 0;
+      let chargesAnnuelles = bailData.charges_annuelles || 0;
+
+      // NOUVEAU: Ajustements selon userComments
+      let loyerLogementPerso = 0;
+      let loyerCommercialAjuste = loyerAnnuelHC;
+      let futureRentAdjustment = false;
+      let commentaireLoyer = '';
+
+      if (userComments?.loyer) {
+        // Si un futur loyer commercial est spécifié (mensuel en €)
+        if (userComments.loyer.futur_loyer_commercial) {
+          const futureRentMonthly = userComments.loyer.futur_loyer_commercial;
+          loyerCommercialAjuste = futureRentMonthly * 12;
+          futureRentAdjustment = true;
+        }
+
+        // Si une part logement personnel est spécifiée (mensuel en €)
+        if (userComments.loyer.loyer_logement_perso) {
+          loyerLogementPerso = userComments.loyer.loyer_logement_perso * 12; // Annualisé
+          // Soustraire du loyer commercial si futureRent non spécifié
+          if (!futureRentAdjustment) {
+            loyerCommercialAjuste = Math.max(0, loyerAnnuelHC - loyerLogementPerso);
+          }
+        }
+
+        // Commentaire utilisateur
+        if (userComments.loyer.commentaire) {
+          commentaireLoyer = userComments.loyer.commentaire;
+        }
+      }
+
+      const loyerTotalAnnuel = loyerCommercialAjuste + chargesAnnuelles;
       const loyerMensuel = Math.round(loyerTotalAnnuel / 12);
 
       // Loyer au m²
       const surfaceM2 = bailData.surface_m2 || 0;
-      const loyerM2Annuel = surfaceM2 > 0 ? Math.round(loyerAnnuelHC / surfaceM2) : 0;
+      const loyerM2Annuel = surfaceM2 > 0 ? Math.round(loyerCommercialAjuste / surfaceM2) : 0;
 
       // ÉTAPE 5 : Estimer loyer de marché (heuristique simplifiée)
       let loyerMarcheEstime = loyerAnnuelHC;
@@ -180,9 +221,9 @@ export const analyzeBailTool = new FunctionTool({
         loyerMarcheEstime = Math.round(surfaceM2 * loyerMoyenM2);
       }
 
-      // Écart par rapport au marché
+      // Écart par rapport au marché (utilise le loyer commercial ajusté)
       const ecartMarchePct = loyerMarcheEstime > 0
-        ? Math.round(((loyerAnnuelHC - loyerMarcheEstime) / loyerMarcheEstime) * 100)
+        ? Math.round(((loyerCommercialAjuste - loyerMarcheEstime) / loyerMarcheEstime) * 100)
         : 0;
 
       let appreciation: 'avantageux' | 'marche' | 'desavantageux' = 'marche';
@@ -193,6 +234,20 @@ export const analyzeBailTool = new FunctionTool({
         appreciation = 'desavantageux';
       }
 
+      // Détection négociation favorable utilisateur
+      let negociation_utilisateur_favorable = false;
+      if (userComments?.loyer?.futur_loyer_commercial) {
+        const loyerActuelMensuel = loyerAnnuelHC / 12;
+        const loyerFuturMensuel = userComments.loyer.futur_loyer_commercial;
+
+        if (loyerFuturMensuel < loyerActuelMensuel) {
+          negociation_utilisateur_favorable = true;
+          // Améliorer l'appreciation si négociation réussie
+          if (appreciation === 'marche') appreciation = 'avantageux';
+          if (appreciation === 'desavantageux') appreciation = 'marche';
+        }
+      }
+
       // ÉTAPE 6 : Vérifier données manquantes
       if (!bailData.type) donneesManquantes.push('Type de bail non spécifié');
       if (!bailData.bailleur) donneesManquantes.push('Nom du bailleur non fourni');
@@ -200,7 +255,7 @@ export const analyzeBailTool = new FunctionTool({
       if (loyerAnnuelHC === 0) donneesManquantes.push('Loyer annuel non fourni');
       if (surfaceM2 === 0) donneesManquantes.push('Surface non fournie');
 
-      const bail = {
+      const bail: any = {
         type: bailData.type || 'commercial_3_6_9',
         bailleur: bailData.bailleur || 'Non spécifié',
         date_signature: bailData.date_signature || '',
@@ -209,6 +264,7 @@ export const analyzeBailTool = new FunctionTool({
         duree_initiale_mois: dureeInitialeMois,
         duree_restante_mois: dureeRestanteMois,
         loyer_annuel_hc: loyerAnnuelHC,
+        loyer_commercial_ajuste: loyerCommercialAjuste, // NOUVEAU
         charges_annuelles: chargesAnnuelles,
         loyer_total_annuel: loyerTotalAnnuel,
         loyer_mensuel: loyerMensuel,
@@ -222,8 +278,19 @@ export const analyzeBailTool = new FunctionTool({
         destination: bailData.destination || 'Activité commerciale',
         loyer_marche_estime: loyerMarcheEstime,
         ecart_marche_pct: ecartMarchePct,
-        appreciation
+        appreciation,
+        negociation_utilisateur_favorable  // NOUVEAU - pour bonus score immobilier
       };
+
+      // NOUVEAU: Ajouter les informations sur les ajustements utilisateur
+      if (loyerLogementPerso > 0 || futureRentAdjustment || commentaireLoyer) {
+        bail.ajustements_utilisateur = {
+          loyer_logement_perso_annuel: loyerLogementPerso,
+          loyer_logement_perso_mensuel: Math.round(loyerLogementPerso / 12),
+          futur_loyer_applicable: futureRentAdjustment,
+          commentaire: commentaireLoyer || undefined
+        };
+      }
 
       return {
         dataStatus: {

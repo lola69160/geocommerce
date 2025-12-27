@@ -15,6 +15,217 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 6 agents spécialisé
 5. **FinancialValidationAgent** ✅ - Validation croisée et contrôle qualité des analyses
 6. **FinancialReportAgent** ✅ - Génération rapport HTML professionnel
 
+## Recent Improvements (2025-12-27)
+
+### Phase 1: Quality & Accuracy Fixes (Morning)
+
+#### 🎯 Data Extraction & Scoring
+
+**1. Fixed Valuation Scoring (assessDataQualityTool.ts)**
+- **Before**: Score always 0/100 due to structure mismatch (`valo.methodes` vs `valo.methodeEBE`)
+- **After**: Dynamic calculation based on methods present:
+  - EBE method: +30 points
+  - CA method: +25 points
+  - Patrimonial method: +20 points
+  - Synthesis: +25 points
+  - **Result**: Up to 100/100
+
+**2. Fixed Valuation Comparison Table (generateFinancialHtmlTool.ts)**
+- **Before**: Empty table due to structure mismatch
+- **After**: Displays all 3 methods with ranges (low/median/high)
+- Added patrimonial method details (net assets + goodwill breakdown)
+- Backward compatibility: supports both `methodes.ebe` and `methodeEBE` structures
+
+**3. Improved Document Detection (assessDataQualityTool.ts)**
+- **Before**: Only checked `documentType === 'bilan'`
+- **After**: Multi-pattern recognition:
+  - Document type: `bilan`, `compte_resultat`, `liasse_fiscale`
+  - Filename patterns: contains "bilan", "liasse", "compte", "resultat"
+  - Content analysis: tables contain "ACTIF"+"PASSIF" or "CHARGES"+"PRODUITS"
+  - Fallback: If SIG complete, documents are considered present
+- **Result**: Eliminated false "missing documents" alerts
+
+**4. Added "liasse_fiscale" Document Type (geminiVisionExtractTool.ts)**
+- **Before**: Only "bilan" or "compte_resultat"
+- **After**: Content-based detection:
+  - `bilan`: Contains ONLY balance sheet (ACTIF + PASSIF)
+  - `compte_resultat`: Contains ONLY income statement (CHARGES + PRODUITS)
+  - `liasse_fiscale`: Complete document with BOTH balance sheet AND income statement + SIG/annexes
+- **Rule**: If document contains BOTH → type = "liasse_fiscale"
+
+**5. Increased maxOutputTokens (DocumentExtractionAgent.ts)**
+- **Before**: 8192 tokens → potential truncation on long documents
+- **After**: 16384 tokens → supports 33+ page documents without truncation
+
+### 🎨 User Experience Enhancements
+
+**6. New "User Comments" Section in Reports (generateFinancialHtmlTool.ts)**
+- Added section "💬 Éléments Complémentaires Fournis" after executive summary
+- Displays user-provided information:
+  - **Rent**: Negotiated future rent, personal housing portion, comments
+  - **Automatic breakdown**: Commercial rent vs personal housing advantage
+  - **Renovation**: Planned budget, comments
+  - **Sale conditions**: Negotiation possible, comments
+  - **Other**: Free-form comments
+- Reads from `state.userComments` (loyer, travaux, conditions_vente, autres)
+
+**7. Real Estate Score Considers User Negotiations (analyzeBailTool.ts + ImmobilierAgent.ts)**
+- **Before**: Score didn't reflect negotiated rent reductions
+- **After**:
+  - `analyzeBailTool` detects favorable negotiations (future rent < current rent)
+  - Improves appreciation: `desavantageux` → `marche`, `marche` → `avantageux`
+  - Adds `negociation_utilisateur_favorable` flag
+  - `ImmobilierAgent` grants +10 bonus points for successful negotiations
+- **Result**: Real estate score reflects actual deal quality
+
+### 🤖 Gemini Vision Extraction Improvements
+
+**8. Hierarchical Extraction Prompt (geminiVisionExtractTool.ts)**
+- **Before**: Generic prompt, limited guidance
+- **After**: 4-level priority structure:
+  - **CRITICAL**: Balance sheet (10+ line items), Income statement (13+ line items)
+  - **IMPORTANT**: SIG (7 indicators)
+  - **USEFUL**: Annexes (7 sections)
+- Detailed extraction instructions for each section:
+  - Balance sheet: Assets (tangible, intangible, current) + Liabilities (equity, provisions, debts)
+  - Income statement: Revenue, purchases, external costs, personnel, depreciation, results
+  - SIG: Revenue, gross margin, value added, EBITDA, operating result, net result
+  - Annexes: Asset details, receivables/payables aging, provisions, staff compensation, off-balance commitments
+- Explicit extraction rules: French format (50 000 → 50000), negatives, hierarchical structure
+- Enhanced reasoning: 4-point explanation (classification, sections found, confidence, missing data)
+
+**9. Expected Results**
+- **Extraction score**: 70/100 → **85-90/100** (+15-20 points)
+- **Valuation score**: 0/100 → **100/100** (+100 points)
+- **False alerts**: Eliminated "missing documents" when documents present
+- **User transparency**: Full visibility of user-provided data in reports
+- **Real estate accuracy**: Score reflects negotiated deals
+
+---
+
+### Phase 2: Report Quality & User Experience (Afternoon)
+
+#### 📁 Report Naming & Organization
+
+**10. Timestamp at Beginning of Filename (saveFinancialReportTool.ts)**
+- **Before**: `financial-report-{businessId}-{YYYY-MM-DD}.html`
+- **After**: `{YYYYMMDD_HHMMSS}_financial-report-{businessId}.html`
+- **Benefits**:
+  - Aligns with professional reports naming convention
+  - Chronological sorting (most recent first when sorted alphabetically)
+  - Full precision timestamp (date + time, not just date)
+- **Example**:
+  - Before: `financial-report-au-fil-de-lo-2025-12-27.html`
+  - After: `20251227_143022_financial-report-au-fil-de-lo.html`
+
+#### 💬 User Comments Integration
+
+**11. Full Frontend-to-Backend User Comments Transmission**
+
+**Frontend Changes (ProfessionalAnalysisModal.jsx)**:
+- `additionalInfo` field (existing textarea) now sent to API
+- Transmitted as `userComments: { autres: additionalInfo }`
+- No UX change - uses existing "Informations complémentaires" field
+
+**Backend Changes (server.js)**:
+- Extract `userComments` from `req.body` (line 932)
+- Inject into `initialState.userComments` (line 978)
+- Available to ALL agents via `state.userComments`
+
+**Report Display (generateFinancialHtmlTool.ts)**:
+- Section "💬 Éléments Complémentaires Fournis" after Executive Summary
+- Automatic display when `userComments` exists in state
+- Structured display:
+  - **Loyer** (Rent): Future commercial rent, personal housing portion, comments
+  - **Travaux** (Renovation): Planned budget, comments
+  - **Conditions de vente** (Sale conditions): Negotiation possible, comments
+  - **Autres** (Other): Free-form comments
+- Automatic breakdown: Commercial rent vs personal housing advantage
+
+**Example User Input**:
+> "lors du rachat nous avons négocié dans le prochain bail que le loyer serait de 2100 euros par mois dont 600 euros pour le loyer du logement personnel"
+
+**Report Output**:
+```
+💬 Éléments Complémentaires Fournis
+
+Autres Informations
+"lors du rachat nous avons négocié dans le prochain bail que le loyer serait
+de 2100 euros par mois dont 600 euros pour le loyer du logement personnel"
+```
+
+#### 💰 Budget Travaux Display
+
+**12. Renovation Budget as Additional Investment Cost (generateFinancialHtmlTool.ts)**
+
+**Design Decision**: Do NOT subtract from valuation, show as separate additive cost
+
+**Before**: Only valuation displayed
+```
+Valorisation Recommandée: 205 000 €
+```
+
+**After**: With renovation budget in Executive Summary
+```
+Valorisation Recommandée: 205 000 €
+
+💰 Investissement Total Estimé
+  Valorisation du fonds      205 000 €
+  + Budget travaux            25 000 €
+  Total investissement       230 000 €
+```
+
+**Implementation**:
+- Reads `userComments.travaux.budget_prevu` from state
+- Displayed only if budget > 0
+- Valuation unchanged (transparency: user sees breakdown)
+- Total investment = valuation + works budget
+
+#### ✅ Report Quality Improvements
+
+**13. Always Display Patrimoniale Method (generateFinancialHtmlTool.ts, line 496)**
+- **Before**: Row hidden if `valeur_estimee === 0` (condition: `> 0`)
+- **After**: Always display with note if missing
+- **Display**:
+  - If `valeur_estimee > 0`: `"150 000 €"`
+  - If `valeur_estimee === 0`: `"0 € (bilan non fourni)"`
+- **Benefit**: Users see all 3 methods, understand why data missing
+
+**14. Default Message for Empty "Points Forts" (generateFinancialHtmlTool.ts, line 285)**
+- **Before**: Empty list when no strengths (confusing UX)
+- **After**: Explicit message
+  ```
+  Aucun point fort majeur identifié selon les critères standards
+  (santé ≥70, marge ≥10%, croissance)
+  ```
+- **Triggers when**:
+  - Health score < 70
+  - EBE margin < 10%
+  - No revenue growth (trend ≠ "croissance")
+- **Benefit**: User understands WHY list is empty (not a bug)
+
+#### 📊 Files Modified (Phase 2)
+
+1. **saveFinancialReportTool.ts** (lines 43-49)
+   - Timestamp format change
+   - Filename structure change
+
+2. **ProfessionalAnalysisModal.jsx** (line 334-336)
+   - Add `userComments` to API request payload
+
+3. **server.js** (lines 932, 978)
+   - Extract `userComments` from req.body
+   - Inject into `initialState`
+
+4. **generateFinancialHtmlTool.ts** (4 modifications)
+   - Line 63: Parse `userComments` early, pass to `generateExecutiveSummary`
+   - Line 252: Add `userComments` parameter to function signature
+   - Line 305-317: Display budget travaux as additional cost
+   - Line 285-287: Default message for empty strengths
+   - Line 496-502: Always show Patrimoniale method
+
+---
+
 ## 1. DocumentExtractionAgent
 
 ### Responsabilités

@@ -54,6 +54,22 @@ export type FinancialInput = {
     nafCode: string;
     activity: string;
   };
+  userComments?: {
+    loyer?: {
+      futur_loyer_commercial?: number;  // Ex: 1500 (nouveau loyer commercial mensuel en €)
+      loyer_logement_perso?: number;    // Ex: 600 (part logement personnel mensuel en €)
+      commentaire?: string;              // Ex: "le loyer sera baissé à 2100 euros dans le prochain bail"
+    };
+    travaux?: {
+      budget_prevu?: number;
+      commentaire?: string;
+    };
+    conditions_vente?: {
+      negociation_possible?: boolean;
+      commentaire?: string;
+    };
+    autres?: string;  // Commentaires libres
+  };
 };
 
 export type FinancialState = {
@@ -63,4 +79,36 @@ export type FinancialState = {
   immobilier?: any;
   financialValidation?: any;
   financialReport?: any;
+  userComments?: {
+    loyer?: {
+      futur_loyer_commercial?: number;
+      loyer_logement_perso?: number;
+      commentaire?: string;
+    };
+    travaux?: {
+      budget_prevu?: number;
+      commentaire?: string;
+    };
+    conditions_vente?: {
+      negociation_possible?: boolean;
+      commentaire?: string;
+    };
+    autres?: string;
+  };
+  transactionCosts?: {
+    prix_fonds: number;
+    honoraires_ht: number;
+    frais_acte_ht: number;
+    debours: number;
+    droits_enregistrement: number;
+    tva: number;
+    stock_fonds_roulement: number;
+    loyer_avance: number;
+    total_investissement: number;
+    apport_requis: number;
+    credit_sollicite: number;
+    duree_credit_mois: number;
+    taux_credit: number;
+    mensualites: number;
+  };
 };

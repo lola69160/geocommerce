@@ -40,11 +40,14 @@ Complete documentation of the professional analysis pipeline (10 agents):
 - HTML report generation with enriched sections
 
 ### 💰 [FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md)
-Financial analysis pipeline (4 agents):
+Financial analysis pipeline (6 agents):
 - DocumentExtractionAgent, ComptableAgent, ValorisationAgent, ImmobilierAgent
+- FinancialValidationAgent, FinancialReportAgent
 - Accounting analysis (SIG, ratios, benchmarks)
 - Business valuation (3 methods: EBE, CA, Patrimonial)
 - Real estate analysis (lease, walls purchase, works estimation)
+- Cross-validation and quality control
+- **Recent improvements (2025-12-27)**: Enhanced Gemini Vision extraction, user comments support, improved scoring
 
 ### 🔌 [API_INTEGRATION.md](docs/API_INTEGRATION.md)
 External API integrations and data enrichment:
@@ -83,6 +86,65 @@ For complete testing documentation, see:
 - **[tests/README.md](tests/README.md)** - Complete testing guide
 - **[tests/QUICK_START.md](tests/QUICK_START.md)** - Quick start guide
 - **[TESTS_SUMMARY.md](TESTS_SUMMARY.md)** - Test results summary
+
+## Recent Updates (2025-12-27)
+
+### Financial Pipeline Improvements - Phase 1 (Morning)
+
+**Quality & Accuracy Enhancements:**
+- ✅ Fixed valuation scoring: Dynamic calculation (0 → 100/100)
+- ✅ Fixed valuation comparison table: Now displays all 3 methods with ranges
+- ✅ Improved document detection: Multi-pattern recognition (type, filename, content)
+- ✅ Added "liasse_fiscale" document type with content-based detection
+- ✅ Increased maxOutputTokens: 8192 → 16384 for long documents (33+ pages)
+
+**User Experience:**
+- ✅ New section: "User Comments" in financial reports
+  - Displays negotiated rent, renovation budget, sale conditions
+  - Automatic breakdown of rent (commercial + personal housing)
+- ✅ Real estate scoring now considers user negotiations (+10 bonus points)
+
+**Gemini Vision Extraction:**
+- ✅ Hierarchical prompt: CRITICAL → IMPORTANT → USEFUL sections
+- ✅ Detailed extraction instructions for:
+  - Balance sheet (10+ line items)
+  - Income statement (13+ line items)
+  - SIG (7 indicators)
+  - Annexes (7 sections: assets detail, receivables/payables, provisions, staff, commitments)
+- ✅ Expected extraction score improvement: 70/100 → 85-90/100
+
+### Financial Pipeline Improvements - Phase 2 (Afternoon)
+
+**Report Naming & Organization:**
+- ✅ Timestamp at beginning of filename: `YYYYMMDD_HHMMSS_financial-report-{businessId}.html`
+  - Aligns with professional reports naming convention
+  - Enables chronological sorting and better file organization
+  - Example: `20251227_143022_financial-report-au-fil-de-lo.html`
+
+**User Comments Integration:**
+- ✅ Full frontend-to-backend transmission of user comments
+  - Frontend: `additionalInfo` field now sent to API as `userComments.autres`
+  - Backend: Extracted from req.body and injected into pipeline initialState
+  - All agents can access `state.userComments` for context-aware analysis
+  - Automatic display in "💬 Éléments Complémentaires Fournis" section after Executive Summary
+
+**Budget Travaux (Renovation) Display:**
+- ✅ Renovation budget shown as additional investment cost
+  - Displayed in Executive Summary as "💰 Investissement Total Estimé"
+  - Breakdown: Valorisation du fonds + Budget travaux = Total investissement
+  - Does not modify valuation itself (shown separately for transparency)
+  - Example: 205k€ (valuation) + 25k€ (works) = 230k€ (total investment)
+
+**Report Quality Improvements:**
+- ✅ Always display Patrimoniale method in valuation table
+  - Shows all 3 methods even if data missing
+  - Displays "0 € (bilan non fourni)" when balance sheet unavailable
+  - Better transparency for users
+- ✅ Default message for empty "Points Forts" list
+  - When no strengths identified: "Aucun point fort majeur identifié selon les critères standards (santé ≥70, marge ≥10%, croissance)"
+  - Provides explicit feedback instead of confusing empty section
+
+See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for technical details.
 
 ## Key Technologies
 
