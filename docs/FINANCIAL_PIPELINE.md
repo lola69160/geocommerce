@@ -16,6 +16,74 @@ Le Financial Pipeline est un **SequentialAgent orchestrant 7 agents spécialisé
 5. **FinancialValidationAgent** ✅ - Validation croisée et contrôle qualité des analyses
 6. **FinancialReportAgent** ✅ - Génération rapport HTML professionnel
 
+## Recent Improvements (2025-12-28)
+
+### COMPTA Extraction Rework
+
+Complete rework of the extraction system for preprocessed COMPTA documents (COMPTA2021.pdf, COMPTA2022.pdf, etc.) from the A_ANALYSER folder.
+
+#### 🎯 New Architecture
+
+**1. New TypeScript Schema (extractionComptaSchema.ts)**
+- New file with comprehensive interfaces for COMPTA extraction
+- 4 structured sections: `BilanActifExtraction`, `BilanPassifExtraction`, `CompteResultatExtraction`, `SigExtraction`
+- New `ValeurSig` type: `{ valeur: number; pct_ca: number }` for SIG data with % CA
+- Utility functions: `isComptaPreprocessedDocument()`, `extractYearFromComptaFilename()`, `validateBilanCoherence()`
+
+**2. Specialized COMPTA Extraction Prompt (geminiVisionExtractTool.ts)**
+- ~200-line specialized prompt for 4-section preprocessed documents
+- Automatic detection: filename contains "COMPTA" OR document in A_ANALYSER folder
+- No `responseSchema` for COMPTA docs (too complex for Gemini API → 400 Bad Request)
+- Deterministic year extraction from filename: `COMPTA2023.pdf` → `2023` (priority over Gemini)
+
+**3. Enhanced SIG Tool (calculateSigTool.ts)**
+- New output format: `{ valeur: number, pct_ca: number }` for all SIG indicators
+- 3-level extraction priority:
+  - **PRIORITY 0**: SIG extracted directly from COMPTA documents (no recalculation)
+  - **PRIORITY 1**: key_values from Vision extraction
+  - **PRIORITY 2**: Table parsing with heuristics
+- New field: `source` indicates data origin (`compta_extraction`, `vision_key_values`, `table_parsing`)
+- `_legacy` field for backward compatibility
+
+**4. Director Salary from SIG (calculateEbeRetraitementTool.ts)**
+- 3-level salary extraction priority:
+  - **PRIORITY 0**: `charges_exploitant` from SIG extraction (most reliable)
+  - **PRIORITY 1**: `userComments.salaire_dirigeant` (user provided)
+  - **PRIORITY 2**: Standard estimate (35,000€)
+- Enhanced logging for transparency
+
+#### 📊 Data Extraction Improvement
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Accounting values extracted | ~10 | **90+** |
+| SIG indicators with % CA | 0 | **15+** |
+| Director salary auto-detection | No | **Yes** |
+| Year extraction reliability | Gemini only | **Filename + Gemini** |
+
+#### 🔧 Bug Fixes
+
+**1. Fixed 400 Bad Request on COMPTA Documents**
+- **Cause**: `ComptaGeminiResponseSchema` too complex for Gemini API
+- **Solution**: Don't use `responseSchema` for COMPTA docs, detailed prompt is sufficient
+
+**2. Deterministic Year Extraction**
+- **Before**: Year depended only on Gemini extraction (could fail)
+- **After**: Priority to filename extraction (`COMPTA2023.pdf` → 2023)
+
+#### 📁 Files Modified
+
+| File | Type | Description |
+|------|------|-------------|
+| `schemas/extractionComptaSchema.ts` | New | TypeScript interfaces for structured extraction |
+| `schemas/visionExtractionSchema.ts` | Modified | Added `ComptaGeminiResponseSchema` |
+| `tools/document/geminiVisionExtractTool.ts` | Modified | COMPTA prompt + year from filename |
+| `tools/accounting/calculateSigTool.ts` | Modified | Priority 0 SIG + `{ valeur, pct_ca }` format |
+| `tools/accounting/calculateEbeRetraitementTool.ts` | Modified | `charges_exploitant` reading |
+| `tests/financial/tools/calculateSig.test.ts` | Modified | Adapted to new output format |
+
+---
+
 ## Recent Improvements (2025-12-27)
 
 ### Phase 1: Quality & Accuracy Fixes (Morning)

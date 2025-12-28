@@ -87,6 +87,34 @@ For complete testing documentation, see:
 - **[tests/QUICK_START.md](tests/QUICK_START.md)** - Quick start guide
 - **[TESTS_SUMMARY.md](TESTS_SUMMARY.md)** - Test results summary
 
+## Recent Updates (2025-12-28)
+
+### COMPTA Extraction Rework
+
+Complete rework of data extraction for preprocessed COMPTA documents:
+
+**New Features:**
+- ✅ New `extractionComptaSchema.ts` with TypeScript interfaces for 4 sections (Bilan Actif, Passif, CR, SIG)
+- ✅ Specialized COMPTA extraction prompt (~200 lines) for 4-section documents
+- ✅ SIG output format changed to `{ valeur: number, pct_ca: number }` (includes % CA)
+- ✅ 3-level SIG extraction priority: COMPTA extraction > Vision key_values > Table parsing
+- ✅ Director salary auto-detection from `charges_exploitant` in SIG
+- ✅ Deterministic year extraction from filename (`COMPTA2023.pdf` → 2023)
+
+**Bug Fixes:**
+- ✅ Fixed 400 Bad Request on COMPTA documents (schema too complex for Gemini API)
+- ✅ Fixed orphaned console.log statements in EBE retraitement tool
+
+**Files Modified:**
+- `schemas/extractionComptaSchema.ts` (NEW)
+- `schemas/visionExtractionSchema.ts` (ComptaGeminiResponseSchema)
+- `tools/document/geminiVisionExtractTool.ts` (COMPTA prompt + no responseSchema)
+- `tools/accounting/calculateSigTool.ts` (Priority 0 + new format)
+- `tools/accounting/calculateEbeRetraitementTool.ts` (charges_exploitant)
+- `tests/financial/tools/calculateSig.test.ts` (new format)
+
+---
+
 ## Recent Updates (2025-12-27)
 
 ### Financial Pipeline Improvements - Phase 1 (Morning)
@@ -143,6 +171,64 @@ For complete testing documentation, see:
 - ✅ Default message for empty "Points Forts" list
   - When no strengths identified: "Aucun point fort majeur identifié selon les critères standards (santé ≥70, marge ≥10%, croissance)"
   - Provides explicit feedback instead of confusing empty section
+
+### Financial Pipeline Improvements - Phase 3 (Evening)
+
+**Accessibility & Design Quality:**
+- ✅ **WCAG AA Compliant Color Palette**: Complete CSS overhaul
+  - Created 11 CSS variables for consistent, accessible colors
+  - All text meets 4.5:1 contrast ratio minimum
+  - Replaced 12 hard-coded color values throughout report
+  - Added 3 new table row classes (base, total, normatif) with proper contrast
+  - Print-friendly fallbacks for colored backgrounds
+  - Impact: Report now accessible to users with visual impairments
+
+**Enhanced Transparency & Debugging:**
+- ✅ **Comprehensive UserComments Logging**: Full visibility in console
+  - Structured display with visual formatting (boxes, emojis, calculations)
+  - Shows: salaire dirigeant, salariés non repris, loyer details, budget travaux
+  - Breakdown of rent components (commercial + personal housing)
+  - Automatic calculation of rent savings
+  - Added logging in EBE retraitement tool for traceability
+
+- ✅ **Improved Gemini Vision Logging**: Extraction quality metrics
+  - Logs extraction details (document type, confidence, year)
+  - Shows count of accounting values and tables extracted
+  - Warns about missing critical keys (CA, EBE, résultat net, capitaux propres, dettes)
+  - Displays extraction completeness (e.g., "35/50 keys extracted")
+
+**Chart & Table Display Improvements:**
+- ✅ **Valorisation Chart Always Visible**: All 3 methods displayed
+  - Shows EBE, CA, and Patrimonial methods even when values are 0€
+  - Console warnings indicate which methods couldn't be calculated
+  - Better user experience - no more empty "Pas de données" chart
+
+- ✅ **Comparison Table Transparency**: Complete method visibility
+  - Always displays all 3 valuation methods in table
+  - Explanatory messages for missing data (e.g., "0 € (données insuffisantes - EBE non disponible)")
+  - Consistent behavior across chart and table
+
+**Strategic Analysis Expansion:**
+- ✅ **Extended Strategic Scenarios**: 5 → 10 scenarios
+  - **Scenario 6**: Clientèle & saisonnalité analysis (tourist vs residential zones)
+  - **Scenario 7**: Risques réglementaires (tobacco regulations, compliance)
+  - **Scenario 8**: Opportunités de croissance (growth levers, digitalization)
+  - **Scenario 9**: Points de négociation (buyer/seller arguments, pricing strategy)
+  - **Scenario 10**: Stratégie de financement (loan capacity, guarantees, duration)
+
+- ✅ **New Section: "Conseils pour le Rachat"**: Comprehensive acquisition guide
+  - **Subsection 1**: Risques Identifiés & Mitigation (4 risk categories with strategies)
+  - **Subsection 2**: Opportunités de Création de Valeur (5 value creation levers)
+  - **Subsection 3**: Checklist Due Diligence (7-point checklist with status badges)
+  - **Subsection 4**: Arguments de Négociation (buyer vs seller arguments side-by-side)
+  - Integrated after Business Plan section
+  - Provides actionable guidance for buyers
+
+**Files Modified in Phase 3:**
+- `server/adk/financial/tools/report/generateFinancialHtmlTool.ts` - Main report generator (260+ lines added)
+- `server/adk/financial/tools/report/generateChartsTool.ts` - Chart display logic
+- `server/adk/financial/tools/document/geminiVisionExtractTool.ts` - Extraction prompt & logging
+- `server.js` - UserComments console display
 
 See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for technical details.
 
