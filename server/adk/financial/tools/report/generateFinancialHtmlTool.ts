@@ -5,6 +5,38 @@ import { zToGen } from '../../../utils/schemaHelper';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// ========================================
+// EXTRACTED MODULES (Phase 2 refactoring)
+// ========================================
+
+// Styles
+import { generateCSS } from './styles';
+
+// Helpers
+import {
+  parseState,
+  generateHTMLHeader,
+  generateFooter,
+  generateStrategicCommentary
+} from './helpers';
+
+// Sections
+import {
+  generateCoverPage,
+  generateAccountingSection,
+  generateValuationSection,
+  generateRealEstateSection,
+  generateBusinessPlanSection
+} from './sections';
+
+// Acquisition Advice
+import {
+  generateAcquisitionAdviceSection,
+  parseProfessionalReport,
+  detectHorairesExtension,
+  type ProfessionalReportData
+} from './acquisitionAdvice';
+
 /**
  * Generate Financial HTML Tool
  *
@@ -65,9 +97,9 @@ export const generateFinancialHtmlTool = new FunctionTool({
       html += generateCoverPage(businessInfo, financialValidation);
       sections_included.push('cover_page');
 
-      // 2. Synthèse exécutive (avec userComments pour afficher budget travaux)
+      // 2. Synthèse exécutive (avec userComments pour afficher budget travaux et documentExtraction pour prix demandé)
       let userComments = parseState(toolContext?.state.get('userComments'));
-      html += generateExecutiveSummary(comptable, valorisation, financialValidation, userComments);
+      html += generateExecutiveSummary(comptable, valorisation, financialValidation, userComments, businessPlan, documentExtraction);
       sections_included.push('executive_summary');
 
       // 2bis. Éléments complémentaires utilisateur
@@ -77,7 +109,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       }
 
       // 2ter. Commentaires stratégiques
-      const strategicCommentaries = analyzeAndGenerateCommentaries(comptable, immobilier, userComments, businessInfo, valorisation);
+      const strategicCommentaries = analyzeAndGenerateCommentaries(comptable, immobilier, userComments, businessInfo, valorisation, businessPlan);
       if (strategicCommentaries && strategicCommentaries.length > 0) {
         html += '<h2>💡 Commentaires Stratégiques</h2>';
         strategicCommentaries.forEach(commentary => {
@@ -90,8 +122,8 @@ export const generateFinancialHtmlTool = new FunctionTool({
       html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge);
       sections_included.push('accounting_analysis');
 
-      // 4. Valorisation
-      html += generateValuationSection(valorisation, params.charts.valorisationChart);
+      // 4. Valorisation (avec documentExtraction pour prix demandé)
+      html += generateValuationSection(valorisation, params.charts.valorisationChart, documentExtraction);
       sections_included.push('valuation');
 
       // 5. Analyse immobilière
@@ -106,8 +138,32 @@ export const generateFinancialHtmlTool = new FunctionTool({
         sections_included.push('business_plan');
       }
 
-      // 6bis. Conseils pour le Rachat
-      html += generateAcquisitionAdviceSection(comptable, valorisation, immobilier, businessInfo, userComments);
+      // 6bis. Conseils pour le Rachat (enrichi avec rapport professionnel)
+      // Extraire le SIREN depuis businessInfo
+      const siret = businessInfo?.siret || '';
+      const siren = siret.substring(0, 9);
+      let professionalData: ProfessionalReportData | null = null;
+
+      if (siren.length === 9) {
+        try {
+          professionalData = await parseProfessionalReport(siren);
+          if (professionalData) {
+            console.log('[generateFinancialHtml] ✅ Rapport professionnel chargé pour enrichissement');
+          }
+        } catch (e) {
+          console.log('[generateFinancialHtml] ⚠️ Rapport professionnel non disponible');
+        }
+      }
+
+      html += generateAcquisitionAdviceSection({
+        comptable,
+        valorisation,
+        immobilier,
+        businessInfo,
+        userComments,
+        businessPlan,
+        professionalData
+      });
       sections_included.push('acquisition_advice');
 
       // 7. Validation & fiabilité
@@ -196,222 +252,18 @@ export const generateFinancialHtmlTool = new FunctionTool({
   }
 });
 
-/**
- * Génère l'en-tête HTML
- */
-function generateHTMLHeader(): string {
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rapport d'Analyse Financière - Due Diligence</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-</head>`;
-}
-
-/**
- * Génère le CSS
- */
-function generateCSS(): string {
-  return `
-<style>
-  /* ========================================
-     PALETTE WCAG AA COMPLIANT
-     ======================================== */
-  :root {
-    --color-text-primary: #1a1a1a;      /* Noir principal (15.8:1) */
-    --color-text-secondary: #4a5568;    /* Gris foncé (8.59:1) */
-    --color-text-muted: #718096;        /* Gris moyen (5.14:1) - limite OK */
-
-    --color-bg-base: #ffffff;
-    --color-bg-light: #f7fafc;
-    --color-bg-medium: #e2e8f0;
-    --color-bg-emphasis: #cbd5e0;
-
-    --color-table-header: #edf2f7;
-    --color-table-border: #cbd5e0;
-    --color-table-hover: #f7fafc;
-
-    /* Couleurs sémantiques */
-    --color-success-bg: #c6f6d5;
-    --color-success-text: #22543d;
-    --color-warning-bg: #feebc8;
-    --color-warning-text: #7c2d12;
-    --color-error-bg: #fed7d7;
-    --color-error-text: #742a2a;
-    --color-info-bg: #bee3f8;
-    --color-info-text: #2c5282;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.6;
-    color: #333;
-    background: #f5f5f5;
-    padding: 20px;
-  }
-  .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-
-  /* Typography */
-  h1 { color: #1a1a1a; font-size: 2.5em; margin-bottom: 10px; border-bottom: 4px solid #0066cc; padding-bottom: 10px; }
-  h2 { color: #0066cc; font-size: 1.8em; margin-top: 40px; margin-bottom: 15px; border-left: 4px solid #0066cc; padding-left: 15px; }
-  h3 { color: #333; font-size: 1.3em; margin-top: 25px; margin-bottom: 10px; }
-
-  /* Cover page */
-  .cover-page { text-align: center; padding: 100px 0; margin-bottom: 60px; }
-  .cover-page h1 { font-size: 3em; border: none; }
-  .cover-page .subtitle { font-size: 1.5em; color: #666; margin: 20px 0; }
-  .cover-page .timestamp { color: #999; font-size: 1.1em; margin-top: 30px; }
-  .confidence-badge { display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; font-size: 1.3em; font-weight: bold; margin-top: 30px; }
-
-  /* Summary box */
-  .summary-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; margin: 30px 0; }
-  .summary-box h2 { color: white; border: none; margin-top: 0; }
-  .summary-box h3 { color: white; }
-
-  /* Verdict */
-  .verdict { font-size: 2.5em; font-weight: bold; margin: 20px 0; text-align: center; padding: 20px; border-radius: 8px; }
-  .verdict.favorable { background: #d1fae5; color: #065f46; }
-  .verdict.reserves { background: #fed7aa; color: #92400e; }
-  .verdict.defavorable { background: #fecaca; color: #991b1b; }
-
-  /* Score cards */
-  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
-  .score-card { background: #f8fafc; border-left: 4px solid #0066cc; padding: 20px; border-radius: 4px; text-align: center; }
-  .score-value { font-size: 2.5em; font-weight: bold; color: #0066cc; }
-  .score-label { color: #666; font-size: 0.9em; text-transform: uppercase; margin-top: 5px; }
-
-  /* Lists */
-  .strength-list { background: #d1fae5; padding: 20px; border-radius: 8px; margin: 15px 0; }
-  .strength-list li { color: #065f46; margin: 8px 0; font-weight: 500; }
-  .warning-list { background: #fed7aa; padding: 20px; border-radius: 8px; margin: 15px 0; }
-  .warning-list li { color: #92400e; margin: 8px 0; font-weight: 500; }
-
-  /* Tables */
-  table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-  th, td {
-    text-align: left;
-    padding: 12px;
-    border-bottom: 1px solid var(--color-table-border);
-  }
-  th {
-    background: var(--color-table-header);
-    font-weight: 600;
-    color: var(--color-text-primary);
-  }
-  tr:hover { background: var(--color-table-hover); }
-  .text-right { text-align: right !important; }
-  .text-center { text-align: center !important; }
-
-  /* Charts */
-  .chart-container { position: relative; height: 400px; margin: 30px 0; }
-  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin: 30px 0; }
-
-  /* Badges */
-  .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-right: 8px; }
-  .badge.success { background: #d1fae5; color: #065f46; }
-  .badge.warning { background: #fed7aa; color: #92400e; }
-  .badge.error { background: #fecaca; color: #991b1b; }
-  .badge.info { background: #dbeafe; color: #1e40af; }
-
-  /* Alert boxes */
-  .alert-box {
-    padding: 15px;
-    margin: 10px 0;
-    border-left: 4px solid;
-    border-radius: 4px;
-    font-weight: 500; /* Améliore lisibilité */
-  }
-  .alert-box.critical {
-    background: var(--color-error-bg);
-    border-color: var(--color-error-text);
-    color: var(--color-error-text);
-  }
-  .alert-box.warning {
-    background: var(--color-warning-bg);
-    border-color: var(--color-warning-text);
-    color: var(--color-warning-text);
-  }
-  .alert-box.info {
-    background: var(--color-info-bg);
-    border-color: var(--color-info-text);
-    color: var(--color-info-text);
-  }
-
-  /* Strategic Commentary */
-  .strategic-commentary { background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 20px; margin: 20px 0; border-radius: 8px; }
-  .strategic-commentary h4 { color: #0369a1; margin: 0 0 10px 0; font-size: 1.1em; }
-  .strategic-commentary p { color: #075985; margin: 0; line-height: 1.8; }
-
-  /* Info grid */
-  .info-grid { display: grid; grid-template-columns: 200px 1fr; gap: 15px; margin: 15px 0; }
-  .info-label { font-weight: bold; color: #666; }
-  .info-value { color: #333; }
-
-  /* Footer */
-  .footer { margin-top: 60px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #666; font-size: 0.9em; }
-
-  /* Page break for print */
-  .page-break { page-break-after: always; }
-
-  /* Tables avec emphase (retraitement EBE) */
-  .table-base-row {
-    background: var(--color-bg-medium) !important;
-    font-weight: 500;
-  }
-  .table-total-row {
-    background: var(--color-bg-emphasis);
-    border-top: 2px solid var(--color-text-primary);
-    font-weight: bold;
-  }
-  .table-normatif-row {
-    background: var(--color-info-bg);
-    border-top: 2px solid var(--color-info-text);
-    font-weight: bold;
-  }
-
-  @media print {
-    body { background: white; padding: 0; }
-    .container { box-shadow: none; }
-    .page-break { page-break-after: always; }
-    .table-base-row { background: #d0d0d0 !important; }
-    .table-total-row { background: #b0b0b0 !important; }
-    .table-normatif-row { background: #a0c4e0 !important; }
-  }
-
-  @media (max-width: 768px) {
-    .chart-row { grid-template-columns: 1fr; }
-    .score-grid { grid-template-columns: 1fr; }
-  }
-</style>
-`;
-}
-
-/**
- * Génère la page de garde
- */
-function generateCoverPage(businessInfo: any, financialValidation: any): string {
-  const businessName = businessInfo?.name || 'Commerce';
-  const date = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
-  const confidenceScore = financialValidation?.confidenceScore?.overall || 0;
-
-  return `
-<div class="cover-page">
-  <h1>${businessName}</h1>
-  <div class="subtitle">Analyse Financière - Due Diligence</div>
-  <div class="confidence-badge">Score de Confiance: ${confidenceScore}/100</div>
-  <div class="timestamp">Rapport généré le ${date}</div>
-</div>
-<div class="page-break"></div>
-`;
-}
+// ========================================
+// FUNCTIONS NOT YET EXTRACTED
+// (These functions will be extracted to separate modules in a future refactoring)
+// ========================================
 
 /**
  * Génère la synthèse exécutive
  */
-function generateExecutiveSummary(comptable: any, valorisation: any, financialValidation: any, userComments?: any): string {
+function generateExecutiveSummary(comptable: any, valorisation: any, financialValidation: any, userComments?: any, businessPlan?: any, documentExtraction?: any): string {
+  // Extraction du prix demandé par le vendeur (transactionCosts)
+  const transactionCosts = documentExtraction?.transactionCosts;
+  const prixDemande = transactionCosts?.prix_fonds || 0;
   const healthScore = comptable?.healthScore?.overall || 0;
   const confidenceScore = financialValidation?.confidenceScore?.overall || 0;
 
@@ -426,15 +278,67 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
     verdictClass = 'reserves';
   }
 
-  // Fourchette valorisation
-  const valoMin = (valorisation?.synthese?.fourchette_basse || 0).toLocaleString('fr-FR');
-  const valoMax = (valorisation?.synthese?.fourchette_haute || 0).toLocaleString('fr-FR');
-  const valoMediane = (valorisation?.synthese?.valeur_recommandee || valorisation?.synthese?.fourchette_mediane || 0).toLocaleString('fr-FR');
+  // Fourchette valorisation (avec fallback méthode hybride pour Tabac)
+  const valoMin = (
+    valorisation?.synthese?.fourchette_basse ||
+    valorisation?.methodeHybride?.valorisationTotale?.fourchetteBasse ||
+    0
+  ).toLocaleString('fr-FR');
+  const valoMax = (
+    valorisation?.synthese?.fourchette_haute ||
+    valorisation?.methodeHybride?.valorisationTotale?.fourchetteHaute ||
+    0
+  ).toLocaleString('fr-FR');
+  const valoMediane = (
+    valorisation?.synthese?.valeur_recommandee ||
+    valorisation?.methodeHybride?.valorisationTotale?.valeurMediane ||
+    valorisation?.synthese?.fourchette_mediane ||
+    0
+  ).toLocaleString('fr-FR');
 
-  // Points forts (3 max)
+  // Valeur numérique pour calculs
+  const valoMedianeNum =
+    valorisation?.synthese?.valeur_recommandee ||
+    valorisation?.methodeHybride?.valorisationTotale?.valeurMediane ||
+    valorisation?.synthese?.fourchette_mediane ||
+    0;
+
+  // ========================================
+  // Calculs préliminaires pour BP et Points Forts
+  // ========================================
+
+  // Déterminer la dernière année disponible
+  const years = comptable?.sig ? Object.keys(comptable.sig).sort().reverse() : [];
+  const lastYear = years[0] || '';
+
+  // Valeurs actuelles (depuis comptable)
+  const sigLastYear = comptable?.sig?.[lastYear] || {};
+  // Gérer le nouveau format SIG { valeur, pct_ca } ou l'ancien format (number)
+  const extractValue = (val: any) => typeof val === 'object' && val !== null ? val.valeur : (val || 0);
+
+  const ebeComptable = comptable?.ebeRetraitement?.ebe_comptable || extractValue(sigLastYear?.ebe) || 0;
+  const caActuel = extractValue(sigLastYear?.chiffre_affaires) || 0;
+  const margeEbeActuelle = comptable?.ratios?.marge_ebe_pct || (caActuel > 0 ? (ebeComptable / caActuel * 100) : 0);
+
+  // Valeurs business plan (depuis businessPlan et comptable.ebeRetraitement)
+  const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || 0;
+  const projectionAnnee1 = businessPlan?.projections?.[1]; // Année 1 (Reprise)
+  const projectionAnnee3 = businessPlan?.projections?.[3]; // Année 3 (Croisière)
+
+  const caAnnee1 = projectionAnnee1?.ca || 0;
+  const ebeAnnee1 = projectionAnnee1?.ebe_normatif || 0;
+  const ebeAnnee3 = projectionAnnee3?.ebe_normatif || 0;
+  const caAnnee3 = projectionAnnee3?.ca || 0;
+  const margeEbeNormatif = caActuel > 0 ? (ebeNormatif / caActuel * 100) : 0;
+
+  // ========================================
+  // Points forts (actuels + potentiel BP)
+  // ========================================
   const strengths: string[] = [];
+
+  // 1. Critères basés sur données comptables actuelles
   if (comptable?.evolution?.tendance === 'croissance') {
-    strengths.push(`📈 Croissance ${comptable.evolution.ca_evolution_pct.toFixed(1)}% du CA`);
+    strengths.push(`📈 Croissance historique ${comptable.evolution.ca_evolution_pct.toFixed(1)}% du CA`);
   }
   if (healthScore >= 70) {
     strengths.push(`✅ Bonne santé financière (${healthScore}/100)`);
@@ -443,13 +347,143 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
     strengths.push(`💰 Marge EBE solide (${comptable.ratios.marge_ebe_pct.toFixed(1)}%)`);
   }
 
-  // Message par défaut si aucun point fort identifié
-  if (strengths.length === 0) {
-    strengths.push('Aucun point fort majeur identifié selon les critères standards (santé ≥70, marge ≥10%, croissance)');
+  // 2. Critères basés sur le Business Plan (potentiel repreneur)
+  // Potentiel d'amélioration EBE (si normatif > comptable de +30% ou plus)
+  if (ebeComptable > 0 && ebeNormatif > 0 && strengths.length < 3) {
+    const ameliorationEbe = ((ebeNormatif - ebeComptable) / ebeComptable) * 100;
+    if (ameliorationEbe >= 30) {
+      strengths.push(`🚀 Potentiel EBE normatif +${ameliorationEbe.toFixed(0)}% après optimisation`);
+    }
   }
 
-  // Points de vigilance (3 max)
-  const warnings = financialValidation?.synthese?.pointsVigilance?.slice(0, 3) || [];
+  // Croissance CA projetée Année 3 (si +10% ou plus vs actuel)
+  if (caAnnee3 > 0 && caActuel > 0 && strengths.length < 3) {
+    const croissanceProjetee = ((caAnnee3 - caActuel) / caActuel) * 100;
+    if (croissanceProjetee >= 10) {
+      strengths.push(`📊 Croissance CA projetée +${croissanceProjetee.toFixed(0)}% à horizon 3 ans`);
+    }
+  }
+
+  // Rentabilité projetée Année 3 (marge EBE > 15%)
+  if (ebeAnnee3 > 0 && caAnnee3 > 0 && strengths.length < 3) {
+    const margeProjetee = (ebeAnnee3 / caAnnee3) * 100;
+    if (margeProjetee >= 15) {
+      strengths.push(`💎 Rentabilité cible ${margeProjetee.toFixed(1)}% en année 3`);
+    }
+  }
+
+  // Message par défaut si aucun point fort identifié
+  if (strengths.length === 0) {
+    strengths.push('Aucun point fort majeur identifié selon les critères standards (santé ≥70, marge ≥10%, croissance historique ou projetée)');
+  }
+
+  // ========================================
+  // Points de vigilance depuis alertes déterministes
+  // ========================================
+  // Priorité 1: Utiliser les alertes déterministes (reproductibles)
+  // Priorité 2: Fallback sur l'ancien format pointsVigilance
+  const deterministicAlerts = financialValidation?.deterministicAlerts || [];
+
+  let warnings: string[] = [];
+
+  if (deterministicAlerts.length > 0) {
+    // Utiliser les alertes déterministes (format structuré)
+    warnings = deterministicAlerts
+      .filter((a: any) => a.severity === 'critical' || a.severity === 'warning')
+      .slice(0, 5)
+      .map((a: any) => {
+        // Format: "Titre\nMessage\n\nRecommandation : ..."
+        let text = `<strong>${a.title}</strong><br>${a.message}`;
+        if (a.recommendation) {
+          text += `<br><em>Recommandation : ${a.recommendation}</em>`;
+        }
+        // Ajouter contexte BP si amélioration EBE prévue
+        if (a.category === 'rentabilite' && ebeNormatif > ebeComptable && ebeComptable > 0) {
+          const amelioration = ((ebeNormatif - ebeComptable) / ebeComptable * 100).toFixed(0);
+          text += `<br><span class="bp-context">→ BP: redressement prévu +${amelioration}% via EBE normatif</span>`;
+        }
+        return text;
+      });
+  } else {
+    // Fallback: ancien format pointsVigilance (pour compatibilité)
+    const rawWarnings = financialValidation?.synthese?.pointsVigilance?.slice(0, 5) || [];
+    warnings = rawWarnings;
+  }
+
+  // Calcul des évolutions
+  const evolutionEbe = ebeComptable > 0 ? ((ebeNormatif - ebeComptable) / ebeComptable * 100) : 0;
+  const evolutionMarge = margeEbeNormatif - margeEbeActuelle; // en points
+  const evolutionCA = caActuel > 0 ? ((caAnnee1 - caActuel) / caActuel * 100) : 0;
+  const evolutionEbeAnnee1 = ebeComptable > 0 ? ((ebeAnnee1 - ebeComptable) / ebeComptable * 100) : 0;
+
+  // Capacité remboursement = EBE - Annuité emprunt
+  const annuiteActuelle = transactionCosts?.mensualites ? transactionCosts.mensualites * 12 : 0;
+  const annuitePrevue = businessPlan?.financement?.annuite || annuiteActuelle;
+  const capaciteActuelle = ebeComptable - annuiteActuelle;
+  const capacitePotentielle = ebeAnnee1 > 0 ? ebeAnnee1 - annuitePrevue : ebeNormatif - annuitePrevue;
+  const evolutionCapacite = capaciteActuelle !== 0 ? ((capacitePotentielle - capaciteActuelle) / Math.abs(capaciteActuelle) * 100) : 0;
+
+  // Helper pour formater l'évolution
+  const formatEvolution = (value: number, isPoints: boolean = false) => {
+    if (value === 0) return { text: '-', class: 'evolution-neutral' };
+    const sign = value > 0 ? '+' : '';
+    const unit = isPoints ? ' pts' : '%';
+    return {
+      text: `${sign}${value.toFixed(1)}${unit}`,
+      class: value > 0 ? 'evolution-positive' : 'evolution-negative'
+    };
+  };
+
+  // Générer le HTML du tableau comparatif (seulement si businessPlan disponible)
+  const comparisonTable = (businessPlan?.projections?.length > 0 && ebeNormatif > 0) ? `
+<h3>📊 Comparatif Situation Actuelle vs Potentiel Repreneur</h3>
+<table class="comparison-table">
+  <thead>
+    <tr>
+      <th>Indicateur</th>
+      <th>Situation Actuelle</th>
+      <th>Potentiel Repreneur</th>
+      <th>Évolution</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>EBE</strong></td>
+      <td>${ebeComptable.toLocaleString('fr-FR')} € <small>(comptable)</small></td>
+      <td>${ebeNormatif.toLocaleString('fr-FR')} € <small>(normatif)</small></td>
+      <td class="${formatEvolution(evolutionEbe).class}">${formatEvolution(evolutionEbe).text}</td>
+    </tr>
+    <tr>
+      <td><strong>Marge EBE</strong></td>
+      <td>${margeEbeActuelle.toFixed(1)}%</td>
+      <td>${margeEbeNormatif.toFixed(1)}%</td>
+      <td class="${formatEvolution(evolutionMarge, true).class}">${formatEvolution(evolutionMarge, true).text}</td>
+    </tr>
+    <tr>
+      <td><strong>CA Année 1</strong></td>
+      <td>${caActuel.toLocaleString('fr-FR')} €</td>
+      <td>${caAnnee1.toLocaleString('fr-FR')} €</td>
+      <td class="${formatEvolution(evolutionCA).class}">${formatEvolution(evolutionCA).text}</td>
+    </tr>
+    <tr>
+      <td><strong>EBE Année 1</strong></td>
+      <td>${ebeComptable.toLocaleString('fr-FR')} €</td>
+      <td>${ebeAnnee1.toLocaleString('fr-FR')} €</td>
+      <td class="${formatEvolution(evolutionEbeAnnee1).class}">${formatEvolution(evolutionEbeAnnee1).text}</td>
+    </tr>
+    <tr>
+      <td><strong>Capacité Remboursement</strong></td>
+      <td>${capaciteActuelle.toLocaleString('fr-FR')} € <small>(EBE - annuité)</small></td>
+      <td>${capacitePotentielle.toLocaleString('fr-FR')} € <small>(projeté)</small></td>
+      <td class="${formatEvolution(evolutionCapacite).class}">${formatEvolution(evolutionCapacite).text}</td>
+    </tr>
+  </tbody>
+</table>
+<p class="comparison-note">
+  💡 <strong>EBE Normatif</strong> = EBE comptable retraité (salaire dirigeant, économies loyer, charges non récurrentes).<br/>
+  Les projections Année 1 intègrent les hypothèses du business plan (extension horaires, impacts travaux).
+</p>
+` : '';
 
   return `
 <h2>📊 Synthèse Exécutive</h2>
@@ -463,6 +497,13 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
     <div class="info-value">${valoMin} € - ${valoMax} €</div>
     <div class="info-label">Valorisation Recommandée</div>
     <div class="info-value"><strong>${valoMediane} €</strong></div>
+    ${prixDemande > 0 ? `
+    <div class="info-label">Prix Demandé Vendeur</div>
+    <div class="info-value">${prixDemande.toLocaleString('fr-FR')} €</div>
+    <div class="info-label">Écart Prix / Estimation</div>
+    <div class="info-value" style="color: ${((prixDemande - valoMedianeNum) / valoMedianeNum * 100) > 0 ? 'var(--color-error-text)' : 'var(--color-success-text)'}">
+      ${((prixDemande - valoMedianeNum) / valoMedianeNum * 100) > 0 ? '+' : ''}${((prixDemande - valoMedianeNum) / valoMedianeNum * 100).toFixed(1)}%
+    </div>` : ''}
   </div>
   ${userComments?.travaux?.budget_prevu ? `
   <div class="alert-box info" style="margin-top: 15px;">
@@ -494,6 +535,8 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
   </div>
 </div>
 
+${comparisonTable}
+
 <h3>✅ Points Forts Financiers</h3>
 <ul class="strength-list">
   ${strengths.map(s => `<li>${s}</li>`).join('')}
@@ -508,858 +551,128 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
 `;
 }
 
+// generateAccountingSection, generateValuationSection, generateRealEstateSection, generateBusinessPlanSection
+// have been moved to ./sections/*.ts - See imports at top of file
+
+// Skip to generateCompletenessBlock which is NOT yet extracted
+// TODO: Consider extracting the following functions to separate modules in a future refactoring:
+// - generateCompletenessBlock
+// - generateDataCompletenessSection
+// - generateValidationSection
+// - generateAnnexes
+// - generateUserCommentsSection
+// - analyzeAndGenerateCommentaries
+
 /**
- * Génère la section analyse comptable
+ * Génère un bloc de complétude pour une section
  */
-function generateAccountingSection(comptable: any, evolutionChart: any, healthGauge: any): string {
-  if (!comptable) {
-    return '<h2>📈 Analyse Comptable</h2><p class="no-data">Données comptables non disponibles</p>';
-  }
+function generateCompletenessBlock(section: any): string {
+  if (!section) return '';
 
-  let html = '<h2>📈 Analyse Comptable</h2>';
+  const scoreClass = section.score >= 80 ? 'success' :
+                     (section.score >= 50 ? 'warning' : 'error');
 
-  // Tableau SIG
-  if (comptable.sig) {
-    html += '<h3>Soldes Intermédiaires de Gestion (SIG)</h3>';
-    html += '<table><thead><tr><th>Indicateur</th>';
+  let html = '<div class="data-completeness">';
+  html += `<h4>📋 ${section.section} <span class="badge ${scoreClass}">${section.score}/100</span></h4>`;
 
-    const years = Object.keys(comptable.sig).sort().reverse();
-    years.forEach(y => {
-      html += `<th class="text-right">${y}</th>`;
-    });
-    html += '</tr></thead><tbody>';
+  html += '<ul class="missing-data-list">';
 
-    const indicators = [
-      { key: 'chiffre_affaires', label: 'Chiffre d\'Affaires' },
-      { key: 'marge_commerciale', label: 'Marge Commerciale' },
-      { key: 'valeur_ajoutee', label: 'Valeur Ajoutée' },
-      { key: 'ebe', label: 'EBE' },
-      { key: 'resultat_exploitation', label: 'Résultat d\'Exploitation' },
-      { key: 'resultat_net', label: 'Résultat Net' }
-    ];
-
-    indicators.forEach(ind => {
-      html += `<tr><td><strong>${ind.label}</strong></td>`;
-      years.forEach(y => {
-        const value = comptable.sig[y]?.[ind.key] || 0;
-        html += `<td class="text-right">${value.toLocaleString('fr-FR')} €</td>`;
-      });
-      html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-  }
-
-  // ========================================
-  // NOUVEAU: Tableau de Retraitement EBE
-  // ========================================
-  if (comptable.ebeRetraitement && comptable.ebeRetraitement.ebe_normatif) {
-    const ebe = comptable.ebeRetraitement;
-
-    html += '<h3>💡 Retraitement de l\'EBE - Capacité Normatif du Repreneur</h3>';
-    html += '<div class="summary-box">';
-    html += '<p style="margin-bottom:15px; color:var(--color-text-secondary)">';
-    html += 'L\'EBE Normatif représente la <strong>capacité bénéficiaire réelle</strong> pour le repreneur, après retraitements des éléments non récurrents ou liés au cédant.';
-    html += '</p>';
-
-    // Tableau de retraitement
-    html += '<table><thead><tr><th>Ligne de Retraitement</th><th class="text-right">Montant</th><th>Source</th></tr></thead><tbody>';
-
-    // Ligne de base
-    html += `<tr class="table-base-row">
-      <td><strong>EBE Comptable (Base)</strong></td>
-      <td class="text-right"><strong>${ebe.ebe_comptable.toLocaleString('fr-FR')} €</strong></td>
-      <td><span class="badge info">Bilan ${ebe.annee_reference}</span></td>
-    </tr>`;
-
-    // Retraitements
-    if (ebe.retraitements && ebe.retraitements.length > 0) {
-      ebe.retraitements.forEach((r: any) => {
-        const sign = r.montant >= 0 ? '+' : '';
-        const color = r.montant >= 0 ? '#10b981' : '#ef4444';
-        const sourceLabel = r.source === 'userComments' ? 'Utilisateur' : (r.source === 'documentExtraction' ? 'Bilan' : 'Estimation');
-
-        html += `<tr>
-          <td>${r.description}</td>
-          <td class="text-right" style="color:${color}"><strong>${sign}${r.montant.toLocaleString('fr-FR')} €</strong></td>
-          <td><span class="badge ${r.source === 'userComments' ? 'success' : 'info'}">${sourceLabel}</span></td>
-        </tr>`;
-
-        // Commentaire si disponible
-        if (r.commentaire) {
-          html += `<tr style="font-size:0.85em; color:var(--color-text-secondary)">
-            <td colspan="3" style="padding-left:30px; font-style:italic">${r.commentaire}</td>
-          </tr>`;
-        }
-      });
+  // Present fields (show top 3)
+  const presentToShow = section.presentFields?.slice(0, 3) || [];
+  for (const field of presentToShow) {
+    html += `<li class="present">`;
+    html += `<span>✅ ${field.label}</span>`;
+    if (field.source) {
+      html += `<em style="font-size:0.85em; margin-left:8px">(${field.source})</em>`;
     }
+    html += '</li>';
+  }
 
-    // Ligne totale
-    const ecartColor = ebe.total_retraitements >= 0 ? '#10b981' : '#ef4444';
-    html += `<tr class="table-total-row">
-      <td><strong>Total Retraitements</strong></td>
-      <td class="text-right" style="color:${ecartColor}"><strong>${ebe.total_retraitements >= 0 ? '+' : ''}${ebe.total_retraitements.toLocaleString('fr-FR')} €</strong></td>
-      <td></td>
-    </tr>`;
-
-    // Ligne EBE Normatif
-    html += `<tr class="table-normatif-row">
-      <td><strong>🎯 EBE NORMATIF (Capacité Repreneur)</strong></td>
-      <td class="text-right"><strong style="font-size:1.2em; color:#0066cc">${ebe.ebe_normatif.toLocaleString('fr-FR')} €</strong></td>
-      <td><span class="badge success">+${ebe.ecart_pct}%</span></td>
-    </tr>`;
-
-    html += '</tbody></table>';
-
-    // Synthèse textuelle
-    if (ebe.synthese) {
-      html += `<p style="margin-top:15px; padding:10px; background:#fffbeb; border-left:3px solid #f59e0b">
-        <strong>💡 Synthèse:</strong> ${ebe.synthese}
-      </p>`;
+  // Partial fields
+  const partialFields = section.partialFields || [];
+  for (const field of partialFields) {
+    html += `<li class="partial">`;
+    html += `<span>⚠️ ${field.label}`;
+    if (field.details) {
+      html += ` <em style="font-size:0.85em">- ${field.details}</em>`;
     }
-
-    html += '</div>';
+    html += '</span></li>';
   }
 
-  // Graphique évolution
-  html += '<h3>Évolution sur 3 ans</h3>';
-  html += '<div class="chart-container"><canvas id="evolutionChart"></canvas></div>';
-  html += `<script>
-  new Chart(document.getElementById('evolutionChart'), ${JSON.stringify(evolutionChart)});
-  </script>`;
-
-  // Ratios + Gauge
-  html += '<div class="chart-row">';
-
-  // Tableau ratios
-  if (comptable.ratios) {
-    html += '<div><h3>Ratios Clés</h3><table>';
-    html += '<tr><td>Marge Brute</td><td class="text-right"><strong>' + (comptable.ratios.marge_brute_pct?.toFixed(1) || 0) + '%</strong></td></tr>';
-    html += '<tr><td>Marge EBE</td><td class="text-right"><strong>' + (comptable.ratios.marge_ebe_pct?.toFixed(1) || 0) + '%</strong></td></tr>';
-    html += '<tr><td>Marge Nette</td><td class="text-right"><strong>' + (comptable.ratios.marge_nette_pct?.toFixed(1) || 0) + '%</strong></td></tr>';
-    html += '<tr><td>Délai Clients</td><td class="text-right">' + (comptable.ratios.delai_clients_jours || 0) + ' jours</td></tr>';
-    html += '<tr><td>Taux d\'Endettement</td><td class="text-right">' + (comptable.ratios.taux_endettement_pct?.toFixed(1) || 0) + '%</td></tr>';
-    html += '<tr><td>CAF</td><td class="text-right">' + (comptable.ratios.capacite_autofinancement?.toLocaleString('fr-FR') || 0) + ' €</td></tr>';
-    html += '</table></div>';
+  // Missing fields (sorted by impact, show top 5)
+  const missingFields = [...(section.missingFields || [])].sort((a: any, b: any) => b.impact - a.impact);
+  const missingToShow = missingFields.slice(0, 5);
+  for (const field of missingToShow) {
+    html += `<li class="missing">`;
+    html += `<span>❌ ${field.label}</span>`;
+    if (field.impact >= 3) {
+      html += `<span class="impact badge error">-${field.impact} pts</span>`;
+    }
+    html += '</li>';
   }
 
-  // Gauge santé
-  html += '<div><div class="chart-container"><canvas id="healthGauge"></canvas></div></div>';
+  // Show count of remaining missing fields
+  if (missingFields.length > 5) {
+    html += `<li class="missing" style="font-style:italic; opacity:0.8">`;
+    html += `<span>... et ${missingFields.length - 5} autres éléments manquants</span></li>`;
+  }
+
+  html += '</ul>';
+
+  // Recommendations
+  if (section.recommendations && section.recommendations.length > 0) {
+    html += '<div class="completeness-recommendation">';
+    html += '<strong>👉 Documents à demander au cédant :</strong>';
+    html += '<ul>';
+    for (const rec of section.recommendations) {
+      html += `<li>${rec}</li>`;
+    }
+    html += '</ul></div>';
+  }
+
   html += '</div>';
-  html += `<script>
-  new Chart(document.getElementById('healthGauge'), ${JSON.stringify(healthGauge)});
-  </script>`;
-
-  // Benchmark sectoriel
-  if (comptable.benchmark) {
-    html += '<h3>Comparaison Sectorielle</h3>';
-    html += `<p><strong>Secteur:</strong> ${comptable.benchmark.sector} (NAF ${comptable.benchmark.nafCode})</p>`;
-
-    if (comptable.benchmark.comparisons && comptable.benchmark.comparisons.length > 0) {
-      html += '<table><thead><tr><th>Ratio</th><th class="text-right">Entreprise</th><th class="text-right">Moyenne Secteur</th><th class="text-center">Position</th></tr></thead><tbody>';
-
-      comptable.benchmark.comparisons.slice(0, 6).forEach((comp: any) => {
-        const badge = comp.position === 'superieur' ? 'success' : (comp.position === 'inferieur' ? 'error' : 'warning');
-        const emoji = comp.position === 'superieur' ? '📈' : (comp.position === 'inferieur' ? '📉' : '➡️');
-
-        html += `<tr>
-          <td>${comp.ratio}</td>
-          <td class="text-right"><strong>${comp.value.toFixed(1)}</strong></td>
-          <td class="text-right">${comp.sectorAverage.toFixed(1)}</td>
-          <td class="text-center"><span class="badge ${badge}">${emoji} ${comp.position}</span></td>
-        </tr>`;
-      });
-
-      html += '</tbody></table>';
-    }
-  }
-
-  // Alertes
-  if (comptable.alertes && comptable.alertes.length > 0) {
-    html += '<h3>Alertes & Points de Vigilance</h3>';
-
-    comptable.alertes.forEach((alert: any) => {
-      const alertClass = alert.level === 'critical' ? 'critical' : (alert.level === 'warning' ? 'warning' : 'info');
-      html += `<div class="alert-box ${alertClass}">
-        <strong>${alert.message}</strong>
-        <p>${alert.impact}</p>
-        <p><em>Recommandation : ${alert.recommendation}</em></p>
-      </div>`;
-    });
-  }
-
-  html += '<div class="page-break"></div>';
   return html;
 }
 
 /**
- * Génère la section valorisation
+ * Génère la section complète de suivi des données
  */
-function generateValuationSection(valorisation: any, valorisationChart: any): string {
-  if (!valorisation) {
-    return '<h2>💰 Valorisation du Fonds</h2><p class="no-data">Données de valorisation non disponibles</p>';
+function generateDataCompletenessSection(dataCompleteness: any): string {
+  if (!dataCompleteness || !dataCompleteness.sections) return '';
+
+  let html = '<h3>📋 Complétude des Données par Section</h3>';
+  html += '<p style="color: var(--color-text-secondary); margin-bottom: 15px;">';
+  html += 'Détail des données présentes, manquantes ou partielles pour chaque section du rapport.</p>';
+
+  // Generate blocks for each section
+  for (const section of dataCompleteness.sections) {
+    html += generateCompletenessBlock(section);
   }
 
-  let html = '<h2>💰 Valorisation du Fonds</h2>';
-
-  // ========================================
-  // NOUVEAU: Valorisation Hybride Tabac/Presse/FDJ
-  // ========================================
-  if (valorisation.methodeHybride) {
-    const tabac = valorisation.methodeHybride;
-
-    html += '<div class="summary-box" style="background:#e6f7ff; border-left:4px solid #0066cc">';
-    html += '<h3>🔵 Méthode HYBRIDE Tabac/Presse/FDJ</h3>';
-    html += `<p style="color:var(--color-text-secondary)"><strong>Type de commerce:</strong> ${tabac.descriptionType}</p>`;
-
-    // Tableau de décomposition
+  // Priority documents table
+  if (dataCompleteness.priorityDocuments && dataCompleteness.priorityDocuments.length > 0) {
+    html += '<div class="priority-docs-table">';
+    html += '<h4>📄 Documents Prioritaires à Obtenir</h4>';
     html += '<table>';
-    html += '<thead><tr><th>Bloc Valorisation</th><th class="text-right">Base</th><th class="text-right">Coefficient / %</th><th class="text-right">Valeur</th></tr></thead>';
+    html += '<thead><tr><th>Document</th><th>Criticité</th><th>Impact Score</th><th>Section</th></tr></thead>';
     html += '<tbody>';
 
-    // Bloc 1: Activité Réglementée
-    html += '<tr style="background:#f0f8ff">';
-    html += '<td><strong>📋 Bloc 1 : Activité Réglementée</strong><br><span style="font-size:0.9em; color:var(--color-text-secondary)">(Tabac + Loto + Presse + FDJ)</span></td>';
-    html += `<td class="text-right">${tabac.blocReglemente.commissionsNettes.toLocaleString('fr-FR')} €<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Commissions nettes annuelles</span></td>`;
-    html += `<td class="text-right">${tabac.blocReglemente.coefficientMin} - ${tabac.blocReglemente.coefficientMax}<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Coefficient multiplicateur</span></td>`;
-    html += `<td class="text-right"><strong>${tabac.blocReglemente.valeurMin.toLocaleString('fr-FR')} - ${tabac.blocReglemente.valeurMax.toLocaleString('fr-FR')} €</strong></td>`;
-    html += '</tr>';
-
-    // Bloc 2: Activité Commerciale
-    html += '<tr style="background:#fff8e1">';
-    html += '<td><strong>🛒 Bloc 2 : Activité Commerciale</strong><br><span style="font-size:0.9em; color:var(--color-text-secondary)">(Souvenirs + Confiserie + Vape + Téléphonie)</span></td>';
-    html += `<td class="text-right">${tabac.blocCommercial.caActiviteBoutique.toLocaleString('fr-FR')} €<br><span style="font-size:0.9em; color:var(--color-text-secondary)">CA boutique annuel</span></td>`;
-    html += `<td class="text-right">${tabac.blocCommercial.pourcentageMin} - ${tabac.blocCommercial.pourcentageMax}%<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Pourcentage CA</span></td>`;
-    html += `<td class="text-right"><strong>${tabac.blocCommercial.valeurMin.toLocaleString('fr-FR')} - ${tabac.blocCommercial.valeurMax.toLocaleString('fr-FR')} €</strong></td>`;
-    html += '</tr>';
-
-    // Total
-    html += '<tr style="border-top:2px solid #0066cc; background:#e6f7ff">';
-    html += '<td colspan="3"><strong>🎯 VALORISATION TOTALE (Bloc 1 + Bloc 2)</strong></td>';
-    html += `<td class="text-right"><strong style="font-size:1.2em; color:#0066cc">${tabac.valorisationTotale.fourchetteBasse.toLocaleString('fr-FR')} - ${tabac.valorisationTotale.fourchetteHaute.toLocaleString('fr-FR')} €</strong><br><span style="color:#0066cc">Médiane: ${tabac.valorisationTotale.valeurMediane.toLocaleString('fr-FR')} €</span></td>`;
-    html += '</tr>';
-
-    html += '</tbody></table>';
-
-    // Facteurs valorisants spécifiques
-    if (tabac.facteursValorisants && tabac.facteursValorisants.length > 0) {
-      html += '<div style="margin-top:15px"><strong>✅ Facteurs Valorisants:</strong><ul style="margin-top:5px">';
-      tabac.facteursValorisants.forEach((facteur: string) => {
-        html += `<li>${facteur}</li>`;
-      });
-      html += '</ul></div>';
-    }
-
-    // Justification
-    if (tabac.justification) {
-      html += `<p style="margin-top:15px; padding:10px; background:#fffbeb; border-left:3px solid #f59e0b; font-size:0.95em">
-        <strong>💡 Méthode:</strong> ${tabac.justification}
-      </p>`;
-    }
-
-    html += '</div>'; // Fin summary-box
-  }
-
-  // Graphique fourchettes
-  html += '<div class="chart-container"><canvas id="valorisationChart"></canvas></div>';
-  html += `<script>
-  new Chart(document.getElementById('valorisationChart'), ${JSON.stringify(valorisationChart)});
-  </script>`;
-
-  // Tableau comparatif (seulement pour méthodes standard - pas pour hybride car déjà affiché au-dessus)
-  if (!valorisation.methodeHybride) {
-    html += '<h3>Comparaison des Méthodes de Valorisation</h3>';
-    html += '<table><thead><tr><th>Méthode</th><th class="text-right">Fourchette Basse</th><th class="text-right">Médiane</th><th class="text-right">Fourchette Haute</th></tr></thead><tbody>';
-
-    // Support BOTH structures (backward compatibility) - IDENTIQUE à generateChartsTool.ts
-    const methodes = valorisation.methodes || {
-      ebe: valorisation.methodeEBE,
-      ca: valorisation.methodeCA,
-      patrimoniale: valorisation.methodePatrimoniale
-    };
-
-    // MÉTHODE EBE - Toujours afficher
-    if (methodes?.ebe) {
-      const ebe = methodes.ebe;
-      if (ebe.valeur_mediane > 0) {
-        html += `<tr>
-          <td><strong>Méthode EBE</strong> (${ebe.coefficient_bas}x - ${ebe.coefficient_haut}x)</td>
-          <td class="text-right">${(ebe.valeur_basse || 0).toLocaleString('fr-FR')} €</td>
-          <td class="text-right">${(ebe.valeur_mediane || 0).toLocaleString('fr-FR')} €</td>
-          <td class="text-right">${(ebe.valeur_haute || 0).toLocaleString('fr-FR')} €</td>
-        </tr>`;
-      } else {
-        // Afficher avec message explicatif
-        html += `<tr style="color:var(--color-text-muted)">
-          <td><strong>Méthode EBE</strong></td>
-          <td class="text-right" colspan="3">0 € <em>(données insuffisantes - EBE non disponible ou trop faible)</em></td>
-        </tr>`;
-      }
-    }
-
-    // MÉTHODE CA - Toujours afficher
-    if (methodes?.ca) {
-      const ca = methodes.ca;
-      if (ca.valeur_mediane > 0) {
-        html += `<tr>
-          <td><strong>Méthode CA</strong> (${ca.pourcentage_bas}% - ${ca.pourcentage_haut}% CA)</td>
-          <td class="text-right">${(ca.valeur_basse || 0).toLocaleString('fr-FR')} €</td>
-          <td class="text-right">${(ca.valeur_mediane || 0).toLocaleString('fr-FR')} €</td>
-          <td class="text-right">${(ca.valeur_haute || 0).toLocaleString('fr-FR')} €</td>
-        </tr>`;
-      } else {
-        html += `<tr style="color:var(--color-text-muted)">
-          <td><strong>Méthode CA</strong></td>
-          <td class="text-right" colspan="3">0 € <em>(données insuffisantes - CA non disponible)</em></td>
-        </tr>`;
-      }
-    }
-
-    // MÉTHODE PATRIMONIALE - Garder comportement actuel (déjà correct)
-    if (methodes?.patrimoniale) {
-      const patri = methodes.patrimoniale;
-      const valeurPatri = patri.valeur_estimee || 0;
-      html += `<tr${valeurPatri === 0 ? ' style="color:var(--color-text-muted)"' : ''}>
-        <td><strong>Méthode Patrimoniale</strong> (Actif Net + Goodwill)</td>
-        <td class="text-right" colspan="3">${valeurPatri.toLocaleString('fr-FR')} €${valeurPatri === 0 ? ' <em>(bilan non fourni)</em>' : ''}</td>
+    for (const doc of dataCompleteness.priorityDocuments) {
+      const critClass = `criticite-${doc.criticite}`;
+      const critIcon = doc.criticite === 'bloquant' ? '🔴' :
+                       (doc.criticite === 'important' ? '🟠' : '🟢');
+      html += `<tr>
+        <td>${doc.document}</td>
+        <td class="${critClass}">${critIcon} ${doc.criticite}</td>
+        <td class="text-right">+${doc.impact} pts</td>
+        <td>${doc.section || ''}</td>
       </tr>`;
-      // Ajouter détail patrimonial
-      if (patri.actif_net_comptable) {
-        html += `<tr style="font-size:0.9em; color:var(--color-text-secondary)">
-          <td style="padding-left:30px">Actif net comptable</td>
-          <td class="text-right" colspan="3">${(patri.actif_net_comptable || 0).toLocaleString('fr-FR')} €</td>
-        </tr>`;
-      }
-      if (patri.goodwill) {
-        html += `<tr style="font-size:0.9em; color:var(--color-text-secondary)">
-          <td style="padding-left:30px">Goodwill (survaleur)</td>
-          <td class="text-right" colspan="3">${(patri.goodwill || 0).toLocaleString('fr-FR')} €</td>
-        </tr>`;
-      }
     }
 
     html += '</tbody></table>';
-  } else {
-    // Pour la méthode hybride, afficher un message explicatif
-    html += '<div class="summary-box" style="background:#f0f9ff; border-left:4px solid #0066cc">';
-    html += '<p style="margin:0"><strong>Note :</strong> La méthode HYBRIDE Tabac/Presse/FDJ ci-dessus est la méthode de valorisation privilégiée pour ce type de commerce réglementé. Les méthodes classiques (EBE, CA, Patrimoniale) ne sont pas adaptées à ce secteur.</p>';
     html += '</div>';
   }
 
-  // Synthèse valorisation
-  if (valorisation.synthese) {
-    html += '<div class="summary-box">';
-    html += '<h3>Valorisation Retenue</h3>';
-    html += '<div class="info-grid">';
-    html += `<div class="info-label">Fourchette</div>`;
-    html += `<div class="info-value">${(valorisation.synthese.fourchette_basse || 0).toLocaleString('fr-FR')} € - ${(valorisation.synthese.fourchette_haute || 0).toLocaleString('fr-FR')} €</div>`;
-    html += `<div class="info-label">Méthode Privilégiée</div>`;
-    html += `<div class="info-value">${valorisation.synthese.methode_privilegiee || 'N/A'}</div>`;
-    html += `<div class="info-label">Valeur Recommandée</div>`;
-    html += `<div class="info-value"><strong style="font-size:1.3em">${(valorisation.synthese.valeur_recommandee || 0).toLocaleString('fr-FR')} €</strong></div>`;
-    html += '</div></div>';
-  }
-
-  // Arguments de négociation
-  if (valorisation.argumentsNegociation) {
-    html += '<h3>Arguments de Négociation</h3>';
-    html += '<div class="chart-row">';
-
-    if (valorisation.argumentsNegociation.pour_acheteur) {
-      html += '<div class="warning-list"><h4>Pour l\'Acheteur</h4><ul>';
-      valorisation.argumentsNegociation.pour_acheteur.forEach((arg: string) => {
-        html += `<li>${arg}</li>`;
-      });
-      html += '</ul></div>';
-    }
-
-    if (valorisation.argumentsNegociation.pour_vendeur) {
-      html += '<div class="strength-list"><h4>Pour le Vendeur</h4><ul>';
-      valorisation.argumentsNegociation.pour_vendeur.forEach((arg: string) => {
-        html += `<li>${arg}</li>`;
-      });
-      html += '</ul></div>';
-    }
-
-    html += '</div>';
-  }
-
-  html += '<div class="page-break"></div>';
-  return html;
-}
-
-/**
- * Génère la section immobilière
- */
-function generateRealEstateSection(immobilier: any): string {
-  let html = '<h2>🏠 Analyse Immobilière</h2>';
-
-  if (!immobilier.bail && !immobilier.murs) {
-    return html + '<p class="no-data">Aucune donnée immobilière disponible</p>';
-  }
-
-  // Synthèse du bail
-  if (immobilier.bail) {
-    html += '<h3>Bail Commercial</h3>';
-    html += '<table>';
-    html += `<tr><td>Type de Bail</td><td><strong>${immobilier.bail.type || 'N/A'}</strong></td></tr>`;
-    html += `<tr><td>Loyer Annuel HC</td><td><strong>${(immobilier.bail.loyer_annuel_hc || 0).toLocaleString('fr-FR')} €</strong></td></tr>`;
-    html += `<tr><td>Surface</td><td>${immobilier.bail.surface_m2 || 0} m²</td></tr>`;
-    html += `<tr><td>Loyer/m²/an</td><td>${(immobilier.bail.loyer_m2_annuel || 0).toLocaleString('fr-FR')} €</td></tr>`;
-    html += `<tr><td>Durée Restante</td><td>${immobilier.bail.duree_restante_mois || 0} mois</td></tr>`;
-
-    if (immobilier.bail.loyer_marche_estime) {
-      const ecart = immobilier.bail.ecart_marche_pct || 0;
-      const badgeClass = ecart < 0 ? 'success' : 'error';
-      html += `<tr><td>Comparaison Marché</td><td><span class="badge ${badgeClass}">${ecart > 0 ? '+' : ''}${ecart}%</span> ${immobilier.bail.appreciation || ''}</td></tr>`;
-    }
-
-    if (immobilier.bail.droit_au_bail_estime) {
-      html += `<tr><td>Droit au Bail Estimé</td><td><strong>${immobilier.bail.droit_au_bail_estime.toLocaleString('fr-FR')} €</strong></td></tr>`;
-    }
-
-    html += '</table>';
-  }
-
-  // Option murs
-  if (immobilier.murs && immobilier.murs.option_possible) {
-    html += '<h3>Option Rachat des Murs</h3>';
-    html += '<table>';
-    html += `<tr><td>Prix Demandé</td><td><strong>${(immobilier.murs.prix_demande || 0).toLocaleString('fr-FR')} €</strong></td></tr>`;
-    html += `<tr><td>Prix/m² Zone</td><td>${(immobilier.murs.prix_m2_zone || 0).toLocaleString('fr-FR')} €</td></tr>`;
-    html += `<tr><td>Rentabilité Brute</td><td><strong>${immobilier.murs.rentabilite_brute_pct || 0}%</strong></td></tr>`;
-    html += `<tr><td>Rentabilité Nette</td><td><strong>${immobilier.murs.rentabilite_nette_pct || 0}%</strong></td></tr>`;
-
-    const recomm = immobilier.murs.recommandation || 'louer';
-    const badgeClass = recomm === 'acheter' ? 'success' : (recomm === 'negocier' ? 'warning' : 'info');
-    html += `<tr><td>Recommandation</td><td><span class="badge ${badgeClass}">${recomm.toUpperCase()}</span></td></tr>`;
-    html += '</table>';
-
-    if (immobilier.murs.arguments) {
-      html += '<ul class="strength-list">';
-      immobilier.murs.arguments.forEach((arg: string) => {
-        html += `<li>${arg}</li>`;
-      });
-      html += '</ul>';
-    }
-  }
-
-  // Travaux
-  if (immobilier.travaux) {
-    html += '<h3>Budget Travaux</h3>';
-    html += '<table>';
-    html += `<tr><td>État Général</td><td><strong>${immobilier.travaux.etat_general || 'N/A'}</strong></td></tr>`;
-
-    if (immobilier.travaux.budget_total) {
-      const bt = immobilier.travaux.budget_total;
-      html += `<tr><td>Budget Obligatoire</td><td><strong>${(bt.obligatoire_bas || 0).toLocaleString('fr-FR')} € - ${(bt.obligatoire_haut || 0).toLocaleString('fr-FR')} €</strong></td></tr>`;
-      if (bt.recommande_bas) {
-        html += `<tr><td>Budget Recommandé</td><td>${(bt.recommande_bas || 0).toLocaleString('fr-FR')} € - ${(bt.recommande_haut || 0).toLocaleString('fr-FR')} €</td></tr>`;
-      }
-    }
-
-    html += '</table>';
-  }
-
-  // Simulation Loyer
-  if (immobilier.simulationLoyer) {
-    const sim = immobilier.simulationLoyer;
-    html += '<h3>📊 Simulation Renégociation Loyer</h3>';
-
-    // Comparaison actuel vs marché
-    if (sim.comparaison) {
-      const badgeClass = sim.comparaison.appreciation === 'avantageux' ? 'success' :
-                         (sim.comparaison.appreciation === 'desavantageux' ? 'error' : 'warning');
-      html += `<div class="alert-box ${badgeClass}">`;
-      html += `<strong>Loyer actuel : ${sim.comparaison.appreciation.toUpperCase()}</strong>`;
-      html += `<p>Écart avec le marché : <strong>${sim.comparaison.ecartPourcentage > 0 ? '+' : ''}${sim.comparaison.ecartPourcentage}%</strong> `;
-      html += `(${Math.abs(sim.comparaison.ecartAnnuel).toLocaleString('fr-FR')} €/an)</p>`;
-      html += '</div>';
-    }
-
-    // Table des scénarios
-    if (sim.scenarios) {
-      html += '<h4>Scénarios de Renégociation</h4>';
-      html += '<table>';
-      html += '<thead><tr><th>Scénario</th><th>Nouveau Loyer/an</th><th>Économie/an</th><th>Impact EBE</th><th>Probabilité</th></tr></thead>';
-      html += '<tbody>';
-
-      // Scénario Pessimiste
-      if (sim.scenarios.pessimiste) {
-        const s = sim.scenarios.pessimiste;
-        html += '<tr>';
-        html += `<td><strong>Pessimiste</strong><br/><small>${s.description}</small></td>`;
-        html += `<td class="text-right">${s.nouveauLoyerAnnuel.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}">${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}">${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-center">${s.probabilite}</td>`;
-        html += '</tr>';
-      }
-
-      // Scénario Réaliste
-      if (sim.scenarios.realiste) {
-        const s = sim.scenarios.realiste;
-        html += '<tr style="background: #f0f9ff;">';
-        html += `<td><strong>Réaliste ⭐</strong><br/><small>${s.description}</small></td>`;
-        html += `<td class="text-right"><strong>${s.nouveauLoyerAnnuel.toLocaleString('fr-FR')} €</strong></td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}"><strong>${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</strong></td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}"><strong>${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</strong></td>`;
-        html += `<td class="text-center"><strong>${s.probabilite}</strong></td>`;
-        html += '</tr>';
-      }
-
-      // Scénario Optimiste
-      if (sim.scenarios.optimiste) {
-        const s = sim.scenarios.optimiste;
-        html += '<tr>';
-        html += `<td><strong>Optimiste</strong><br/><small>${s.description}</small></td>`;
-        html += `<td class="text-right">${s.nouveauLoyerAnnuel.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}">${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-right" style="color: ${s.economieAnnuelle > 0 ? '#065f46' : '#991b1b'}">${s.economieAnnuelle > 0 ? '+' : ''}${s.economieAnnuelle.toLocaleString('fr-FR')} €</td>`;
-        html += `<td class="text-center">${s.probabilite}</td>`;
-        html += '</tr>';
-      }
-
-      html += '</tbody></table>';
-
-      // Note sur le scénario réaliste
-      html += '<p><small><em>⭐ Le scénario réaliste est utilisé pour le calcul de l\'EBE Normatif</em></small></p>';
-    }
-
-    // Arguments de négociation
-    if (sim.argumentsNegociation && sim.argumentsNegociation.length > 0) {
-      html += '<h4>Arguments de Négociation</h4>';
-      html += '<ul class="strength-list">';
-      sim.argumentsNegociation.forEach((arg: string) => {
-        html += `<li>${arg}</li>`;
-      });
-      html += '</ul>';
-    }
-
-    // Recommandation
-    if (sim.recommandation) {
-      html += `<div class="alert-box info">`;
-      html += `<strong>Recommandation :</strong> ${sim.recommandation}`;
-      html += `</div>`;
-    }
-  }
-
-  // Score immobilier
-  if (immobilier.synthese?.score_immobilier) {
-    html += `<div class="summary-box">`;
-    html += `<h3>Score Immobilier : ${immobilier.synthese.score_immobilier}/100</h3>`;
-    html += `<p>${immobilier.synthese.recommandation || ''}</p>`;
-    html += `</div>`;
-  }
-
-  html += '<div class="page-break"></div>';
-  return html;
-}
-
-/**
- * Génère la section Business Plan Dynamique
- */
-function generateBusinessPlanSection(businessPlan: any): string {
-  let html = '<h2>📈 Business Plan Dynamique - Projection 5 ans</h2>';
-
-  if (!businessPlan || !businessPlan.projections) {
-    return html + '<p class="no-data">Aucune projection disponible</p>';
-  }
-
-  const { projections, indicateursBancaires, hypotheses, synthese, recommandations } = businessPlan;
-
-  // Synthèse du business plan
-  if (synthese) {
-    html += `<div class="summary-box">`;
-    html += `<h3>Synthèse</h3>`;
-    html += `<p>${synthese}</p>`;
-    html += `</div>`;
-  }
-
-  // Table des projections sur 5 ans
-  html += '<h3>Projections sur 5 ans</h3>';
-  html += '<table>';
-  html += '<thead><tr>';
-  html += '<th>Indicateur</th>';
-
-  projections.forEach((proj: any) => {
-    html += `<th class="text-center">${proj.label}</th>`;
-  });
-
-  html += '</tr></thead><tbody>';
-
-  // Ligne CA
-  html += '<tr style="background:#f0f9ff">';
-  html += '<td><strong>Chiffre d\'Affaires</strong></td>';
-  projections.forEach((proj: any) => {
-    html += `<td class="text-right"><strong>${proj.ca.toLocaleString('fr-FR')} €</strong></td>`;
-  });
-  html += '</tr>';
-
-  // Détails impacts CA
-  html += '<tr>';
-  html += '<td style="padding-left:20px; font-size:0.9em">└─ Impact horaires</td>';
-  projections.forEach((proj: any) => {
-    const val = proj.ca_detail?.impact_horaires || 0;
-    html += `<td class="text-right" style="font-size:0.9em; color:#059669">${val > 0 ? '+' : ''}${Math.round(val).toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  html += '<tr>';
-  html += '<td style="padding-left:20px; font-size:0.9em">└─ Impact travaux</td>';
-  projections.forEach((proj: any) => {
-    const val = proj.ca_detail?.impact_travaux || 0;
-    html += `<td class="text-right" style="font-size:0.9em; color:#059669">${val > 0 ? '+' : ''}${Math.round(val).toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  html += '<tr>';
-  html += '<td style="padding-left:20px; font-size:0.9em">└─ Croissance naturelle</td>';
-  projections.forEach((proj: any) => {
-    const val = proj.ca_detail?.croissance_naturelle || 0;
-    html += `<td class="text-right" style="font-size:0.9em; color:#059669">${val > 0 ? '+' : ''}${Math.round(val).toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  // Ligne Charges fixes
-  html += '<tr style="background:#fff7ed">';
-  html += '<td><strong>Charges Fixes</strong></td>';
-  projections.forEach((proj: any) => {
-    html += `<td class="text-right"><strong>${proj.charges_fixes.toLocaleString('fr-FR')} €</strong></td>`;
-  });
-  html += '</tr>';
-
-  // Détails charges
-  html += '<tr>';
-  html += '<td style="padding-left:20px; font-size:0.9em">└─ Salaires</td>';
-  projections.forEach((proj: any) => {
-    html += `<td class="text-right" style="font-size:0.9em">${proj.charges_detail.salaires.toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  html += '<tr>';
-  html += '<td style="padding-left:20px; font-size:0.9em">└─ Loyer</td>';
-  projections.forEach((proj: any) => {
-    html += `<td class="text-right" style="font-size:0.9em">${proj.charges_detail.loyer.toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  // Ligne EBE Normatif
-  html += '<tr style="background:#d1fae5">';
-  html += '<td><strong>EBE Normatif</strong></td>';
-  projections.forEach((proj: any) => {
-    const color = proj.ebe_normatif > 0 ? '#065f46' : '#991b1b';
-    html += `<td class="text-right" style="color:${color}"><strong>${proj.ebe_normatif.toLocaleString('fr-FR')} €</strong></td>`;
-  });
-  html += '</tr>';
-
-  // Ligne Annuité emprunt
-  html += '<tr>';
-  html += '<td>Annuité emprunt</td>';
-  projections.forEach((proj: any) => {
-    html += `<td class="text-right" style="color:#991b1b">${proj.annuite_emprunt > 0 ? '-' : ''}${proj.annuite_emprunt.toLocaleString('fr-FR')} €</td>`;
-  });
-  html += '</tr>';
-
-  // Ligne Reste après dette
-  html += '<tr style="background:#e6f7ff; border-top:2px solid #0066cc">';
-  html += '<td><strong>💰 Reste après dette</strong></td>';
-  projections.forEach((proj: any) => {
-    const color = proj.reste_apres_dette > 0 ? '#065f46' : '#991b1b';
-    html += `<td class="text-right" style="color:${color}"><strong>${proj.reste_apres_dette.toLocaleString('fr-FR')} €</strong></td>`;
-  });
-  html += '</tr>';
-
-  html += '</tbody></table>';
-
-  // Graphique Chart.js des projections
-  html += '<h4>Évolution Projetée sur 5 ans</h4>';
-  html += '<div class="chart-container"><canvas id="projectionChart"></canvas></div>';
-
-  // Configuration Chart.js
-  const labels = projections.map((p: any) => p.label);
-  const caData = projections.map((p: any) => p.ca);
-  const ebeData = projections.map((p: any) => p.ebe_normatif);
-  const resteData = projections.map((p: any) => p.reste_apres_dette);
-
-  const projectionChartConfig = {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Chiffre d\'Affaires',
-          data: caData,
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          borderWidth: 3,
-          tension: 0.3,
-          fill: true
-        },
-        {
-          label: 'EBE Normatif',
-          data: ebeData,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          borderWidth: 3,
-          tension: 0.3,
-          fill: true
-        },
-        {
-          label: 'Reste après dette',
-          data: resteData,
-          borderColor: '#8b5cf6',
-          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-          borderWidth: 3,
-          tension: 0.3,
-          fill: true
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: {
-            font: { size: 14, weight: 'bold' },
-            padding: 20
-          }
-        },
-        title: {
-          display: false
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: function(context: any) {
-              let label = context.dataset.label || '';
-              if (label) {
-                label += ': ';
-              }
-              label += new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(context.parsed.y);
-              return label;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: function(value: any) {
-              return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
-            }
-          }
-        }
-      }
-    }
-  };
-
-  html += `<script>
-  new Chart(document.getElementById('projectionChart'), ${JSON.stringify(projectionChartConfig)});
-  </script>`;
-
-  // Indicateurs bancaires
-  if (indicateursBancaires) {
-    const ind = indicateursBancaires;
-    html += '<h3>🏦 Indicateurs Bancaires</h3>';
-
-    // Appréciation globale
-    const appreciationClass = ind.appreciation === 'excellent' ? 'success' :
-                               (ind.appreciation === 'bon' ? 'success' :
-                                (ind.appreciation === 'acceptable' ? 'warning' : 'error'));
-    html += `<div class="alert-box ${appreciationClass}">`;
-    html += `<strong>Profil bancaire : ${ind.appreciation.toUpperCase()}</strong>`;
-    html += `</div>`;
-
-    // Table indicateurs
-    html += '<div class="score-grid">';
-
-    html += '<div class="score-card">';
-    html += `<div class="score-value">${ind.ratioCouvertureDette}x</div>`;
-    html += '<div class="score-label">Ratio de Couverture</div>';
-    html += '<p style="font-size:0.85em; margin-top:5px">Cible: > 1.5x</p>';
-    html += '</div>';
-
-    html += '<div class="score-card">';
-    html += `<div class="score-value">${ind.rentabiliteCapitauxInvestis}%</div>`;
-    html += '<div class="score-label">ROI</div>';
-    html += '<p style="font-size:0.85em; margin-top:5px">Rentabilité investissement</p>';
-    html += '</div>';
-
-    html += '<div class="score-card">';
-    html += `<div class="score-value">${ind.delaiRetourInvestissement} ans</div>`;
-    html += '<div class="score-label">Délai de Retour</div>';
-    html += '<p style="font-size:0.85em; margin-top:5px">Amortissement apport</p>';
-    html += '</div>';
-
-    html += '<div class="score-card">';
-    html += `<div class="score-value">${ind.pointMort.toLocaleString('fr-FR')} €</div>`;
-    html += '<div class="score-label">Point Mort</div>';
-    html += '<p style="font-size:0.85em; margin-top:5px">CA minimum équilibre</p>';
-    html += '</div>';
-
-    html += '</div>';
-
-    // Détails financement
-    html += '<table>';
-    html += `<tr><td>Investissement Total</td><td class="text-right"><strong>${ind.investissementTotal.toLocaleString('fr-FR')} €</strong></td></tr>`;
-    html += `<tr><td>Montant Emprunté</td><td class="text-right">${ind.montantEmprunte.toLocaleString('fr-FR')} €</td></tr>`;
-    html += `<tr><td>Annuité Emprunt</td><td class="text-right">${ind.annuiteEmprunt.toLocaleString('fr-FR')} €/an</td></tr>`;
-    html += `<tr><td>Capacité d'Autofinancement (Année 1)</td><td class="text-right"><strong>${ind.capaciteAutofinancement.toLocaleString('fr-FR')} €</strong></td></tr>`;
-    html += '</table>';
-  }
-
-  // Recommandations
-  if (recommandations && recommandations.length > 0) {
-    html += '<h3>💡 Recommandations</h3>';
-    html += '<ul class="warning-list">';
-    recommandations.forEach((rec: string) => {
-      html += `<li>${rec}</li>`;
-    });
-    html += '</ul>';
-  }
-
-  // Hypothèses utilisées
-  if (hypotheses) {
-    html += '<h3>📋 Hypothèses du Business Plan</h3>';
-    html += '<table>';
-
-    if (hypotheses.extensionHoraires?.impactEstime) {
-      html += `<tr><td>Impact extension horaires</td><td class="text-right">+${(hypotheses.extensionHoraires.impactEstime * 100).toFixed(0)}% du CA</td></tr>`;
-    }
-
-    if (hypotheses.travaux?.impactAnnee2) {
-      html += `<tr><td>Impact travaux (Année 2)</td><td class="text-right">+${(hypotheses.travaux.impactAnnee2 * 100).toFixed(0)}% du CA</td></tr>`;
-    }
-
-    if (hypotheses.travaux?.impactRecurrent) {
-      html += `<tr><td>Croissance récurrente (Années 3-5)</td><td class="text-right">+${(hypotheses.travaux.impactRecurrent * 100).toFixed(0)}% du CA/an</td></tr>`;
-    }
-
-    if (hypotheses.salairesSupprimes) {
-      html += `<tr><td>Salaires supprimés</td><td class="text-right" style="color:#059669">-${hypotheses.salairesSupprimes.toLocaleString('fr-FR')} €/an</td></tr>`;
-    }
-
-    if (hypotheses.salairesAjoutes) {
-      html += `<tr><td>Salaires ajoutés</td><td class="text-right" style="color:#991b1b">+${hypotheses.salairesAjoutes.toLocaleString('fr-FR')} €/an</td></tr>`;
-    }
-
-    if (hypotheses.tauxEmprunt) {
-      html += `<tr><td>Taux d'emprunt</td><td class="text-right">${hypotheses.tauxEmprunt.toFixed(2)}%</td></tr>`;
-    }
-
-    if (hypotheses.dureeEmpruntMois) {
-      html += `<tr><td>Durée emprunt</td><td class="text-right">${(hypotheses.dureeEmpruntMois / 12).toFixed(1)} ans (${hypotheses.dureeEmpruntMois} mois)</td></tr>`;
-    }
-
-    html += '</table>';
-  }
-
-  html += '<div class="page-break"></div>';
   return html;
 }
 
@@ -1418,6 +731,11 @@ function generateValidationSection(financialValidation: any, confidenceRadar: an
       });
       html += '</ul></div>';
     }
+  }
+
+  // Data Completeness Tracking (NEW)
+  if (financialValidation.dataCompleteness) {
+    html += generateDataCompletenessSection(financialValidation.dataCompleteness);
   }
 
   // Anomalies
@@ -1606,259 +924,9 @@ function generateUserCommentsSection(userComments: any): string {
 }
 
 /**
- * Génère le footer
- */
-function generateFooter(): string {
-  const date = new Date().toLocaleString('fr-FR');
-  return `
-<div class="footer">
-  <p><strong>Rapport d'Analyse Financière - Due Diligence</strong></p>
-  <p>Généré automatiquement le ${date}</p>
-  <p><em>Ce rapport est confidentiel et destiné uniquement à l'usage interne dans le cadre d'une acquisition.</em></p>
-</div>
-`;
-}
-
-/**
- * Génère un commentaire stratégique contextuel
- */
-function generateStrategicCommentary(title: string, commentary: string): string {
-  return `
-<div class="strategic-commentary">
-  <h4>📌 ${title}</h4>
-  <p>${commentary}</p>
-</div>
-`;
-}
-
-/**
- * Génère la section dédiée "Conseils pour le Rachat"
- */
-function generateAcquisitionAdviceSection(
-  comptable: any,
-  valorisation: any,
-  immobilier: any,
-  businessInfo: any,
-  userComments: any
-): string {
-  let html = '<div class="page-break"></div>';
-  html += '<h2>💡 Conseils pour le Rachat</h2>';
-
-  // ========================================
-  // Sous-section 1: Risques Identifiés & Mitigation
-  // ========================================
-  html += '<h3>⚠️ Risques Identifiés & Mitigation</h3>';
-  html += '<table><thead><tr><th>Risque</th><th>Niveau</th><th>Stratégie de Mitigation</th></tr></thead><tbody>';
-
-  const risques = [];
-
-  // Risque 1: Baisse EBE
-  if (comptable?.evolution?.ebe_evolution_pct < -20) {
-    risques.push({
-      description: 'Baisse importante de l\'EBE (-' + Math.abs(comptable.evolution.ebe_evolution_pct).toFixed(0) + '%)',
-      niveau: 'critical',
-      mitigation: 'Auditer masse salariale, renégocier loyer, optimiser plannings. Clause earn-out pour garantir rentabilité.'
-    });
-  }
-
-  // Risque 2: Loyer élevé
-  if (immobilier?.simulationLoyer?.comparaison?.appreciation === 'desavantageux') {
-    const ecart = immobilier.simulationLoyer.comparaison.ecartPourcentage || 0;
-    risques.push({
-      description: 'Loyer supérieur au marché (+' + Math.abs(ecart).toFixed(0) + '%)',
-      niveau: 'warning',
-      mitigation: 'Renégociation avant signature (objectif -15% minimum). Clause de réduction si CA < seuil. Envisager rachat murs si possible.'
-    });
-  }
-
-  // Risque 3: Financement
-  const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || comptable?.sig?.[comptable.yearsAnalyzed?.[0]]?.ebe || 0;
-  const valeurRecommandee = valorisation?.synthese?.valeur_recommandee || 0;
-  const annuiteEstimee = valeurRecommandee * 0.15; // ~15% du prix
-  if (annuiteEstimee > ebeNormatif * 0.7 && ebeNormatif > 0) {
-    risques.push({
-      description: 'Annuité de prêt supérieure à 70% de l\'EBE',
-      niveau: 'critical',
-      mitigation: 'Augmenter apport personnel, négocier prix à la baisse, ou différer remboursement capital (1ère année intérêts seuls).'
-    });
-  }
-
-  // Risque 4: Travaux importants
-  if (immobilier?.travaux?.budget_total) {
-    const totalTravaux = (immobilier.travaux.budget_total.obligatoire_haut || 0) + (immobilier.travaux.budget_total.recommande_haut || 0);
-    if (totalTravaux > 30000) {
-      risques.push({
-        description: 'Travaux importants nécessaires (' + totalTravaux.toLocaleString('fr-FR') + ' €)',
-        niveau: 'warning',
-        mitigation: 'Négocier prise en charge partielle par vendeur. Étaler travaux sur 18-24 mois. Intégrer au plan de financement.'
-      });
-    }
-  }
-
-  // Afficher les risques
-  if (risques.length > 0) {
-    risques.forEach(r => {
-      const badgeClass = r.niveau === 'critical' ? 'error' : 'warning';
-      const badgeText = r.niveau === 'critical' ? '🔴 Critique' : '🟠 Important';
-      html += `<tr>
-        <td>${r.description}</td>
-        <td><span class="badge ${badgeClass}">${badgeText}</span></td>
-        <td>${r.mitigation}</td>
-      </tr>`;
-    });
-  } else {
-    html += '<tr><td colspan="3" style="text-align:center;color:var(--color-text-muted)">Aucun risque majeur identifié</td></tr>';
-  }
-
-  html += '</tbody></table>';
-
-  // ========================================
-  // Sous-section 2: Opportunités de Création de Valeur
-  // ========================================
-  html += '<h3>✅ Opportunités de Création de Valeur</h3>';
-  html += '<ul class="strength-list">';
-
-  // Opportunité 1: Optimisation masse salariale
-  if (comptable?.ratios?.charges_personnel_ratio > 30) {
-    html += '<li>📊 <strong>Optimisation masse salariale</strong> : Ratio charges personnel élevé (' + comptable.ratios.charges_personnel_ratio.toFixed(0) + '% CA). Potentiel de gain : 5-10% EBE via plannings optimisés.</li>';
-  }
-
-  // Opportunité 2: Extension horaires
-  if (userComments?.horaires_extension) {
-    html += '<li>⏰ <strong>Extension horaires</strong> : ' + userComments.horaires_extension + '. Impact estimé : +15-20% CA (capter flux matin/soir).</li>';
-  }
-
-  // Opportunité 3: Diversification
-  html += '<li>🛒 <strong>Diversification revenus</strong> : Développer activités complémentaires (vape, souvenirs, confiserie, services). Objectif : réduire dépendance activité réglementée.</li>';
-
-  // Opportunité 4: Digitalisation
-  html += '<li>📱 <strong>Digitalisation</strong> : Click & collect, livraison, programme fidélité digital. Coût : 2-3k€. ROI 12-18 mois.</li>';
-
-  // Opportunité 5: Renégociation loyer
-  if (immobilier?.simulationLoyer?.scenarios?.realiste?.economieAnnuelle > 0) {
-    html += '<li>💰 <strong>Économie loyer</strong> : Renégociation peut générer ' + immobilier.simulationLoyer.scenarios.realiste.economieAnnuelle.toLocaleString('fr-FR') + '€/an d\'économie (améliore cash-flow immédiatement).</li>';
-  }
-
-  html += '</ul>';
-
-  // ========================================
-  // Sous-section 3: Checklist Due Diligence
-  // ========================================
-  html += '<h3>📋 Checklist Due Diligence (avant signature)</h3>';
-  html += '<table><thead><tr><th>Point de Contrôle</th><th>Statut</th><th>Action Requise</th></tr></thead><tbody>';
-
-  const checklist = [
-    {
-      item: 'Bail commercial (3-6-9 ans minimum)',
-      status: immobilier?.bail ? 'ok' : 'missing',
-      action: 'Demander bail original + avenants'
-    },
-    {
-      item: 'Liasse fiscale 3 dernières années',
-      status: comptable?.sig?.length >= 3 ? 'ok' : 'partial',
-      action: 'Obtenir liasses complètes certifiées'
-    },
-    {
-      item: 'Carte débitant tabac (si applicable)',
-      status: 'unknown',
-      action: 'Vérifier validité + procédure transfert préfecture'
-    },
-    {
-      item: 'Contrats fournisseurs (FDJ, PMU, etc.)',
-      status: 'unknown',
-      action: 'Lister + vérifier clauses transfert'
-    },
-    {
-      item: 'Conformité ERP & accessibilité',
-      status: 'unknown',
-      action: 'Audit sécurité incendie + handicap'
-    },
-    {
-      item: 'État des stocks (valorisation)',
-      status: 'unknown',
-      action: 'Inventaire contradictoire à la date de cession'
-    },
-    {
-      item: 'Litiges en cours (prud\'hommes, fiscal)',
-      status: 'unknown',
-      action: 'Attestation vendeur + recherche Infogreffe'
-    }
-  ];
-
-  checklist.forEach(item => {
-    const statusBadge = item.status === 'ok'
-      ? '<span class="badge success">✅ OK</span>'
-      : item.status === 'partial'
-      ? '<span class="badge warning">⚠️ Partiel</span>'
-      : '<span class="badge error">❌ À vérifier</span>';
-
-    html += `<tr>
-      <td>${item.item}</td>
-      <td>${statusBadge}</td>
-      <td>${item.action}</td>
-    </tr>`;
-  });
-
-  html += '</tbody></table>';
-
-  // ========================================
-  // Sous-section 4: Négociation - Arguments Clés
-  // ========================================
-  html += '<h3>🎯 Arguments de Négociation</h3>';
-  html += '<div class="chart-row">';
-
-  // Arguments acheteur (pression à la baisse)
-  html += '<div style="flex:1">';
-  html += '<h4 style="color:#f59e0b">Arguments Acheteur (pression à la baisse)</h4>';
-  html += '<ul class="warning-list">';
-
-  if (comptable?.alertes?.some((a: any) => a.severite === 'critical')) {
-    html += '<li>Alertes comptables critiques détectées (voir section Validation)</li>';
-  }
-  if (immobilier?.simulationLoyer?.comparaison?.appreciation === 'desavantageux') {
-    const ecart = Math.abs(immobilier.simulationLoyer.comparaison.ecartPourcentage || 0);
-    html += '<li>Loyer surévalué (+' + ecart.toFixed(0) + '% vs marché)</li>';
-  }
-  if (immobilier?.travaux?.budget_total) {
-    const totalTravaux = (immobilier.travaux.budget_total.obligatoire_haut || 0) + (immobilier.travaux.budget_total.recommande_haut || 0);
-    if (totalTravaux > 10000) {
-      html += '<li>Travaux de mise aux normes nécessaires (' + totalTravaux.toLocaleString('fr-FR') + '€)</li>';
-    }
-  }
-  if (comptable?.evolution?.ebe_evolution_pct < 0) {
-    html += '<li>Baisse tendancielle de rentabilité (EBE ' + comptable.evolution.ebe_evolution_pct.toFixed(0) + '%)</li>';
-  }
-  html += '<li>Incertitudes conjoncturelles (inflation, pouvoir achat consommateurs)</li>';
-
-  html += '</ul></div>';
-
-  // Arguments vendeur (maintien prix)
-  html += '<div style="flex:1">';
-  html += '<h4 style="color:#10b981">Arguments Vendeur (maintien prix)</h4>';
-  html += '<ul class="strength-list">';
-
-  if (comptable?.ratios?.marge_ebe > 10) {
-    html += '<li>Marge EBE solide (' + comptable.ratios.marge_ebe.toFixed(0) + '%)</li>';
-  }
-  if (businessInfo?.zone_touristique) {
-    html += '<li>Emplacement premium en zone touristique</li>';
-  }
-  html += '<li>Clientèle fidèle et récurrente</li>';
-  if (businessInfo?.activite_principale?.includes('tabac')) {
-    html += '<li>Activité réglementée (barrière à l\'entrée)</li>';
-  }
-  html += '<li>Potentiel de croissance inexploité</li>';
-
-  html += '</ul></div>';
-  html += '</div>'; // End chart-row
-
-  return html;
-}
-
-/**
  * Analyse les données et génère les commentaires stratégiques pertinents
  */
-function analyzeAndGenerateCommentaries(comptable: any, immobilier: any, userComments: any, businessInfo: any, valorisation: any): string[] {
+function analyzeAndGenerateCommentaries(comptable: any, immobilier: any, userComments: any, businessInfo: any, valorisation: any, businessPlan: any): string[] {
   const commentaries: string[] = [];
 
   // 1. Baisse de CA liée aux horaires
@@ -1951,11 +1019,17 @@ function analyzeAndGenerateCommentaries(comptable: any, immobilier: any, userCom
   const caAncien = comptable?.sig?.[comptable.yearsAnalyzed?.[comptable.yearsAnalyzed.length - 1]]?.chiffre_affaires || 0;
   const croissanceCA = caAncien > 0 ? ((caRecent - caAncien) / caAncien) * 100 : 0;
 
+  // Détecter les plans d'extension d'horaires dans userComments
+  const horairesExtension = detectHorairesExtension(userComments);
+  const horairesInfo = horairesExtension.detected
+    ? `prévu par l'acheteur : ${horairesExtension.description}`
+    : `actuellement ${businessInfo?.horaires_fermeture || 'non renseigné'}`;
+
   if (croissanceCA < 5) {
     commentaries.push(generateStrategicCommentary(
       'Potentiel de croissance sous-exploité',
       `CA stagnant (${croissanceCA.toFixed(1)}% sur 3 ans). **Leviers identifiés** :
-      1. Extension horaires d'ouverture (actuellement ${businessInfo?.horaires_fermeture || 'non renseigné'})
+      1. Extension horaires d'ouverture (${horairesInfo})
       2. Digitalisation (click & collect, livraison, e-commerce complémentaire)
       3. Merchandising (réaménagement vitrine, mise en avant produits à marge)
       4. Animation locale (partenariats associations, événements de quartier).
@@ -1979,18 +1053,39 @@ function analyzeAndGenerateCommentaries(comptable: any, immobilier: any, userCom
     ));
   }
 
-  // 10. STRATÉGIE DE FINANCEMENT
+  // 10. STRATÉGIE DE FINANCEMENT (basé sur projections Business Plan)
   const apportPersonnel = businessInfo?.apport_personnel || (valeurRecommandee * 0.30);
   const montantEmprunt = valeurRecommandee - apportPersonnel;
-  const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || comptable?.sig?.[comptable.yearsAnalyzed?.[0]]?.ebe || 0;
-  const annuiteMax = ebeNormatif * 0.7; // 70% de l'EBE max pour annuité
+
+  // Calcul EBE : moyenne années 1-3 du business plan (ou fallback EBE actuel)
+  let ebeProjeteMoyen = 0;
+  const ebeActuel = comptable?.ebeRetraitement?.ebe_normatif || comptable?.sig?.[comptable.yearsAnalyzed?.[0]]?.ebe || 0;
+
+  if (businessPlan?.projections && businessPlan.projections.length >= 4) {
+    // Années 1, 2, 3 = indices 1, 2, 3 (indice 0 = Actuel)
+    const ebe1 = businessPlan.projections[1]?.ebe_normatif || 0;
+    const ebe2 = businessPlan.projections[2]?.ebe_normatif || 0;
+    const ebe3 = businessPlan.projections[3]?.ebe_normatif || 0;
+    ebeProjeteMoyen = (ebe1 + ebe2 + ebe3) / 3;
+    console.log(`[Financement] EBE Business Plan: Année 1=${ebe1}, Année 2=${ebe2}, Année 3=${ebe3}, Moyenne=${ebeProjeteMoyen.toFixed(0)}`);
+  } else {
+    // Fallback sur EBE actuel si business plan non disponible
+    ebeProjeteMoyen = ebeActuel;
+    console.log(`[Financement] ⚠️ Business Plan non disponible, utilisation EBE actuel: ${ebeActuel}`);
+  }
+
+  const annuiteMax = ebeProjeteMoyen * 0.7; // 70% de l'EBE max pour annuité
   const dureeMax = annuiteMax > 0 ? montantEmprunt / annuiteMax : 0;
 
-  if (valeurRecommandee > 0 && ebeNormatif > 0) {
+  if (valeurRecommandee > 0 && ebeProjeteMoyen > 0) {
+    const sourceEbe = businessPlan?.projections?.length >= 4
+      ? '(moyenne années 1-3 Business Plan)'
+      : '(EBE actuel - Business Plan non disponible)';
+
     commentaries.push(generateStrategicCommentary(
       'Plan de financement & capacité d\'endettement',
       `Valorisation ${valeurRecommandee.toLocaleString('fr-FR')}€. Avec apport ${apportPersonnel.toLocaleString('fr-FR')}€ (${((apportPersonnel/valeurRecommandee)*100).toFixed(0)}%), emprunt nécessaire : ${montantEmprunt.toLocaleString('fr-FR')}€.
-      **Capacité de remboursement** : EBE normatif ${ebeNormatif.toLocaleString('fr-FR')}€/an → annuité max ${annuiteMax.toLocaleString('fr-FR')}€ (70% EBE). Durée emprunt : ${dureeMax.toFixed(1)} ans.
+      **Capacité de remboursement** : EBE projeté ${ebeProjeteMoyen.toLocaleString('fr-FR')}€/an ${sourceEbe} → annuité max ${annuiteMax.toLocaleString('fr-FR')}€ (70% EBE). Durée emprunt : ${dureeMax.toFixed(1)} ans.
       ${dureeMax > 7 ? '⚠️ **Alerte** : Durée > 7 ans = risque bancaire. Négocier prix à la baisse ou augmenter apport.' : '✅ Financement viable sur durée classique (5-7 ans).'}
       **Garanties attendues** : Nantissement fonds, caution personnelle dirigeant, assurance décès-invalidité.`
     ));
@@ -1999,17 +1094,3 @@ function analyzeAndGenerateCommentaries(comptable: any, immobilier: any, userCom
   return commentaries;
 }
 
-/**
- * Parse state (handle JSON string)
- */
-function parseState(state: any): any {
-  if (!state) return null;
-  if (typeof state === 'string') {
-    try {
-      return JSON.parse(state);
-    } catch {
-      return null;
-    }
-  }
-  return state;
-}
