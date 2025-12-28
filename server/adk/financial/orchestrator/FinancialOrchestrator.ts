@@ -1,4 +1,5 @@
 import { SequentialAgent } from '@google/adk';
+import { ComptaPreprocessingAgent } from '../agents/ComptaPreprocessingAgent';
 import { DocumentExtractionAgent } from '../agents/DocumentExtractionAgent';
 import { ComptableAgent } from '../agents/ComptableAgent';
 import { ValorisationAgent } from '../agents/ValorisationAgent';
@@ -10,10 +11,11 @@ import { FinancialReportAgent } from '../agents/FinancialReportAgent';
  * FinancialOrchestrator - Orchestrateur du Pipeline Financier (ADK)
  *
  * SequentialAgent pur suivant les patterns ADK officiels (état de l'art).
- * Orchestre 6 agents spécialisés dans l'ordre séquentiel pour produire
+ * Orchestre 7 agents spécialisés dans l'ordre séquentiel pour produire
  * une analyse financière complète avec rapport HTML professionnel.
  *
  * Pipeline (ordre d'exécution):
+ * 0. ComptaPreprocessingAgent - Preprocessing documents COMPTA (extraction pages pertinentes)
  * 1. DocumentExtractionAgent - Extraction et classification documents PDF
  * 2. ComptableAgent - Analyse comptable (SIG, ratios, benchmark, santé)
  * 3. ValorisationAgent - Valorisation entreprise (3 méthodes: EBE, CA, Patrimoniale)
@@ -48,6 +50,7 @@ import { FinancialReportAgent } from '../agents/FinancialReportAgent';
  *
  * Output State (après exécution):
  * {
+ *   comptaPreprocessing: { skipped: boolean, originalDocuments: [...], consolidatedDocuments: [...] },
  *   documentExtraction: { documents: [...], summary: {...} },
  *   comptable: { sig: {...}, ratios: {...}, evolution: {...}, benchmark: {...}, healthScore: {...} },
  *   valorisation: { methodes: {...}, synthese: {...}, comparaisonPrix: {...} },
@@ -84,13 +87,31 @@ import { FinancialReportAgent } from '../agents/FinancialReportAgent';
  * Plus de wrapper LlmAgent = plus de handoff inutile = plus d'UNKNOWN_ERROR
  *
  * Les callbacks beforeAgentRun/afterAgentRun sont gérés au niveau du Runner (dans server.js)
+ *
+ * @param options - Options de configuration du pipeline
+ * @param options.extractionOnly - Si true, exécute uniquement DocumentExtractionAgent (debug)
  */
-export function createFinancialOrchestrator(): SequentialAgent {
+export function createFinancialOrchestrator(options?: { extractionOnly?: boolean }): SequentialAgent {
+  // Mode debug : seulement extraction pour tester Gemini Vision
+  if (options?.extractionOnly) {
+    console.log('🔧 [FinancialOrchestrator] Mode EXTRACTION ONLY activé (debug)');
+    return new SequentialAgent({
+      name: 'financial_extraction_only',
+      description: 'Extraction only mode - runs DocumentExtractionAgent for debugging Gemini Vision',
+
+      subAgents: [
+        new DocumentExtractionAgent()   // 1. Extract PDF data (ONLY)
+      ]
+    });
+  }
+
+  // Mode complet : tous les 7 agents
   return new SequentialAgent({
     name: 'financial_analysis_pipeline',
-    description: 'Sequential execution of 6 specialized agents for complete financial analysis with professional HTML report',
+    description: 'Sequential execution of 7 specialized agents for complete financial analysis with professional HTML report',
 
     subAgents: [
+      new ComptaPreprocessingAgent(),  // 0. Preprocess COMPTA documents (extract relevant pages)
       new DocumentExtractionAgent(),   // 1. Extract PDF data
       new ComptableAgent(),             // 2. Accounting analysis
       new ValorisationAgent(),          // 3. Business valuation (3 methods)

@@ -5,13 +5,14 @@
  * Produit une analyse de niveau expert-comptable avec rapport HTML indépendant.
  *
  * ARCHITECTURE:
- * - Orchestrator: SequentialAgent avec 6 agents spécialisés
+ * - Orchestrator: SequentialAgent avec 7 agents spécialisés
  * - State: AgentState partagé via outputKey (pattern ADK officiel)
  * - Tools: FunctionTool avec validation Zod
  * - Model: Gemini 2.5 Flash Lite (multimodal, 1M tokens, gratuit)
  */
 
 import { SequentialAgent } from '@google/adk';
+import { ComptaPreprocessingAgent } from './agents/ComptaPreprocessingAgent';
 import { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
 import { ComptableAgent } from './agents/ComptableAgent';
 import { ValorisationAgent } from './agents/ValorisationAgent';
@@ -22,7 +23,8 @@ import { FinancialReportAgent } from './agents/FinancialReportAgent';
 /**
  * Financial Orchestrator
  *
- * SequentialAgent orchestrant 6 agents spécialisés :
+ * SequentialAgent orchestrant 7 agents spécialisés :
+ * 0. ComptaPreprocessingAgent - Preprocessing documents COMPTA ✅ IMPLEMENTED
  * 1. DocumentExtractionAgent - Extraction données PDF ✅ IMPLEMENTED
  * 2. ComptableAgent - Analyse comptable ratios ✅ IMPLEMENTED
  * 3. ValorisationAgent - Valorisation entreprise ✅ IMPLEMENTED
@@ -33,6 +35,7 @@ import { FinancialReportAgent } from './agents/FinancialReportAgent';
 export { createFinancialOrchestrator, FinancialOrchestrator } from './orchestrator/FinancialOrchestrator';
 
 // Export agents
+export { ComptaPreprocessingAgent } from './agents/ComptaPreprocessingAgent';
 export { DocumentExtractionAgent } from './agents/DocumentExtractionAgent';
 export { ComptableAgent } from './agents/ComptableAgent';
 export { ValorisationAgent } from './agents/ValorisationAgent';
@@ -73,6 +76,22 @@ export type FinancialInput = {
 };
 
 export type FinancialState = {
+  comptaPreprocessing?: {
+    skipped: boolean;
+    reason?: string;
+    originalDocuments?: string[];
+    pagesAnalyzed?: number;
+    pagesKept?: number;
+    pagesIgnored?: number;
+    consolidatedDocuments?: Array<{
+      filename: string;
+      year: number;
+      pageTypes: string[];
+      pageCount: number;
+    }>;
+    savedTo?: string;
+    documentsUpdated: boolean;
+  };
   documentExtraction?: any;
   comptable?: any;
   valorisation?: any;
