@@ -4,6 +4,7 @@ import {
   generateFinancialHtmlTool,
   saveFinancialReportTool
 } from '../tools/report';
+import { businessPlanDynamiqueTool } from '../tools/planning';
 import type { FinancialState } from '../index';
 
 /**
@@ -59,6 +60,7 @@ export class FinancialReportAgent extends LlmAgent {
 
       // Tools disponibles pour l'agent
       tools: [
+        businessPlanDynamiqueTool,
         generateChartsTool,
         generateFinancialHtmlTool,
         saveFinancialReportTool
@@ -77,13 +79,44 @@ Les données sont passées via state (accessible dans les tools) :
 - state.valorisation : Valorisation (3 méthodes, synthèse, arguments)
 - state.immobilier : Analyse immobilière (bail, murs, travaux)
 - state.financialValidation : Validation croisée (cohérence, anomalies, qualité, confiance)
+- state.userComments : Commentaires et hypothèses du repreneur (investissement, travaux, horaires, charges)
 
 IMPORTANT: Les tools génèrent tout automatiquement - tu n'as PAS besoin de formater manuellement.
 Tu dois simplement APPELER LES TOOLS dans l'ordre.
 
 WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
-ÉTAPE 1 : GÉNÉRER LES GRAPHIQUES
+ÉTAPE 1 : GÉNÉRER LE BUSINESS PLAN DYNAMIQUE (NOUVEAU)
+   businessPlanDynamique({
+     prixAchat: <valeur recommandée depuis state.valorisation>,
+     montantTravaux: <budget travaux depuis state.immobilier>,
+     subventionsEstimees: <depuis userComments si fourni>,
+     apportPersonnel: <depuis userComments ou 30% investissement>,
+     tauxEmprunt: <depuis userComments ou 4.5% par défaut>,
+     dureeEmpruntMois: <depuis userComments ou 84 mois par défaut>,
+     extensionHoraires: {
+       joursSupplementaires: <depuis userComments>,
+       impactEstime: <depuis userComments ou 0.10 par défaut>
+     },
+     travaux: {
+       impactAnnee2: <depuis userComments ou 0.10 par défaut>,
+       impactRecurrent: <depuis userComments ou 0.03 par défaut>
+     },
+     salairesSupprimes: <depuis userComments ou 0>,
+     salairesAjoutes: <depuis userComments ou 0>,
+     loyerNegocie: <depuis simulationLoyer scenario réaliste ou loyer actuel>
+   })
+   → Retourne { projections: [], indicateursBancaires: {}, hypotheses: {}, synthese: "...", recommandations: [] }
+
+   Le tool génère automatiquement :
+   - Projections sur 5 ans (Année 0 à 5) avec CA, charges, EBE, annuité, reste après dette
+   - Indicateurs bancaires (ratio couverture, CAF, point mort, ROI, délai retour)
+   - Recommandations pour optimiser le plan
+
+   IMPORTANT: Lire state.userComments pour extraire les hypothèses du repreneur.
+   Si userComments n'est pas fourni, utiliser des valeurs par défaut raisonnables basées sur les analyses précédentes.
+
+ÉTAPE 2 : GÉNÉRER LES GRAPHIQUES
    generateCharts({})
    → Retourne { evolutionChart, valorisationChart, healthGauge, confidenceRadar }
 
@@ -93,65 +126,45 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
    - healthGauge : Gauge score de santé (doughnut 0-100)
    - confidenceRadar : Radar confiance par section
 
-ÉTAPE 2 : GÉNÉRER LE HTML COMPLET
-   generateFinancialHtml({ charts: <résultat étape 1> })
-   → Retourne { html: "...", sections_included: [...] }
+ÉTAPE 3 : GÉNÉRER ET SAUVEGARDER LE RAPPORT HTML
+   generateFinancialHtml({ charts: <résultat étape 2> })
+   → Le tool génère le HTML ET le sauvegarde automatiquement dans data/financial-reports/
+   → Retourne { saved: true, filepath: "...", filename: "...", sections_included: [...] }
 
-   Le tool génère automatiquement le HTML complet avec 7 sections :
+   IMPORTANT: Ce tool sauvegarde automatiquement le fichier.
+   Tu n'as PAS besoin d'appeler saveFinancialReport après.
+
+   Le tool génère automatiquement le HTML complet avec 8 sections :
    1. Page de garde
    2. Synthèse exécutive (verdict FAVORABLE/RÉSERVES/DÉFAVORABLE)
    3. Analyse comptable (tableaux SIG, ratios, graphiques)
    4. Valorisation (comparaison méthodes, graphique, arguments)
    5. Analyse immobilière (bail, murs, travaux)
-   6. Validation & fiabilité (scores, anomalies, vérifications)
-   7. Annexes (documents, hypothèses, glossaire)
+   6. Business Plan Dynamique (NOUVEAU - projections 5 ans, indicateurs bancaires)
+   7. Validation & fiabilité (scores, anomalies, vérifications)
+   8. Annexes (documents, hypothèses, glossaire)
 
-ÉTAPE 3 : SAUVEGARDER LE RAPPORT
-   saveFinancialReport({
-     html: <résultat étape 2>,
-     businessId: <lire depuis state.businessInfo.siret ou générer ID>,
-     sections_included: <sections depuis étape 2>
-   })
-   → Retourne { generated: true, filepath: "...", filename: "...", size_bytes: ..., sections_included: [...], generatedAt: "..." }
+WORKFLOW SIMPLIFIÉ (3 ÉTAPES) :
+1. businessPlanDynamique → génère les projections
+2. generateCharts → génère les graphiques
+3. generateFinancialHtml → génère ET sauvegarde le rapport
 
-   Le tool sauvegarde automatiquement le rapport dans data/financial-reports/
-   Nom de fichier : financial-report-[businessId]-[date].html
+Après l'étape 3, le rapport est automatiquement sauvegardé.
+Tu peux retourner un JSON de confirmation simple.
 
-FORMAT DE SORTIE JSON (STRICT) :
-{
-  "generated": true,
-  "filepath": "C:\\AI\\searchcommerce\\data\\financial-reports\\financial-report-12345678900012-2025-12-26.html",
-  "filename": "financial-report-12345678900012-2025-12-26.html",
-  "size_bytes": 125000,
-  "sections_included": [
-    "cover_page",
-    "executive_summary",
-    "accounting_analysis",
-    "valuation",
-    "real_estate",
-    "validation",
-    "annexes"
-  ],
-  "generatedAt": "2025-12-26T14:30:00.000Z"
-}
+FORMAT DE SORTIE JSON (après les 3 tool calls) :
+{"status":"completed","message":"Rapport généré avec succès"}
 
 RÈGLES :
-1. Appeler les 3 tools dans l'ordre (generateCharts → generateFinancialHtml → saveFinancialReport)
-2. Ne PAS générer de HTML manuellement - utiliser les tools
+1. Appeler les 3 tools dans l'ordre (businessPlanDynamique → generateCharts → generateFinancialHtml)
+2. Ne PAS appeler saveFinancialReport (generateFinancialHtml le fait automatiquement)
 3. Passer les résultats d'un tool à l'autre (chaînage)
-4. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres si possible
-5. Le rapport doit être 100% AUTONOME (aucune référence au Pipeline Stratégique)
-
-BUSINESSID :
-- Priorité 1 : state.businessInfo.siret
-- Priorité 2 : state.businessInfo.name (slugifié)
-- Priorité 3 : "commerce" (défaut)
+4. Le rapport doit être 100% AUTONOME (aucune référence au Pipeline Stratégique)
+5. Pour businessPlanDynamique, extraire les hypothèses depuis state.userComments et les autres states
 
 GESTION D'ERREURS :
-- Si aucune donnée dans le state :
-  Retourner un JSON avec generated = false et error = "Aucune analyse financière disponible"
-
-RETOURNE UNIQUEMENT LE JSON VALIDE (pas de texte avant/après)`,
+- Si aucune donnée dans le state : retourner {"status":"error","message":"Aucune analyse financière disponible"}
+- Si un tool échoue : retourner {"status":"error","message":"<détail de l'erreur>"}`,
 
       // Clé de sortie dans le state
       outputKey: 'financialReport' as keyof FinancialState

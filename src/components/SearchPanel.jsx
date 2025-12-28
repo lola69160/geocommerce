@@ -1,393 +1,320 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, Bug, Copy, Check } from 'lucide-react';
+import { Search, Loader2, Bug, SlidersHorizontal } from 'lucide-react';
 import Autocomplete from './Autocomplete';
 import ActivityAutocomplete from './ActivityAutocomplete';
-import { getDisplayName, hasEnseigne, getEstablishmentCreationDate, formatDate } from '../utils/businessDisplayUtils';
+import BusinessCard from './BusinessCard';
+import { Button } from './ui';
 
+/**
+ * SearchPanel Component - Tech Premium Design System
+ *
+ * Main search interface for finding French businesses.
+ * Features:
+ * - Activity and location autocomplete
+ * - Radius slider
+ * - Results list with stagger animation
+ * - Debug mode toggle
+ * - Filter controls
+ */
 const SearchPanel = ({
-    onSearch,
-    loading,
-    results,
-    onSelectBusiness,
-    debugMode,
-    onToggleDebug,
-    selectedBusiness,
-    filterClosedDays,
-    onToggleFilterClosedDays,
-    notes,
-    cart,
-    onOpenNoteModal,
-    onAddToCart
+  onSearch,
+  loading,
+  results,
+  onSelectBusiness,
+  debugMode,
+  onToggleDebug,
+  selectedBusiness,
+  filterClosedDays,
+  onToggleFilterClosedDays,
+  notes,
+  cart,
+  onOpenNoteModal,
+  onOpenDocumentModal,
+  onAddToCart
 }) => {
-    const [selectedActivity, setSelectedActivity] = useState(null);
-    const [selectedLocation, setSelectedLocation] = useState(null);
-    const [radius, setRadius] = useState(5);
-    const [expandedCards, setExpandedCards] = useState(new Set());
-    const [copiedId, setCopiedId] = useState(null);
-    const cardRefs = useRef({});
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [radius, setRadius] = useState(5);
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  const [showFilters, setShowFilters] = useState(false);
+  const cardRefs = useRef({});
 
-    useEffect(() => {
-        if (selectedBusiness) {
-            const id = selectedBusiness.siren || selectedBusiness.siret;
-            const element = cardRefs.current[id];
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }
-    }, [selectedBusiness]);
+  // Scroll to selected business card
+  useEffect(() => {
+    if (selectedBusiness) {
+      const id = selectedBusiness.siren || selectedBusiness.siret;
+      const element = cardRefs.current[id];
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [selectedBusiness]);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (!selectedActivity) {
-            alert("Veuillez sélectionner une activité");
-            return;
-        }
-        if (!selectedLocation) {
-            alert("Veuillez sélectionner un lieu");
-            return;
-        }
-        onSearch(selectedActivity, selectedLocation, radius);
-    };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedActivity) {
+      alert("Veuillez sélectionner une activité");
+      return;
+    }
+    if (!selectedLocation) {
+      alert("Veuillez sélectionner un lieu");
+      return;
+    }
+    onSearch(selectedActivity, selectedLocation, radius);
+  };
 
-    const toggleCardExpansion = (businessId) => {
-        const newExpanded = new Set(expandedCards);
-        if (newExpanded.has(businessId)) {
-            newExpanded.delete(businessId);
-        } else {
-            newExpanded.add(businessId);
-        }
-        setExpandedCards(newExpanded);
-    };
+  const toggleCardExpansion = (businessId) => {
+    const newExpanded = new Set(expandedCards);
+    if (newExpanded.has(businessId)) {
+      newExpanded.delete(businessId);
+    } else {
+      newExpanded.add(businessId);
+    }
+    setExpandedCards(newExpanded);
+  };
 
-    const handleCopy = (text, id) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
-        });
-    };
-
-    return (
-        <div className="glass-panel" style={{
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '20px',
-            maxWidth: '400px',
-            width: '100%',
-            zIndex: 1000
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.5rem', margin: 0, color: 'var(--primary-color)' }}>
-                    Commerce Finder
-                </h1>
-
-                {/* Debug Mode Toggle */}
-                <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    color: debugMode ? 'var(--primary-color)' : 'var(--text-secondary)',
-                    transition: 'color 0.2s'
-                }}>
-                    <Bug size={18} />
-                    <input
-                        type="checkbox"
-                        checked={debugMode}
-                        onChange={(e) => onToggleDebug(e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    Debug
-                </label>
-            </div>
-
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <ActivityAutocomplete
-                    placeholder="Activité (ex: Boulangerie)"
-                    onSelect={setSelectedActivity}
-                />
-
-                <Autocomplete
-                    placeholder="Lieu (ex: La Rochelle)"
-                    onSelect={setSelectedLocation}
-                />
-
-                <div>
-                    <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                        Rayon de recherche: {radius} km
-                    </label>
-                    <input
-                        type="range"
-                        min="1"
-                        max="50"
-                        value={radius}
-                        onChange={(e) => setRadius(parseInt(e.target.value))}
-                        style={{ width: '100%' }}
-                    />
-                </div>
-
-                <button type="submit" className="btn btn-primary" disabled={loading} style={{ justifyContent: 'center' }}>
-                    {loading ? <Loader2 className="animate-spin" size={20} /> : 'Rechercher'}
-                </button>
-            </form>
-
-            {/* Filters Section */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 mt-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Filtres</h3>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={filterClosedDays}
-                        onChange={(e) => onToggleFilterClosedDays(e.target.checked)}
-                        className="form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">Au moins un jour de fermeture</span>
-                </label>
-            </div>
-
-            <div style={{ marginTop: '20px', flex: 1, overflowY: 'auto' }}>
-                <h2 style={{ fontSize: '1rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>
-                    Résultats ({results.length})
-                </h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {results.map((business) => {
-                        const businessId = business.siren || business.siret;
-                        const isExpanded = expandedCards.has(businessId);
-                        const isSelected = selectedBusiness && (
-                            (selectedBusiness.siren && business.siren && selectedBusiness.siren === business.siren) ||
-                            (selectedBusiness.siret && business.siret && selectedBusiness.siret === business.siret)
-                        );
-
-                        return (
-                            <div
-                                key={businessId}
-                                ref={el => cardRefs.current[businessId] = el}
-                                style={{
-                                    padding: '12px',
-                                    background: isSelected ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer',
-                                    border: isSelected ? '2px solid var(--primary-color)' : '1px solid transparent',
-                                    transition: 'all 0.2s',
-                                    boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.2)' : 'none'
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.borderColor = 'var(--primary-color)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.borderColor = 'transparent';
-                                }}
-                            >
-                                <div onClick={() => onSelectBusiness(business)}>
-                                    <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-                                        {getDisplayName(business)}
-                                    </h3>
-                                    {hasEnseigne(business) && (
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '2px 0', fontStyle: 'italic' }}>
-                                            {business.nom_complet}
-                                        </p>
-                                    )}
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                                        {business.adresse}
-                                    </p>
-
-                                    {/* BODACC Badge */}
-                                    {business.hasBodacc && (
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            fontSize: '0.7rem',
-                                            fontWeight: '500',
-                                            backgroundColor: '#dcfce7',
-                                            color: '#166534',
-                                            marginTop: '4px'
-                                        }}>
-                                            Ventes validées
-                                        </span>
-                                    )}
-
-                                    {/* Closed Days Badge */}
-                                    {business.closedDays && business.closedDays.length > 0 && (
-                                        <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#dc2626' }}>
-                                            Fermé le : {business.closedDays.join(', ')}
-                                        </div>
-                                    )}
-
-                                    {/* Dates */}
-                                    <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                        {getEstablishmentCreationDate(business) && (
-                                            <span>📅 Créé: {formatDate(getEstablishmentCreationDate(business))}</span>
-                                        )}
-                                        {business.date_mise_a_jour_insee && (
-                                            <span>🔄 MAJ: {formatDate(business.date_mise_a_jour_insee)}</span>
-                                        )}
-                                    </div>
-
-                                    {/* Note and Cart Buttons */}
-                                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onOpenNoteModal(business);
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px 12px',
-                                                background: notes[businessId]
-                                                    ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                                                    : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontSize: '0.8125rem',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '5px',
-                                                transition: 'all 0.2s',
-                                                boxShadow: notes[businessId]
-                                                    ? '0 2px 4px rgba(239, 68, 68, 0.25)'
-                                                    : '0 2px 4px rgba(148, 163, 184, 0.25)',
-                                                fontFamily: 'inherit'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                e.currentTarget.style.boxShadow = notes[businessId]
-                                                    ? '0 4px 6px rgba(239, 68, 68, 0.35)'
-                                                    : '0 4px 6px rgba(148, 163, 184, 0.35)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.boxShadow = notes[businessId]
-                                                    ? '0 2px 4px rgba(239, 68, 68, 0.25)'
-                                                    : '0 2px 4px rgba(148, 163, 184, 0.25)';
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '1.05em' }}>📝</span>
-                                            {notes[businessId] ? 'Modifier' : 'Note'}
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onAddToCart(business);
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px 12px',
-                                                background: cart[businessId]
-                                                    ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
-                                                    : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontSize: '0.8125rem',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '5px',
-                                                transition: 'all 0.2s',
-                                                boxShadow: cart[businessId]
-                                                    ? '0 2px 4px rgba(34, 197, 94, 0.25)'
-                                                    : '0 2px 4px rgba(59, 130, 246, 0.25)',
-                                                fontFamily: 'inherit'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                e.currentTarget.style.boxShadow = cart[businessId]
-                                                    ? '0 4px 6px rgba(34, 197, 94, 0.35)'
-                                                    : '0 4px 6px rgba(59, 130, 246, 0.35)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.boxShadow = cart[businessId]
-                                                    ? '0 2px 4px rgba(34, 197, 94, 0.25)'
-                                                    : '0 2px 4px rgba(59, 130, 246, 0.25)';
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '1.05em' }}>🛒</span>
-                                            {cart[businessId] ? '✓' : 'Panier'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Debug Mode View */}
-                                {debugMode && (
-                                    <div style={{ marginTop: '8px', borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: '8px' }}>
-                                        <div
-                                            onClick={() => toggleCardExpansion(businessId)}
-                                            style={{
-                                                fontSize: '0.8rem',
-                                                color: 'var(--primary-color)',
-                                                cursor: 'pointer',
-                                                fontWeight: '600',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}
-                                        >
-                                            <span>{isExpanded ? '▼' : '▶'}</span>
-                                            <span>API: recherche-entreprises.api.gouv.fr (near_point)</span>
-                                        </div>
-
-                                        {isExpanded && (
-                                            <div style={{ position: 'relative' }}>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleCopy(JSON.stringify(business, null, 2), businessId);
-                                                    }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: '12px',
-                                                        right: '12px',
-                                                        background: 'rgba(255,255,255,0.9)',
-                                                        border: '1px solid rgba(0,0,0,0.1)',
-                                                        borderRadius: '4px',
-                                                        padding: '4px',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        zIndex: 10,
-                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                                                    }}
-                                                    title="Copier le JSON"
-                                                >
-                                                    {copiedId === businessId ? <Check size={14} color="green" /> : <Copy size={14} color="var(--text-secondary)" />}
-                                                </button>
-                                                <pre style={{
-                                                    marginTop: '8px',
-                                                    padding: '8px',
-                                                    background: 'rgba(0,0,0,0.05)',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.7rem',
-                                                    fontFamily: 'monospace',
-                                                    overflowX: 'auto',
-                                                    maxHeight: '300px',
-                                                    overflowY: 'auto',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-word'
-                                                }}>
-                                                    {JSON.stringify(business, null, 2)}
-                                                </pre>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+  return (
+    <div className="h-full flex flex-col p-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-display font-bold text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-400">
+            Commerce
+          </h1>
+          <p className="font-display font-light text-lg text-text-muted -mt-1 tracking-wider">
+            FINDER
+          </p>
         </div>
-    );
+
+        {/* Debug Toggle */}
+        <label className={`
+          flex items-center gap-2
+          px-3 py-1.5
+          rounded-lg
+          cursor-pointer
+          text-sm font-medium
+          transition-all duration-fast
+          ${debugMode
+            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+            : 'bg-surface-700 text-text-muted border border-transparent hover:border-cyan-500/20'
+          }
+        `}>
+          <Bug size={16} />
+          <input
+            type="checkbox"
+            checked={debugMode}
+            onChange={(e) => onToggleDebug(e.target.checked)}
+            className="sr-only"
+          />
+          <span>Debug</span>
+        </label>
+      </div>
+
+      {/* Search Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Activity Input */}
+        <ActivityAutocomplete
+          placeholder="Activité (ex: Boulangerie)"
+          onSelect={setSelectedActivity}
+        />
+
+        {/* Location Input */}
+        <Autocomplete
+          placeholder="Lieu (ex: La Rochelle)"
+          onSelect={setSelectedLocation}
+        />
+
+        {/* Radius Slider */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-text-secondary">
+              Rayon de recherche
+            </label>
+            <span className="text-sm font-mono font-bold text-cyan-400">
+              {radius} km
+            </span>
+          </div>
+          <div className="relative">
+            <input
+              type="range"
+              min="1"
+              max="50"
+              value={radius}
+              onChange={(e) => setRadius(parseInt(e.target.value))}
+              className={`
+                w-full h-2
+                appearance-none
+                bg-surface-700
+                rounded-full
+                cursor-pointer
+                [&::-webkit-slider-thumb]:appearance-none
+                [&::-webkit-slider-thumb]:w-4
+                [&::-webkit-slider-thumb]:h-4
+                [&::-webkit-slider-thumb]:rounded-full
+                [&::-webkit-slider-thumb]:bg-cyan-500
+                [&::-webkit-slider-thumb]:shadow-glow-sm
+                [&::-webkit-slider-thumb]:cursor-grab
+                [&::-webkit-slider-thumb]:transition-all
+                [&::-webkit-slider-thumb]:hover:bg-cyan-400
+                [&::-webkit-slider-thumb]:hover:shadow-glow-md
+                [&::-moz-range-thumb]:w-4
+                [&::-moz-range-thumb]:h-4
+                [&::-moz-range-thumb]:rounded-full
+                [&::-moz-range-thumb]:bg-cyan-500
+                [&::-moz-range-thumb]:border-none
+                [&::-moz-range-thumb]:cursor-grab
+              `}
+              style={{
+                background: `linear-gradient(to right, #00d4ff 0%, #00d4ff ${(radius / 50) * 100}%, #1a1a24 ${(radius / 50) * 100}%, #1a1a24 100%)`
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Search Button */}
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={loading}
+          glow={!loading}
+          icon={loading ? null : <Search size={18} />}
+        >
+          {loading ? 'Recherche...' : 'Rechercher'}
+        </Button>
+      </form>
+
+      {/* Filters Section */}
+      <div className="mt-4">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`
+            flex items-center gap-2 w-full
+            px-3 py-2
+            rounded-lg
+            text-sm font-medium
+            transition-all duration-fast
+            ${showFilters
+              ? 'bg-surface-700 text-text-primary'
+              : 'text-text-muted hover:text-text-secondary hover:bg-surface-800'
+            }
+          `}
+        >
+          <SlidersHorizontal size={16} />
+          <span>Filtres</span>
+          {filterClosedDays && (
+            <span className="ml-auto px-1.5 py-0.5 rounded-full text-xs bg-cyan-500/20 text-cyan-400">
+              1
+            </span>
+          )}
+        </button>
+
+        {showFilters && (
+          <div className="mt-2 p-3 bg-surface-800 rounded-lg border border-[rgba(255,255,255,0.06)] animate-fade-in-down">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className={`
+                relative w-5 h-5
+                rounded-md
+                border-2
+                transition-all duration-fast
+                ${filterClosedDays
+                  ? 'bg-cyan-500 border-cyan-500'
+                  : 'bg-transparent border-text-muted group-hover:border-cyan-500/50'
+                }
+              `}>
+                <input
+                  type="checkbox"
+                  checked={filterClosedDays}
+                  onChange={(e) => onToggleFilterClosedDays(e.target.checked)}
+                  className="sr-only"
+                />
+                {filterClosedDays && (
+                  <svg
+                    className="absolute inset-0 w-full h-full p-0.5 text-white"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
+                Au moins un jour de fermeture
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Results Section */}
+      <div className="mt-6 flex-1 overflow-hidden flex flex-col min-h-0">
+        {/* Results header */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
+            Résultats
+          </h2>
+          <span className={`
+            px-2 py-0.5
+            rounded-full
+            text-xs font-mono font-bold
+            ${results.length > 0
+              ? 'bg-cyan-500/15 text-cyan-400'
+              : 'bg-surface-700 text-text-muted'
+            }
+          `}>
+            {results.length}
+          </span>
+        </div>
+
+        {/* Results list */}
+        <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-3">
+          {results.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 mb-4 rounded-full bg-surface-700 flex items-center justify-center">
+                <Search size={24} className="text-text-muted" />
+              </div>
+              <p className="text-text-muted text-sm">
+                Aucun résultat. Lancez une recherche pour commencer.
+              </p>
+            </div>
+          ) : (
+            <div className="stagger">
+              {results.map((business, index) => {
+                const businessId = business.siren || business.siret;
+                const isExpanded = expandedCards.has(businessId);
+                const isSelected = selectedBusiness && (
+                  (selectedBusiness.siren && business.siren && selectedBusiness.siren === business.siren) ||
+                  (selectedBusiness.siret && business.siret && selectedBusiness.siret === business.siret)
+                );
+
+                return (
+                  <BusinessCard
+                    key={businessId}
+                    ref={el => cardRefs.current[businessId] = el}
+                    business={business}
+                    isSelected={isSelected}
+                    isExpanded={isExpanded}
+                    debugMode={debugMode}
+                    hasNote={!!notes[businessId]}
+                    isInCart={!!cart[businessId]}
+                    onSelect={onSelectBusiness}
+                    onToggleExpand={toggleCardExpansion}
+                    onOpenNote={onOpenNoteModal}
+                    onOpenDocuments={onOpenDocumentModal}
+                    onAddToCart={onAddToCart}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default SearchPanel;

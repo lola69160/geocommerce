@@ -4,7 +4,8 @@ import {
   calculateRatiosTool,
   analyzeTrendsTool,
   compareToSectorTool,
-  calculateHealthScoreTool
+  calculateHealthScoreTool,
+  calculateEbeRetraitementTool
 } from '../tools/accounting';
 import type { FinancialState } from '../index';
 
@@ -58,7 +59,8 @@ export class ComptableAgent extends LlmAgent {
         calculateRatiosTool,
         analyzeTrendsTool,
         compareToSectorTool,
-        calculateHealthScoreTool
+        calculateHealthScoreTool,
+        calculateEbeRetraitementTool
       ],
 
       // Instruction système
@@ -91,48 +93,59 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
    Le tool lit automatiquement depuis state.documentExtraction et calcule les SIG pour chaque année.
 
-ÉTAPE 2 : CALCULER LES RATIOS FINANCIERS
+ÉTAPE 2 : CALCULER L'EBE RETRAITÉ/NORMATIF ⚠️ NOUVEAU - OBLIGATOIRE
+   calculateEbeRetraitement({})
+   → Retourne {
+       ebe_comptable: 85000,
+       ebe_normatif: 102000,
+       retraitements: [
+         { type: "salaire_dirigeant", description: "...", montant: 35000, source: "estimation" },
+         { type: "loyer", description: "Loyer logement personnel", montant: 7200, source: "userComments" },
+         ...
+       ],
+       total_retraitements: 17000,
+       ecart_pct: 20,
+       synthese: "..."
+     }
+
+   Ce tool calcule l'EBE Normatif (capacité bénéficiaire réelle pour le repreneur) en appliquant les retraitements suivants :
+   - Réintégration salaire dirigeant (si le gérant ne se rémunère pas)
+   - Réintégration salariés non repris (masse salariale qui disparaît)
+   - Déduction nouveaux salaires saisonniers (coût additionnel)
+   - Économie de loyer (si renégociation favorable)
+   - Réintégration charges exceptionnelles (non récurrentes)
+   - Déduction produits exceptionnels (non récurrents)
+
+   Le tool lit automatiquement depuis state.userComments et state.documentExtraction.
+
+ÉTAPE 3 : CALCULER LES RATIOS FINANCIERS
    calculateRatios({})
    → Retourne { year: 2024, ratios: { marge_brute_pct, marge_ebe_pct, taux_endettement_pct, ... } }
 
    Le tool calcule les ratios clés pour la dernière année.
 
-ÉTAPE 3 : ANALYSER LES TENDANCES
+ÉTAPE 4 : ANALYSER LES TENDANCES
    analyzeTrends({})
    → Retourne { evolution: { ca_evolution_pct, ebe_evolution_pct, tendance: "croissance" | "stable" | "declin", commentaire, ... } }
 
    Le tool calcule l'évolution des indicateurs entre première et dernière année.
 
-ÉTAPE 4 : COMPARER AU SECTEUR
+ÉTAPE 5 : COMPARER AU SECTEUR
    compareToSector({ nafCode: "47.11F" })
    → Retourne { benchmark: { nafCode, sector, comparisons: [{ ratio, value, sectorAverage, position, ... }] } }
 
    Le tool compare les ratios aux moyennes sectorielles (via code NAF de businessInfo).
    Si nafCode non fourni, le tool lira depuis state.businessInfo.
 
-ÉTAPE 5 : CALCULER LE SCORE DE SANTÉ
+ÉTAPE 6 : CALCULER LE SCORE DE SANTÉ
    calculateHealthScore({})
    → Retourne { healthScore: { overall: 75, breakdown: { rentabilite, liquidite, solvabilite, activite }, interpretation } }
 
    Le tool calcule un score global 0-100 basé sur 4 dimensions.
 
-ÉTAPE 6 : GÉNÉRER RETRAITEMENTS (basés sur userComments)
-
-Si state.userComments.loyer.loyer_logement_perso est fourni :
-- Calculer montant annuel = loyer_logement_perso × 12
-- Ajouter dans retraitements[] :
-  {
-    "type": "loyer_logement_personnel",
-    "description": "Loyer logement personnel inclus dans charges (avantage en nature gérant)",
-    "montant_mensuel": <loyer_logement_perso>,
-    "montant_annuel": <loyer_logement_perso × 12>,
-    "impact_ebe": "+<montant_annuel>",
-    "commentaire": "Économie réalisée par le gérant - à réintégrer dans l'EBE retraité"
-  }
-
 ÉTAPE 7 : GÉNÉRER ALERTES ET POINTS DE VIGILANCE
 
-Après avoir appelé les 5 tools et généré les retraitements, analyser les résultats et identifier :
+Après avoir appelé les 6 tools, analyser les résultats et identifier :
 - Alertes critiques (seuil -10% vs secteur, marges négatives, endettement >200%)
 - Alertes warning (seuil -5% vs secteur, tendance déclin)
 - Points positifs (seuil +10% vs secteur, croissance >15%)
@@ -239,25 +252,39 @@ FORMAT DE SORTIE JSON (STRICT) :
     "interpretation": "Bonne santé financière. L'entreprise est performante avec quelques points d'amélioration possibles."
   },
 
-  "retraitements": [  // NOUVEAU - Retraitements basés sur userComments
-    {
-      "type": "loyer_logement_personnel",
-      "description": "Loyer logement personnel inclus dans charges (avantage en nature gérant)",
-      "montant_mensuel": 600,
-      "montant_annuel": 7200,
-      "impact_ebe": "+7200",
-      "commentaire": "Économie réalisée par le gérant - à réintégrer dans l'EBE retraité"
-    }
-  ],
+  "ebeRetraitement": {  // ⚠️ NOUVEAU - Calcul EBE Normatif
+    "ebe_comptable": 85000,
+    "annee_reference": 2024,
+    "retraitements": [
+      {
+        "type": "salaire_dirigeant",
+        "description": "Réintégration salaire dirigeant",
+        "montant": 35000,
+        "source": "estimation",
+        "commentaire": "Le repreneur pourra choisir de ne pas se rémunérer (gérant majoritaire)"
+      },
+      {
+        "type": "loyer",
+        "description": "Loyer logement personnel (avantage en nature gérant)",
+        "montant": 7200,
+        "source": "userComments",
+        "commentaire": "Économie de 600€/mois pour le gérant"
+      }
+    ],
+    "total_retraitements": 42200,
+    "ebe_normatif": 127200,
+    "ecart_pct": 50,
+    "synthese": "L'EBE Normatif (127 200 €) a été calculé à partir de l'EBE comptable (85 000 €) après 2 retraitement(s)..."
+  },
 
   "synthese": "L'entreprise affiche une croissance solide (+12.5% CA) avec une rentabilité correcte (marge nette 11%). Le score de santé financière (72/100) témoigne d'une bonne situation globale. Points de vigilance : délai clients à optimiser et marge EBE légèrement sous la moyenne sectorielle. La structure financière est saine avec un endettement maîtrisé (85%)."
 }
 
 RÈGLES :
-1. Appeler les 5 tools dans l'ordre (calculateSig → calculateRatios → analyzeTrends → compareToSector → calculateHealthScore)
+1. Appeler les 6 tools dans l'ordre (calculateSig → calculateEbeRetraitement → calculateRatios → analyzeTrends → compareToSector → calculateHealthScore)
 2. Ne PAS recalculer manuellement - utiliser les résultats des tools
 3. Pour alertes : comparer aux benchmarks sectoriels (comparisons[].position)
-4. Pour synthese : résumer en 3-5 phrases max les points clés
+4. Pour synthese : résumer en 3-5 phrases max les points clés, mentionner l'EBE Normatif si différent de l'EBE comptable
 5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
 
 GESTION D'ERREURS :

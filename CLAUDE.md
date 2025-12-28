@@ -113,6 +113,38 @@ Complete rework of data extraction for preprocessed COMPTA documents:
 - `tools/accounting/calculateEbeRetraitementTool.ts` (charges_exploitant)
 - `tests/financial/tools/calculateSig.test.ts` (new format)
 
+### Tabac/Presse Report Generation Fix
+
+Fixed critical issue where financial reports were not generated for Tabac/Presse commerce types (NAF 47.26Z).
+
+**Root Causes Identified:**
+1. `generateChartsTool` didn't support `methodeHybride` (Tabac valuation method)
+2. Report generation relied on agent returning JSON text, but agent only returned tool calls
+3. Tool chaining failed due to large HTML parameter size limits
+
+**Fixes Applied:**
+- ✅ Added `methodeHybride` support in `generateChartsTool.ts`
+  - Chart now displays hybrid valuation (Bloc Réglementé + Bloc Commercial)
+  - Log: `[Valorisation Chart] ✅ Using méthode HYBRIDE`
+- ✅ Modified `generateFinancialHtmlTool.ts` for direct file saving
+  - Saves HTML file directly instead of passing via parameters
+  - Injects `financialReport` into state automatically
+  - Log: `[generateFinancialHtml] ✅ financialReport injected into state`
+- ✅ Simplified `FinancialReportAgent.ts` workflow (4 → 3 tools)
+  - businessPlanDynamique → generateCharts → generateFinancialHtml
+  - `saveFinancialReport` no longer needed (integrated into generateFinancialHtml)
+- ✅ Added state injection in `businessPlanDynamiqueTool.ts`
+  - Business plan now available for HTML report generation
+- ✅ Hidden comparison table when `methodeHybride` is used
+
+**Files Modified:**
+- `tools/report/generateChartsTool.ts` (methodeHybride support)
+- `tools/report/generateFinancialHtmlTool.ts` (direct save + state injection)
+- `tools/report/saveFinancialReportTool.ts` (toolContext + logging)
+- `tools/planning/businessPlanDynamiqueTool.ts` (state injection)
+- `agents/FinancialReportAgent.ts` (simplified instruction)
+- `server.js` (debug logging)
+
 ---
 
 ## Recent Updates (2025-12-27)

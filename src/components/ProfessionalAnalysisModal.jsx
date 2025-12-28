@@ -32,6 +32,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
+  const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
 
   // Référence pour nettoyer l'interval lors du démontage
   const progressIntervalRef = useRef(null);
@@ -335,11 +336,12 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
             autres: additionalInfo
           },
           options: {
-            includeImmobilier: true
+            includeImmobilier: true,
+            extractionOnly: extractionOnly // Stop after DocumentExtractionAgent if true
           }
         },
         {
-          timeout: 300000 // 5 minutes timeout for financial analysis
+          timeout: extractionOnly ? 60000 : 300000 // 1 minute for extraction only, 5 minutes for full analysis
         }
       );
 
@@ -521,6 +523,26 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
               />
             </div>
 
+            {/* Extraction Only Checkbox */}
+            <div className="mb-3">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={extractionOnly}
+                  onChange={(e) => setExtractionOnly(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Extraction seulement (debug)
+                </span>
+              </label>
+              {extractionOnly && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Le pipeline s'arrêtera après l'extraction Gemini Vision
+                </p>
+              )}
+            </div>
+
             {/* Rapport Financier Button */}
             <button
               onClick={handleFinancialReport}
@@ -539,7 +561,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
               ) : (
                 <>
                   <FileText size={18} />
-                  <span>Rapport financier</span>
+                  <span>{extractionOnly ? 'Test extraction' : 'Rapport financier'}</span>
                   {selectedDocuments.length > 0 && (
                     <span className="bg-white text-blue-600 rounded-full px-2 py-0.5 text-xs font-bold">
                       {selectedDocuments.length}

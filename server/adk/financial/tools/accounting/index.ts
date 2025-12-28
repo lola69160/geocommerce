@@ -9,3 +9,4 @@ export { calculateRatiosTool } from './calculateRatiosTool';
 export { analyzeTrendsTool } from './analyzeTrendsTool';
 export { compareToSectorTool } from './compareToSectorTool';
 export { calculateHealthScoreTool } from './calculateHealthScoreTool';
+export { calculateEbeRetraitementTool } from './calculateEbeRetraitementTool';

@@ -3,7 +3,8 @@ import {
   analyzeBailTool,
   estimateDroitBailTool,
   analyzeMursTool,
-  estimateTravauxTool
+  estimateTravauxTool,
+  calculateLoyerSimulationTool
 } from '../tools/property';
 import type { FinancialState } from '../index';
 
@@ -56,7 +57,8 @@ export class ImmobilierAgent extends LlmAgent {
         analyzeBailTool,
         estimateDroitBailTool,
         analyzeMursTool,
-        estimateTravauxTool
+        estimateTravauxTool,
+        calculateLoyerSimulationTool
       ],
 
       // Instruction système
@@ -148,9 +150,29 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
    surface_m2 est optionnel (sera lu depuis bail). etat_declare est optionnel.
 
-ÉTAPE 5 : GÉNÉRER SYNTHÈSE ET SCORE IMMOBILIER
+ÉTAPE 5 : SIMULER RENÉGOCIATION LOYER
+   calculateLoyerSimulation({ loyerActuelAnnuel, surfaceM2, dureeRestanteMois?, prixMarcheM2Annuel?, localisation?, contexteNegociation? })
+   → Retourne { loyerActuel, loyerMarche, comparaison, scenarios: { pessimiste, realiste, optimiste }, impactEBE, argumentsNegociation, recommandation }
 
-Après avoir appelé les 4 tools, analyser les résultats et générer :
+   Le tool :
+   - Lit le loyer annuel et surface depuis state.immobilier.bail (DOIT être appelé après analyzeBail)
+   - Compare le loyer actuel (€/m²/an) au prix marché
+   - Estime le prix marché selon localisation si non fourni (barèmes France 2024)
+   - Génère 3 scénarios de renégociation:
+     * Pessimiste: Réduction 30% de l'écart (probabilité 30%)
+     * Réaliste: Réduction 60% de l'écart (probabilité 50%)
+     * Optimiste: Alignement 100% marché (probabilité 20%)
+   - Calcule l'économie annuelle pour chaque scénario
+   - Calcule l'impact sur l'EBE (économie = +EBE)
+   - Génère arguments de négociation basés sur écart marché
+   - Retourne recommandation (FORTE si économie >10k€, CONSEILLÉE si >5k€)
+
+   IMPORTANT: Ces économies de loyer seront automatiquement intégrées dans le calcul de l'EBE Normatif
+   par le ComptableAgent (retraitement type "economie_loyer").
+
+ÉTAPE 6 : GÉNÉRER SYNTHÈSE ET SCORE IMMOBILIER
+
+Après avoir appelé les 5 tools, analyser les résultats et générer :
 
 1. SCORE IMMOBILIER (0-100)
    Calculer un score global basé sur:
@@ -285,6 +307,57 @@ FORMAT DE SORTIE JSON (STRICT) :
     }
   },
 
+  "simulationLoyer": {
+    "loyerActuel": {
+      "annuel": 18000,
+      "mensuel": 1500,
+      "prixM2Annuel": 225,
+      "surfaceM2": 80
+    },
+    "loyerMarche": {
+      "prixM2Estime": 200,
+      "annuelEstime": 16000,
+      "mensuelEstime": 1333,
+      "source": "estimation automatique (barèmes France 2024)"
+    },
+    "comparaison": {
+      "ecartAnnuel": 2000,
+      "ecartPourcentage": 13,
+      "appreciation": "desavantageux"
+    },
+    "scenarios": {
+      "pessimiste": {
+        "description": "Renégociation difficile, faible réduction",
+        "nouveauLoyerAnnuel": 17400,
+        "economieAnnuelle": 600,
+        "probabilite": "30%"
+      },
+      "realiste": {
+        "description": "Renégociation réussie, réduction modérée",
+        "nouveauLoyerAnnuel": 16800,
+        "economieAnnuelle": 1200,
+        "probabilite": "50%"
+      },
+      "optimiste": {
+        "description": "Renégociation excellente, alignement marché",
+        "nouveauLoyerAnnuel": 16000,
+        "economieAnnuelle": 2000,
+        "probabilite": "20%"
+      }
+    },
+    "impactEBE": {
+      "scenarioPessimiste": 600,
+      "scenarioRealiste": 1200,
+      "scenarioOptimiste": 2000
+    },
+    "argumentsNegociation": [
+      "💰 Loyer actuel (18 000 €/an) supérieur de 13% au marché",
+      "📊 Prix marché estimé: 200 €/m²/an vs actuel 225 €/m²/an",
+      "📉 Économie annuelle possible: 2 000 € (scénario optimiste)"
+    ],
+    "recommandation": "RECOMMANDATION: Loyer légèrement élevé (13%). Renégociation possible mais non critique."
+  },
+
   "synthese": {
     "score_immobilier": 72,
     "points_forts": [
@@ -308,7 +381,7 @@ FORMAT DE SORTIE JSON (STRICT) :
 }
 
 RÈGLES :
-1. Appeler les 4 tools dans l'ordre (analyzeBail → estimateDroitBail → analyzeMurs → estimateTravaux)
+1. Appeler les 5 tools dans l'ordre (analyzeBail → estimateDroitBail → analyzeMurs → estimateTravaux → calculateLoyerSimulation)
 2. Si bail non disponible, le mentionner dans dataStatus.source = "non_disponible"
 3. Pour score_immobilier : additionner les points selon les critères ci-dessus
 4. Pour points_forts et points_vigilance : lister 3-5 éléments marquants (emojis conseillés)

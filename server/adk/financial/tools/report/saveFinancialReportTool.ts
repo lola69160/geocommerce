@@ -34,7 +34,10 @@ export const saveFinancialReportTool = new FunctionTool({
   description: 'Sauvegarde le rapport HTML financier dans data/financial-reports/',
   parameters: zToGen(SaveFinancialReportInputSchema),
 
-  execute: async (params) => {
+  execute: async (params, toolContext?: ToolContext) => {
+    console.log('[saveFinancialReport] 📝 Tool called with businessId:', params.businessId);
+    console.log('[saveFinancialReport] HTML length:', params.html?.length || 0);
+
     try {
       // Créer le dossier s'il n'existe pas
       const reportsDir = path.join(process.cwd(), 'data', 'financial-reports');
@@ -58,7 +61,7 @@ export const saveFinancialReportTool = new FunctionTool({
 
       const generatedAt = new Date().toISOString();
 
-      return {
+      const result = {
         generated: true,
         filepath,
         filename,
@@ -67,8 +70,17 @@ export const saveFinancialReportTool = new FunctionTool({
         generatedAt
       };
 
+      // IMPORTANT: Injecter le résultat dans le state pour que financialReport soit PRESENT
+      if (toolContext?.state) {
+        toolContext.state.set('financialReport', result);
+        console.log('[saveFinancialReport] ✅ Report saved and injected into state:', filename);
+      }
+
+      return result;
+
     } catch (error: any) {
-      return {
+      console.error('[saveFinancialReport] ❌ Error:', error.message);
+      const errorResult = {
         generated: false,
         filepath: '',
         filename: '',
@@ -77,6 +89,13 @@ export const saveFinancialReportTool = new FunctionTool({
         generatedAt: new Date().toISOString(),
         error: error.message || 'Failed to save report'
       };
+
+      // Injecter l'erreur dans le state aussi
+      if (toolContext?.state) {
+        toolContext.state.set('financialReport', errorResult);
+      }
+
+      return errorResult;
     }
   }
 });

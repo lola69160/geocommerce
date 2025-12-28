@@ -8,3 +8,4 @@ export { calculateEbeValuationTool } from './calculateEbeValuationTool';
 export { calculateCaValuationTool } from './calculateCaValuationTool';
 export { calculatePatrimonialTool } from './calculatePatrimonialTool';
 export { synthesizeValuationTool } from './synthesizeValuationTool';
+export { calculateTabacValuationTool } from './calculateTabacValuationTool';

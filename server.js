@@ -987,6 +987,91 @@ app.post('/api/analyze-financial', async (req, res) => {
             }
         };
 
+        // ========================================
+        // AFFICHAGE CONSOLE DES USER COMMENTS
+        // ========================================
+        console.log('\n╔═══════════════════════════════════════════════════════════════');
+        console.log('║  USER COMMENTS REÇUS (analyse financière)');
+        console.log('╚═══════════════════════════════════════════════════════════════\n');
+
+        if (userComments && Object.keys(userComments).length > 0) {
+            console.log('📝 Commentaires utilisateur fournis:\n');
+
+            // 1. Salaire dirigeant
+            if (userComments.salaire_dirigeant) {
+                console.log('  💼 Salaire dirigeant:');
+                console.log(`     → ${userComments.salaire_dirigeant.toLocaleString('fr-FR')} € / an`);
+                console.log('');
+            }
+
+            // 2. Salariés non repris
+            if (userComments.salaries_non_repris) {
+                console.log('  👥 Salariés non repris:');
+                console.log(`     → Nombre: ${userComments.salaries_non_repris.nombre}`);
+                console.log(`     → Masse salariale: ${userComments.salaries_non_repris.masse_salariale_annuelle?.toLocaleString('fr-FR') || 'N/A'} € / an`);
+                console.log(`     → Motif: ${userComments.salaries_non_repris.motif || 'Non renseigné'}`);
+                console.log('');
+            }
+
+            // 3. Salaires saisonniers prévus
+            if (userComments.salaires_saisonniers_prevus) {
+                console.log('  🌴 Salaires saisonniers prévus:');
+                console.log(`     → ${userComments.salaires_saisonniers_prevus.toLocaleString('fr-FR')} € / an`);
+                console.log('');
+            }
+
+            // 4. Loyer (détaillé)
+            if (userComments.loyer) {
+                console.log('  🏠 Informations Loyer:');
+                if (userComments.loyer.loyer_actuel_mensuel) {
+                    console.log(`     → Loyer actuel: ${userComments.loyer.loyer_actuel_mensuel.toLocaleString('fr-FR')} € / mois (${(userComments.loyer.loyer_actuel_mensuel * 12).toLocaleString('fr-FR')} € / an)`);
+                }
+                if (userComments.loyer.loyer_futur_mensuel) {
+                    console.log(`     → Loyer négocié: ${userComments.loyer.loyer_futur_mensuel.toLocaleString('fr-FR')} € / mois (${(userComments.loyer.loyer_futur_mensuel * 12).toLocaleString('fr-FR')} € / an)`);
+                    const economie = (userComments.loyer.loyer_actuel_mensuel - userComments.loyer.loyer_futur_mensuel) * 12;
+                    if (economie > 0) {
+                        console.log(`     → Économie annuelle: ${economie.toLocaleString('fr-FR')} € / an`);
+                    }
+                }
+                if (userComments.loyer.futur_loyer_commercial) {
+                    console.log(`     → Loyer commercial futur: ${userComments.loyer.futur_loyer_commercial.toLocaleString('fr-FR')} € / mois`);
+                }
+                if (userComments.loyer.loyer_logement_perso) {
+                    console.log(`     → Loyer logement perso: ${userComments.loyer.loyer_logement_perso.toLocaleString('fr-FR')} € / mois (${(userComments.loyer.loyer_logement_perso * 12).toLocaleString('fr-FR')} € / an)`);
+                }
+                if (userComments.loyer.commentaire) {
+                    console.log(`     → Commentaire: "${userComments.loyer.commentaire}"`);
+                }
+                console.log('');
+            }
+
+            // 5. Budget travaux
+            if (userComments.budget_travaux) {
+                console.log('  🔨 Budget travaux:');
+                console.log(`     → ${userComments.budget_travaux.toLocaleString('fr-FR')} €`);
+                console.log('');
+            }
+
+            // 6. Autres informations
+            if (userComments.autres) {
+                console.log('  📋 Autres informations:');
+                console.log(`     → "${userComments.autres}"`);
+                console.log('');
+            }
+
+            // 7. Horaires extension
+            if (userComments.horaires_extension) {
+                console.log('  ⏰ Extension horaires prévue:');
+                console.log(`     → "${userComments.horaires_extension}"`);
+                console.log('');
+            }
+
+            console.log('═══════════════════════════════════════════════════════════════\n');
+        } else {
+            console.log('⚠️  Aucun commentaire utilisateur fourni.\n');
+            console.log('═══════════════════════════════════════════════════════════════\n');
+        }
+
         // 4. Créer session
         await sessionService.createSession({
             appName,
@@ -1044,7 +1129,7 @@ The documents and business info are available in state for all agents.`
                     const value = event.actions.stateDelta[key];
 
                     // DEBUG: Log raw value before parsing
-                    if (key === 'comptable' || key === 'financialReport') {
+                    if (key === 'comptable' || key === 'valorisation' || key === 'financialReport') {
                         console.log(`\n📋 RAW OUTPUT from ${key}:`);
                         console.log(typeof value === 'string' ? value.substring(0, 500) + '...' : JSON.stringify(value, null, 2).substring(0, 500) + '...');
                         console.log('');
@@ -1067,6 +1152,17 @@ The documents and business info are available in state for all agents.`
                                 console.log('  - sig:', parsed.sig ? Object.keys(parsed.sig) : 'MISSING');
                                 console.log('  - healthScore:', parsed.healthScore);
                                 console.log('  - ratios:', parsed.ratios ? 'PRESENT' : 'MISSING');
+                                console.log('');
+                            }
+
+                            // DEBUG: Log valorisation structure
+                            if (key === 'valorisation') {
+                                console.log(`\n✅ PARSED VALORISATION STRUCTURE:`);
+                                console.log('  - methodeEBE:', parsed.methodeEBE ? 'PRESENT' : 'MISSING');
+                                console.log('  - methodeCA:', parsed.methodeCA ? 'PRESENT' : 'MISSING');
+                                console.log('  - methodePatrimoniale:', parsed.methodePatrimoniale ? 'PRESENT' : 'MISSING');
+                                console.log('  - methodeHybride:', parsed.methodeHybride ? 'PRESENT (Tabac/Presse)' : 'MISSING');
+                                console.log('  - synthese:', parsed.synthese ? JSON.stringify(parsed.synthese, null, 2) : 'MISSING');
                                 console.log('');
                             }
 
@@ -1116,6 +1212,14 @@ The documents and business info are available in state for all agents.`
                     console.log('='.repeat(80));
                     lastAgentAuthor = event.author;
                 }
+            }
+
+            // DEBUG: Log FinancialReport agent output to diagnose parsing issues
+            if (event.author === 'financialReport' && event.content?.parts) {
+                console.log('[DEBUG] FinancialReport raw output:', {
+                    partsCount: event.content.parts.length,
+                    firstPart: event.content.parts[0]?.text?.substring(0, 300) || 'no text'
+                });
             }
         }
 

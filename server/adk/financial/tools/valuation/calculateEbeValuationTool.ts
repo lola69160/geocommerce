@@ -107,42 +107,66 @@ export const calculateEbeValuationTool = new FunctionTool({
         };
       }
 
-      const { sig, yearsAnalyzed } = comptable;
+      const { sig, yearsAnalyzed, ebeRetraitement } = comptable;
 
-      // Calculer EBE de référence (moyenne 3 dernières années ou dernière année)
+      // ========================================
+      // NOUVEAU: Utiliser l'EBE Normatif calculé par ComptableAgent
+      // ========================================
       let ebeReference = 0;
+      let ebeRetraite = 0;
+      let retraitements: { description: string; montant: number }[] = [];
 
-      if (yearsAnalyzed.length >= 3) {
-        // Moyenne des 3 dernières années
-        const ebeValues = yearsAnalyzed.slice(0, 3).map((year: number) => {
-          const yearStr = year.toString();
-          return sig[yearStr]?.ebe || 0;
+      if (ebeRetraitement && ebeRetraitement.ebe_normatif) {
+        // PRIORITÉ 1: Utiliser l'EBE Normatif calculé par ComptableAgent (calculateEbeRetraitementTool)
+        ebeReference = ebeRetraitement.ebe_comptable || 0;
+        ebeRetraite = ebeRetraitement.ebe_normatif || 0;
+
+        // Convertir les retraitements du format ComptableAgent vers le format ValorisationAgent
+        if (ebeRetraitement.retraitements && Array.isArray(ebeRetraitement.retraitements)) {
+          retraitements = ebeRetraitement.retraitements.map((r: any) => ({
+            description: r.description || '',
+            montant: r.montant || 0
+          }));
+        }
+
+        console.log('[calculateEbeValuation] Using EBE Normatif from ComptableAgent:', {
+          ebe_comptable: ebeReference,
+          ebe_normatif: ebeRetraite,
+          retraitements_count: retraitements.length
         });
-        ebeReference = Math.round(ebeValues.reduce((a: number, b: number) => a + b, 0) / ebeValues.length);
-      } else if (yearsAnalyzed.length > 0) {
-        // Dernière année disponible
-        const lastYear = yearsAnalyzed[0].toString();
-        ebeReference = sig[lastYear]?.ebe || 0;
+
+      } else {
+        // PRIORITÉ 2: Fallback - Calculer EBE de référence (ancienne méthode)
+        console.log('[calculateEbeValuation] Fallback: EBE Normatif not found, calculating manually');
+
+        if (yearsAnalyzed.length >= 3) {
+          // Moyenne des 3 dernières années
+          const ebeValues = yearsAnalyzed.slice(0, 3).map((year: number) => {
+            const yearStr = year.toString();
+            return sig[yearStr]?.ebe || 0;
+          });
+          ebeReference = Math.round(ebeValues.reduce((a: number, b: number) => a + b, 0) / ebeValues.length);
+        } else if (yearsAnalyzed.length > 0) {
+          // Dernière année disponible
+          const lastYear = yearsAnalyzed[0].toString();
+          ebeReference = sig[lastYear]?.ebe || 0;
+        }
+
+        // Retraitements standards (fallback)
+        retraitements.push({
+          description: 'Salaire de gérant non rémunéré (estimation)',
+          montant: STANDARD_RETRAITEMENTS.SALAIRE_GERANT_ESTIMATION
+        });
+
+        // Retraitements personnalisés (si fournis)
+        if (params.retraitements_custom && Array.isArray(params.retraitements_custom)) {
+          retraitements.push(...params.retraitements_custom);
+        }
+
+        // Calculer EBE retraité
+        const totalRetraitements = retraitements.reduce((sum, r) => sum + r.montant, 0);
+        ebeRetraite = ebeReference + totalRetraitements;
       }
-
-      // Retraitements standards
-      const retraitements: { description: string; montant: number }[] = [];
-
-      // 1. Salaire de gérant non rémunéré (si applicable)
-      // À déterminer en fonction du contexte - pour l'instant appliqué par défaut
-      retraitements.push({
-        description: 'Salaire de gérant non rémunéré (estimation)',
-        montant: STANDARD_RETRAITEMENTS.SALAIRE_GERANT_ESTIMATION
-      });
-
-      // 2. Retraitements personnalisés (si fournis)
-      if (params.retraitements_custom && Array.isArray(params.retraitements_custom)) {
-        retraitements.push(...params.retraitements_custom);
-      }
-
-      // Calculer EBE retraité
-      const totalRetraitements = retraitements.reduce((sum, r) => sum + r.montant, 0);
-      const ebeRetraite = ebeReference + totalRetraitements;
 
       // Obtenir coefficients sectoriels
       const nafCode = params.nafCode || businessInfo?.nafCode || '';

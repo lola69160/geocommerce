@@ -8,3 +8,4 @@ export { analyzeBailTool } from './analyzeBailTool';
 export { estimateDroitBailTool } from './estimateDroitBailTool';
 export { analyzeMursTool } from './analyzeMursTool';
 export { estimateTravauxTool } from './estimateTravauxTool';
+export { calculateLoyerSimulationTool } from './calculateLoyerSimulationTool';

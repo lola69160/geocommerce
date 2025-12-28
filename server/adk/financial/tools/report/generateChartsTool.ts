@@ -168,13 +168,71 @@ function generateEvolutionChart(comptable: any): any {
 /**
  * Génère le graphique de valorisation (horizontal bar)
  * Supports both structures: new (valorisation.methodes.ebe) and old (valorisation.methodeEBE)
+ * Also supports methodeHybride for Tabac/Presse/FDJ businesses
  */
 function generateValorisationChart(valorisation: any): any {
   if (!valorisation) {
     return getDefaultChart();
   }
 
-  // Support BOTH structures (backward compatibility)
+  // NOUVEAU: Support méthode hybride (Tabac/Presse/FDJ) - PRIORITAIRE
+  if (valorisation.methodeHybride) {
+    const hybrid = valorisation.methodeHybride;
+    const totale = hybrid.valorisationTotale;
+
+    console.log('[Valorisation Chart] ✅ Using méthode HYBRIDE');
+
+    return {
+      type: 'bar',
+      data: {
+        labels: ['Méthode Hybride Tabac/Presse'],
+        datasets: [
+          {
+            label: 'Fourchette Basse (k€)',
+            data: [(totale.fourchetteBasse || 0) / 1000],
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            borderColor: '#ef4444',
+            borderWidth: 1
+          },
+          {
+            label: 'Valorisation Médiane (k€)',
+            data: [(totale.valeurMediane || 0) / 1000],
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: '#3b82f6',
+            borderWidth: 2
+          },
+          {
+            label: 'Fourchette Haute (k€)',
+            data: [(totale.fourchetteHaute || 0) / 1000],
+            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+            borderColor: '#10b981',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { position: 'top' },
+          title: {
+            display: true,
+            text: 'Valorisation Hybride (Bloc Réglementé + Bloc Commercial)',
+            font: { size: 16, weight: 'bold' }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            title: { display: true, text: 'Valorisation (k€)' }
+          }
+        }
+      }
+    };
+  }
+
+  // Support BOTH structures (backward compatibility) - Méthodes standard
   const methodes = valorisation.methodes || {
     ebe: valorisation.methodeEBE,
     ca: valorisation.methodeCA,
@@ -186,32 +244,55 @@ function generateValorisationChart(valorisation: any): any {
   const medianValues = [];
   const maxValues = [];
 
-  // Only add methods that succeeded (filter out null/undefined)
-  if (methodes.ebe && methodes.ebe.valeur_mediane > 0) {
+  // Always add methods, even if value is 0 (show all 3 methods for transparency)
+  if (methodes.ebe) {
     labels.push('Méthode EBE');
-    minValues.push((methodes.ebe.valeur_basse || 0) / 1000);
-    medianValues.push((methodes.ebe.valeur_mediane || 0) / 1000);
-    maxValues.push((methodes.ebe.valeur_haute || 0) / 1000);
+    if (methodes.ebe.valeur_mediane > 0) {
+      minValues.push((methodes.ebe.valeur_basse || 0) / 1000);
+      medianValues.push((methodes.ebe.valeur_mediane || 0) / 1000);
+      maxValues.push((methodes.ebe.valeur_haute || 0) / 1000);
+    } else {
+      // Show 0 values with visual indicator
+      minValues.push(0);
+      medianValues.push(0);
+      maxValues.push(0);
+      console.warn('[Valorisation Chart] ⚠️ Méthode EBE: 0€ (données insuffisantes)');
+    }
   }
 
-  if (methodes.ca && methodes.ca.valeur_mediane > 0) {
+  if (methodes.ca) {
     labels.push('Méthode CA');
-    const median = (methodes.ca.valeur_mediane || 0) / 1000;
-    minValues.push(median * 0.9); // ±10%
-    medianValues.push(median);
-    maxValues.push(median * 1.1);
+    if (methodes.ca.valeur_mediane > 0) {
+      const median = (methodes.ca.valeur_mediane || 0) / 1000;
+      minValues.push(median * 0.9); // ±10%
+      medianValues.push(median);
+      maxValues.push(median * 1.1);
+    } else {
+      minValues.push(0);
+      medianValues.push(0);
+      maxValues.push(0);
+      console.warn('[Valorisation Chart] ⚠️ Méthode CA: 0€ (données insuffisantes)');
+    }
   }
 
-  if (methodes.patrimoniale && methodes.patrimoniale.valeur_estimee > 0) {
+  if (methodes.patrimoniale) {
     labels.push('Méthode Patrimoniale');
-    const value = (methodes.patrimoniale.valeur_estimee || 0) / 1000;
-    minValues.push(value * 0.95);
-    medianValues.push(value);
-    maxValues.push(value * 1.05);
+    if (methodes.patrimoniale.valeur_estimee > 0) {
+      const value = (methodes.patrimoniale.valeur_estimee || 0) / 1000;
+      minValues.push(value * 0.95);
+      medianValues.push(value);
+      maxValues.push(value * 1.05);
+    } else {
+      minValues.push(0);
+      medianValues.push(0);
+      maxValues.push(0);
+      console.warn('[Valorisation Chart] ⚠️ Méthode Patrimoniale: 0€ (bilan non fourni)');
+    }
   }
 
-  // If no methods succeeded, return default chart
+  // If NO methods exist at all, return default chart
   if (labels.length === 0) {
+    console.warn('⚠️ [Valorisation Chart] Aucune méthode de valorisation disponible');
     return getDefaultChart();
   }
 

@@ -3,7 +3,8 @@ import {
   calculateEbeValuationTool,
   calculateCaValuationTool,
   calculatePatrimonialTool,
-  synthesizeValuationTool
+  synthesizeValuationTool,
+  calculateTabacValuationTool
 } from '../tools/valuation';
 import type { FinancialState } from '../index';
 
@@ -56,7 +57,8 @@ export class ValorisationAgent extends LlmAgent {
         calculateEbeValuationTool,
         calculateCaValuationTool,
         calculatePatrimonialTool,
-        synthesizeValuationTool
+        synthesizeValuationTool,
+        calculateTabacValuationTool
       ],
 
       // Instruction système
@@ -71,7 +73,12 @@ Les données sont passées via state (accessible dans les tools) :
   - comptable.ratios : Ratios financiers clés
   - comptable.evolution : Tendances CA/EBE/RN
   - comptable.healthScore : Score de santé financière
-  - comptable.retraitements : Retraitements à appliquer (ex: loyer logement personnel)
+  - comptable.ebeRetraitement : ⚠️ NOUVEAU - EBE Normatif calculé par ComptableAgent
+    * ebeRetraitement.ebe_comptable : EBE comptable de référence
+    * ebeRetraitement.ebe_normatif : EBE Normatif (capacité réelle du repreneur)
+    * ebeRetraitement.retraitements[] : Liste des retraitements appliqués
+    * ebeRetraitement.total_retraitements : Somme des retraitements
+    * ebeRetraitement.ecart_pct : Écart en % entre EBE comptable et normatif
 - state.documentExtraction : Documents comptables extraits (bilans, comptes de résultat)
   - documentExtraction.documents[] : Liste des documents avec tableaux
   - documentExtraction.transactionCosts : Coûts de transaction (NOUVEAU)
@@ -88,18 +95,33 @@ Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
 
 WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
+⚠️ IMPORTANT: DÉTECTION DU TYPE DE COMMERCE
+
+AVANT DE COMMENCER, vérifier si le commerce est de type Tabac/Presse/FDJ :
+- Codes NAF : 47.26 (Tabac), 47.62 (Presse)
+- Activité : contient "tabac", "presse", "fdj", "loto", "pmu"
+
+SI COMMERCE TABAC/PRESSE/FDJ DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
+SINON → Utiliser MÉTHODE CLASSIQUE (Étapes 1-4)
+
+═══════════════════════════════════════════════════════════════════════
+MÉTHODE CLASSIQUE (Commerces standards)
+═══════════════════════════════════════════════════════════════════════
+
 ÉTAPE 1 : MÉTHODE DU MULTIPLE D'EBE (méthode de référence)
    calculateEbeValuation({ nafCode: "47.26Z" })
    → Retourne { methodeEBE: { ebe_reference, ebe_retraite, retraitements[], coefficient_bas, coefficient_median, coefficient_haut, valeur_basse, valeur_mediane, valeur_haute, justification } }
 
    Le tool :
-   - Lit les SIG depuis state.comptable
-   - Calcule EBE moyen sur 3 ans (ou dernière année si moins de données)
-   - Applique retraitements standards (salaire gérant non rémunéré, etc.)
+   - ⚠️ NOUVEAU: Utilise automatiquement l'EBE Normatif depuis state.comptable.ebeRetraitement (calculé par ComptableAgent)
+     * Si ebeRetraitement disponible → utilise ebe_normatif (PRIORITÉ 1)
+     * Sinon → calcule EBE moyen sur 3 ans + retraitements standards (FALLBACK)
    - Applique multiples sectoriels (coefficients par NAF)
    - Retourne fourchette basse/médiane/haute
 
    Si nafCode non fourni, le tool lira depuis state.businessInfo.nafCode.
+
+   IMPORTANT: L'EBE Normatif reflète la capacité bénéficiaire réelle du repreneur (retraitements déjà appliqués par ComptableAgent).
 
 ÉTAPE 2 : MÉTHODE DU % DE CA (méthode complémentaire)
    calculateCaValuation({ nafCode: "47.26Z" })
@@ -145,6 +167,51 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
    - Génère arguments de négociation (points faibles/forts)
 
    prix_affiche est optionnel. Si fourni, le tool calculera l'écart et générera un argumentaire.
+
+═══════════════════════════════════════════════════════════════════════
+MÉTHODE HYBRIDE (Commerces Tabac/Presse/FDJ UNIQUEMENT)
+═══════════════════════════════════════════════════════════════════════
+
+⚠️ UTILISER CETTE MÉTHODE SI ET SEULEMENT SI le commerce est de type Tabac/Presse/FDJ (NAF 47.26 ou 47.62)
+
+ÉTAPE 1bis : VALORISATION HYBRIDE TABAC/PRESSE/FDJ
+   calculateTabacValuation({
+     commissionsNettesAnnuelles: 120000,  // Commissions Tabac + Loto + Presse + FDJ
+     caActiviteBoutiqueAnnuel: 80000,     // CA Souvenirs + Confiserie + Vape
+     localisation: {
+       population: 50000,
+       zone: "centre-ville",
+       tourisme: false,
+       proximite: "gare"
+     },
+     prixAffiche: 480000  // optionnel
+   })
+   → Retourne { typeCommerce, blocReglemente: { commissionsNettes, coefficient, valeur }, blocCommercial: { caActiviteBoutique, pourcentage, valeur }, valorisationTotale: { fourchetteBasse, valeurMediane, fourchetteHaute }, comparaisonPrix, argumentsNegociation, facteursValorisants, justification }
+
+   Le tool :
+   - Détecte automatiquement le type de Tabac (urbain premium, centre-ville, périphérie, rural, touristique, transit, étudiant)
+   - Calcule BLOC 1 (Réglementé) : Commissions Nettes × Coefficient (2.0-3.2)
+   - Calcule BLOC 2 (Commercial) : CA Boutique × Pourcentage (12-25%)
+   - Additionne les 2 blocs pour obtenir la valorisation totale
+   - Compare avec prix affiché si fourni
+   - Génère arguments de négociation spécifiques Tabac
+
+   IMPORTANT: Cette méthode est PLUS PRÉCISE que la méthode EBE classique pour les Tabacs car elle se base sur les COMMISSIONS NETTES (pas le CA total).
+
+   SI commissionsNettesAnnuelles NON FOURNI :
+   - Le tool estimera depuis le CA total (environ 8% du CA)
+   - MAIS il vaut mieux demander à l'utilisateur de fournir les commissions exactes
+
+   SI caActiviteBoutiqueAnnuel NON FOURNI :
+   - Le tool estimera depuis le CA total (environ 25% du CA)
+
+ÉTAPE 2bis : SYNTHÈSE (OPTIONNELLE pour Tabac)
+   Pour les Tabacs, la méthode hybride est DÉJÀ une synthèse complète.
+   Tu peux SKIP les étapes 1-4 de la méthode classique.
+
+   MAIS si tu veux comparer avec la méthode EBE classique (pour validation) :
+   - Tu peux AUSSI appeler calculateEbeValuation et synthesizeValuation
+   - Cela permet de voir l'écart entre méthode hybride et méthode classique
 
 FORMAT DE SORTIE JSON (STRICT) :
 {
@@ -236,13 +303,109 @@ FORMAT DE SORTIE JSON (STRICT) :
   ]
 }
 
+⚠️ EXEMPLE DE SORTIE POUR COMMERCE TABAC/PRESSE/FDJ (MÉTHODE HYBRIDE):
+{
+  "businessInfo": {
+    "name": "Tabac Presse du Centre",
+    "nafCode": "47.26Z",
+    "sector": "Commerce de détail de produits à base de tabac"
+  },
+
+  "methodeHybride": {  // ⚠️ NOUVEAU - Remplace methodeEBE, methodeCA, methodePatrimoniale pour les Tabacs
+    "typeCommerce": "tabac_centre_ville",
+    "descriptionType": "Tabac situé en centre-ville de ville moyenne",
+
+    "blocReglemente": {
+      "commissionsNettes": 120000,
+      "coefficientMin": 2.5,
+      "coefficientMedian": 2.65,
+      "coefficientMax": 2.8,
+      "valeurMin": 300000,
+      "valeurMediane": 318000,
+      "valeurMax": 336000
+    },
+
+    "blocCommercial": {
+      "caActiviteBoutique": 80000,
+      "pourcentageMin": 18,
+      "pourcentageMedian": 20,
+      "pourcentageMax": 22,
+      "valeurMin": 14400,
+      "valeurMediane": 16000,
+      "valeurMax": 17600
+    },
+
+    "valorisationTotale": {
+      "fourchetteBasse": 314400,
+      "valeurMediane": 334000,
+      "fourchetteHaute": 353600
+    },
+
+    "comparaisonPrix": {
+      "prixAffiche": 380000,
+      "ecart": 46000,
+      "ecartPourcentage": 14,
+      "appreciation": "sur-evalue"
+    },
+
+    "argumentsNegociation": {
+      "pour_acheteur": [
+        "📊 Prix affiché (380 000 €) supérieur de 14% à la valorisation médiane",
+        "💰 Marge de négociation possible: 46 000 €"
+      ],
+      "pour_vendeur": [
+        "📈 Tendance positive du CA: +5%"
+      ]
+    },
+
+    "facteursValorisants": [
+      "Emplacement commercial principal",
+      "Clientèle mixte (résidents + passants)",
+      "Bon niveau de commissions Presse/FDJ"
+    ],
+
+    "justification": "Valorisation par MÉTHODE HYBRIDE Tabac/Presse/FDJ. Type de commerce détecté: Tabac situé en centre-ville de ville moyenne. Bloc Réglementé: Commissions nettes (120 000 €) × Coefficient (2.5-2.8) = 300 000 - 336 000 €. Bloc Commercial: CA Boutique (80 000 €) × 18-22% = 14 400 - 17 600 €. Valorisation totale recommandée: 334 000 €."
+  },
+
+  // Pour les Tabacs, on peut OMETTRE methodeEBE, methodeCA, methodePatrimoniale
+  // OU les inclure pour comparaison (validation croisée)
+
+  "synthese": {
+    "fourchette_basse": 314400,
+    "fourchette_mediane": 334000,
+    "fourchette_haute": 353600,
+    "methode_privilegiee": "HYBRIDE",
+    "raison_methode": "La méthode HYBRIDE est la plus adaptée pour les commerces Tabac/Presse/FDJ car elle se base sur les commissions nettes (activité réglementée) et non sur le CA total.",
+    "valeur_recommandee": 334000
+  },
+
+  "confidence": 85,
+  "limitations": []
+}
+
 RÈGLES :
-1. Appeler les 4 tools dans l'ordre (calculateEbeValuation → calculateCaValuation → calculatePatrimonial → synthesizeValuation)
-2. IMPORTANT: Passer les résultats des outils 1-3 comme PARAMÈTRES à synthesizeValuation (étape 4)
-3. Ne PAS recalculer manuellement - utiliser les résultats des tools
-4. Pour synthese : interpréter les résultats et expliquer la méthode privilégiée
-5. Pour argumentsNegociation : croiser avec les alertes de state.comptable
-6. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
+1. ⚠️ DÉTECTER LE TYPE DE COMMERCE AVANT TOUT :
+   - Si NAF 47.26 ou 47.62 (Tabac/Presse) OU activité contient "tabac"/"presse"/"fdj" → Utiliser MÉTHODE HYBRIDE
+   - Sinon → Utiliser MÉTHODE CLASSIQUE (4 tools)
+
+2. POUR COMMERCE TABAC/PRESSE/FDJ (MÉTHODE HYBRIDE) :
+   - Appeler calculateTabacValuation en PRIORITÉ
+   - Optionnel : Appeler aussi calculateEbeValuation pour comparaison/validation
+   - La sortie JSON doit inclure "methodeHybride" au lieu de "methodeEBE"
+
+3. POUR AUTRES COMMERCES (MÉTHODE CLASSIQUE) :
+   - Appeler les 4 tools dans l'ordre (calculateEbeValuation → calculateCaValuation → calculatePatrimonial → synthesizeValuation)
+   - IMPORTANT: Passer les résultats des outils 1-3 comme PARAMÈTRES à synthesizeValuation
+
+4. Ne PAS recalculer manuellement - utiliser les résultats des tools
+
+5. Pour synthese : interpréter les résultats et expliquer la méthode privilégiée
+   - Si Tabac → méthode_privilegiee = "HYBRIDE"
+   - Sinon → méthode_privilegiee = "EBE" (ou "Patrimoniale" si EBE négatif)
+
+6. Pour argumentsNegociation : croiser avec les alertes de state.comptable
+
+7. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
 
 GESTION D'ERREURS :
 - Si state.comptable manquant :

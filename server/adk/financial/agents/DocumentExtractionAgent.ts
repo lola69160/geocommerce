@@ -32,7 +32,7 @@ export class DocumentExtractionAgent extends LlmAgent {
       temperature: 0.4, // Match MODEL_DEFAULTS from models.ts
       topP: 0.95,
       topK: 40,
-      maxOutputTokens: 16384  // Doubled to avoid truncation on long documents (33+ pages)
+      maxOutputTokens: 16384  // Doubled to avoid truncationgemini-3-flash-preview on long documents (33+ pages)
     };
 
     super({
