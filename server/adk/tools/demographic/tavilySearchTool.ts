@@ -81,7 +81,7 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `actualités récentes ${commune} France 2025 projets événements`,
+          query: `actualités récentes ${commune} France 2025 projets événements en français`,
           search_depth: 'basic',
           max_results: 5,
           include_answer: false
@@ -100,7 +100,7 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `projets urbanisme aménagement ${commune} mairie PLU`,
+          query: `projets urbanisme aménagement ${commune} mairie PLU en français`,
           search_depth: 'basic',
           max_results: 5,
           include_answer: false
@@ -119,7 +119,7 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `développement économique commerce activité ${commune}`,
+          query: `développement économique commerce activité ${commune} en français`,
           search_depth: 'basic',
           max_results: 5,
           include_answer: false
@@ -138,7 +138,7 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `tourisme saisonnalité événements variation population ${commune}`,
+          query: `tourisme saisonnalité événements variation population ${commune} en français`,
           search_depth: 'basic',
           max_results: 3,
           include_answer: false

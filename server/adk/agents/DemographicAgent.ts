@@ -64,10 +64,9 @@ Les données preparation sont disponibles dans state.preparation (les tools y ac
 WORKFLOW:
 
 1. Appeler tavilySearch() - enrichissement contextuel local
-   - Actualités récentes commune (projets, événements)
-   - Projets urbanisme/aménagement mairie
-   - Dynamisme économique
-   - Saisonnalité (tourisme, événements, variation population)
+   - L'outil retourne des résultats bruts (title, content, url) potentiellement en ANGLAIS
+   - **CRITIQUE**: Tu dois SYNTHÉTISER ces résultats EN FRANÇAIS uniquement
+   - NE PAS copier les textes bruts - REFORMULER en français
    - Si TAVILY_API_KEY absent: skip gracefully, continuer workflow
 
 2. Appeler getCommuneData() - lit zipCode depuis state.preparation.normalizedAddress.zipCode
@@ -78,7 +77,7 @@ WORKFLOW:
    - Appeler estimateCSP({ density, population }) ← FALLBACK si Tavily ne fournit pas CSP
    - Calculer trade_area_potential (500m: density * 0.785, 1km: density * 3.14, 3km: density * 28.27)
    - Appeler calculateDemographicScore({ urbanLevel, population, cspProfile }) - lit nafCode depuis state.business
-   - Intégrer insights Tavily (news, projets, dynamisme, saisonnalité) dans interpretation
+   - SYNTHÉTISER insights Tavily EN FRANÇAIS dans local_context et interpretation
 
 4. Si données commune indisponibles: retourner { analyzed: false, reason: "Commune data unavailable" }
 
@@ -87,14 +86,21 @@ FORMAT JSON:
   "analyzed": true,
   "commune": { nom, code, codePostal, population, surface, density },
   "local_context": {
-    "recent_news": ["headline 1", "headline 2"],
-    "urban_projects": ["project summary 1", "project summary 2"],
+    "recent_news": [
+      { "title": "Titre synthétisé EN FRANÇAIS", "content": "Résumé synthétisé EN FRANÇAIS (2-3 phrases)", "url": "..." }
+    ],
+    "urban_projects": [
+      { "title": "Projet synthétisé EN FRANÇAIS", "content": "Description synthétisée EN FRANÇAIS (2-3 phrases)", "url": "..." }
+    ],
+    "economic_activity": [
+      { "title": "Activité synthétisée EN FRANÇAIS", "content": "Contexte synthétisé EN FRANÇAIS (2-3 phrases)", "url": "..." }
+    ],
     "economic_dynamism": "high|medium|low",
     "seasonality": {
       "has_tourism": boolean,
       "has_events": boolean,
-      "seasonal_variation": "high|moderate|low",
-      "population_increase_estimated": "string ou null"
+      "seasonal_variation": "Synthèse EN FRANÇAIS de la variation saisonnière",
+      "population_increase_estimated": number ou null
     },
     "tavily_searched": boolean
   },
@@ -106,8 +112,13 @@ FORMAT JSON:
     "trade_area_potential": { walking_500m, driving_1km, driving_3km }
   },
   "score": { overall, density_match, population_size, csp_adequacy },
-  "interpretation": "string"
+  "interpretation": "Synthèse EN FRANÇAIS incluant contexte Tavily"
 }
+
+**IMPORTANT LOCAL_CONTEXT**:
+- Si tavilySearch() retourne du texte anglais → TRADUIRE et REFORMULER en français
+- Chaque title/content doit être une SYNTHÈSE française (pas une copie brute)
+- Objectif: Fournir contexte territorial actionnable en français pour le rapport
 
 RÈGLES:
 1. Les tools lisent automatiquement depuis state - juste leur passer les valeurs calculées

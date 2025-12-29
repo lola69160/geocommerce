@@ -43,12 +43,44 @@ export const DemographicScoreSchema = z.object({
   csp_adequacy: z.number().min(0).max(100)
 });
 
+/**
+ * Local Context Schema - Données Tavily enrichies
+ *
+ * Contexte territorial : actualités, projets municipaux, économie locale
+ */
+export const LocalContextSchema = z.object({
+  recent_news: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+    url: z.string().optional()
+  })).optional(),
+  urban_projects: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+    url: z.string().optional()
+  })).optional(),
+  economic_activity: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+    url: z.string().optional()
+  })).optional(),
+  economic_dynamism: z.enum(['high', 'medium', 'low']).optional(),
+  seasonality: z.object({
+    has_tourism: z.boolean().optional(),
+    has_events: z.boolean().optional(),
+    seasonal_variation: z.string().optional(),
+    population_increase_estimated: z.number().nullable().optional()
+  }).optional(),
+  tavily_searched: z.boolean().optional()
+});
+
 export const DemographicOutputSchema = z.object({
   analyzed: z.boolean(),
   commune: CommuneDataSchema.optional(),
   profile: DemographicProfileSchema.optional(),
   score: DemographicScoreSchema.optional(),
   interpretation: z.string().optional(),
+  local_context: LocalContextSchema.optional(),
   reason: z.string().optional(),
   error: z.boolean().optional(),
   message: z.string().optional()

@@ -137,31 +137,59 @@ export const analyzePhotosTool = new FunctionTool({
         model: "gemini-2.5-flash-lite"
       });
 
-      const prompt = `Tu es un expert en aménagement de commerces avec 20 ans d'expérience.
-Analyse ces photos d'un ${businessType} pour évaluer son état et estimer les travaux nécessaires.
+      const prompt = `Tu es un expert en agencement commercial et merchandising avec 20 ans d'expérience retail.
+Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMMERCIAL.
 
 ## TÂCHES
 
-1. **ÉTAT GÉNÉRAL** (note sur 10)
-   - Devanture (vitrine, enseigne, éclairage)
-   - Intérieur (sols, murs, plafond, éclairage)
-   - Équipement et mobilier
+1. **ÉVALUATION COMMERCIALE** (note sur 10 pour chaque critère)
 
-2. **TRAVAUX À PRÉVOIR**
-   - Urgents: Nécessaires pour sécurité/conformité
-   - Recommandés: Amélioreraient attractivité/modernité
-   - Optionnels: Optimisations possibles
+   A. **Propreté** (évaluation hygiène & entretien)
+      - Vitrine : traces, poussière, netteté
+      - Sols : propreté, usure, traces
+      - Mobilier : entretien, poussière
+      - Surfaces : comptoirs, étagères, produits
 
-3. **ESTIMATION BUDGET TRAVAUX**
-   - Fourchette basse/haute en euros
-   - Détail par poste (peinture, vitrine, sol, équipement, etc.)
-   - Justification des montants
+   B. **Modernité** (design vs tendances retail 2024-2025)
+      - Mobilier : style actuel ou obsolète
+      - Couleurs & matériaux : tendances retail
+      - PLV et signalétique : design moderne
+      - Agencement global : impression de nouveau/ancien
 
-4. **ANALYSE VISUELLE**
-   - 3 points forts visuels
-   - 3 points faibles à améliorer
+   C. **Éclairage** (qualité lumière commerciale)
+      - Ambiance générale : luminosité suffisante
+      - Mise en valeur produits : spots, éclairage directionnel
+      - Zones sombres : coins mal éclairés
+      - Type d'éclairage : LED moderne, halogène ancien
 
-Sois **précis et factuel**. Base tes estimations sur les prix du marché français 2024.`;
+   D. **Présentation Produits** (merchandising)
+      - Organisation : logique, catégorisation claire
+      - Visibilité : produits bien visibles, facing correct
+      - Accessibilité : hauteur, portée client
+      - Quantité affichée : stock visible, impression richesse
+
+   E. **Expérience Client** (attractivité globale)
+      - Circulation : espace, fluidité
+      - Confort visuel : harmonie, surcharge
+      - Attractivité : envie d'entrer, de rester
+
+2. **ÉTAT PHYSIQUE** (note sur 10)
+   - Devanture, intérieur, équipement (comme actuellement)
+
+3. **OPTIMISATIONS RECOMMANDÉES**
+   - **Urgentes** : Critiques pour attractivité (ex: nettoyage, éclairage insuffisant)
+   - **Recommandées** : Amélioreraient expérience (ex: modernisation, merchandising)
+   - **Optionnelles** : Nice-to-have (ex: PLV, décoration)
+
+4. **ESTIMATION COÛTS RETAIL**
+   - Détail par poste retail : nettoyage pro, éclairage LED, modernisation vitrine, merchandising, PLV
+   - Prix marché français 2024 (pas travaux lourds)
+
+5. **ANALYSE COMMERCIALE**
+   - 3 atouts commerciaux (ce qui attire et retient le client)
+   - 3 axes d'amélioration prioritaires (impact direct sur ventes)
+
+**FOCUS** : Attractivité commerciale et expérience client (PAS travaux construction).`;
 
       // Préparer images pour Gemini
       const imageParts = validImages.map(base64 => ({
@@ -202,9 +230,29 @@ Sois **précis et factuel**. Base tes estimations sur les prix du marché franç
                     type: "number",
                     minimum: 0,
                     maximum: 10
+                  },
+                  proprete: {
+                    type: "string",
+                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  },
+                  modernite: {
+                    type: "string",
+                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  },
+                  eclairage: {
+                    type: "string",
+                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  },
+                  presentation_produits: {
+                    type: "string",
+                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  },
+                  experience_client: {
+                    type: "string",
+                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
                   }
                 },
-                required: ["devanture", "interieur", "equipement", "note_globale"]
+                required: ["devanture", "interieur", "equipement", "note_globale", "proprete", "modernite"]
               },
               travaux: {
                 type: "object",

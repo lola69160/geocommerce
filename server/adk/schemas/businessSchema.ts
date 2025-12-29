@@ -80,7 +80,7 @@ export const BusinessInputSchema = z.object({
   dirigeants: z.array(z.any()).optional(),
 
   // Données supplémentaires enrichies
-  bodacc: z.array(z.any()).optional(),
+  bodaccData: z.array(z.any()).optional(),
   places: z.any().optional(),
 
   // Métadonnées

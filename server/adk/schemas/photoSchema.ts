@@ -11,8 +11,15 @@ export const EtatGeneralSchema = z.object({
   devanture: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']),
   interieur: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']),
   equipement: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']),
-  proprete: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']).optional(),
-  modernite: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']).optional()
+
+  // REQUIS - Focus retail
+  proprete: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']),
+  modernite: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']),
+
+  // OPTIONNELS - Nouveaux critères retail
+  eclairage: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']).optional(),
+  presentation_produits: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']).optional(),
+  experience_client: z.enum(['excellent', 'bon', 'moyen', 'mauvais', 'très mauvais']).optional()
 });
 
 export const TravauxSchema = z.object({

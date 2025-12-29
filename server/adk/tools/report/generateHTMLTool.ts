@@ -478,6 +478,34 @@ async function fetchCommuneDataWithTavily(commune: string): Promise<{ imageUrl: 
 }
 
 /**
+ * Traduit catégories CSP et densité en français
+ */
+function translateCategory(key: string, value: string): string {
+  const translations: Record<string, Record<string, string>> = {
+    csp: {
+      'high': 'CSP+ (cadres, professions libérales)',
+      'middle': 'Classes moyennes (employés, professions intermédiaires)',
+      'low': 'Classes populaires (ouvriers, retraités)',
+      'mixed': 'CSP mixte'
+    },
+    density: {
+      'Zone rurale': 'Zone rurale',
+      'Zone péri-urbaine': 'Zone péri-urbaine',
+      'Zone urbaine': 'Zone urbaine',
+      'Centre-ville dense': 'Centre-ville dense',
+      'Très dense': 'Très dense'
+    },
+    dynamism: {
+      'high': 'élevé',
+      'medium': 'modéré',
+      'low': 'faible'
+    }
+  };
+
+  return translations[key]?.[value] || value;
+}
+
+/**
  * Génère la section présentation de la commune
  */
 async function generateCommuneSection(preparation: any, demographic: any): Promise<string> {
@@ -511,23 +539,95 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
     mapError = 'Coordonnées GPS non disponibles';
   }
 
-  // Construire description
+  // Récupérer local_context pour données enrichies
+  const localContext = demographic?.local_context;
+
+  // Construire description enrichie en 6 sections
+  const descriptionParts: string[] = [];
+
+  // 1. DÉMOGRAPHIE DE BASE (2-3 lignes)
   const population = demographic?.commune?.population || 'N/A';
   const densityCategory = demographic?.profile?.density_category || 'N/A';
   const cspCategory = demographic?.profile?.estimated_csp?.dominant || 'N/A';
   const tradeAreaPop = demographic?.profile?.trade_area_potential?.['1km'] || 0;
 
-  const demographicText = typeof population === 'number' && population > 0
-    ? `<strong>${commune}</strong> ${zipCode ? `(${zipCode})` : ''} est une commune de <strong>${population.toLocaleString('fr-FR')} habitants</strong>
-       avec une densité de population <strong>${densityCategory}</strong>.
-       La catégorie socio-professionnelle dominante est <strong>${cspCategory}</strong>.
-       La zone de chalandise estimée à 1 km représente <strong>${tradeAreaPop.toLocaleString('fr-FR')} habitants</strong>.`
-    : `<strong>${commune}</strong> ${zipCode ? `(${zipCode})` : ''} - Données démographiques en cours de collecte.`;
+  if (typeof population === 'number' && population > 0) {
+    const cspTranslated = translateCategory('csp', cspCategory);
+    descriptionParts.push(
+      `<strong>${commune}</strong> ${zipCode ? `(${zipCode})` : ''} est une commune de <strong>${population.toLocaleString('fr-FR')} habitants</strong> ` +
+      `avec une densité de population <strong>${densityCategory}</strong>. ` +
+      `La catégorie socio-professionnelle dominante est <strong>${cspTranslated}</strong>. ` +
+      `La zone de chalandise estimée à 1 km représente <strong>${tradeAreaPop.toLocaleString('fr-FR')} habitants</strong>.`
+    );
+  } else {
+    descriptionParts.push(`<strong>${commune}</strong> ${zipCode ? `(${zipCode})` : ''} - Données démographiques en cours de collecte.`);
+  }
 
+  // 2. PROJETS MUNICIPAUX (3-5 lignes)
+  if (localContext?.urban_projects && Array.isArray(localContext.urban_projects) && localContext.urban_projects.length > 0) {
+    const projects = localContext.urban_projects.slice(0, 3);
+    const projectsList = projects.map((p: any) => {
+      const title = p.title || '';
+      const content = p.content ? p.content.substring(0, 150) : '';
+      const url = p.url || '';
+      return `<strong>${title}</strong>: ${content}${url ? ` <a href="${url}" target="_blank" style="color: #0066cc;">[source]</a>` : ''}`;
+    }).join('<br/>');
+
+    descriptionParts.push(
+      `<br/><br/><strong>🏛️ Projets municipaux:</strong><br/>${projectsList}`
+    );
+  }
+
+  // 3. ACTUALITÉS RÉCENTES (2-3 lignes)
+  if (localContext?.recent_news && Array.isArray(localContext.recent_news) && localContext.recent_news.length > 0) {
+    const news = localContext.recent_news.slice(0, 2);
+    const newsList = news.map((n: any) => {
+      const title = n.title || '';
+      const content = n.content ? n.content.substring(0, 120) : '';
+      return `${title}: ${content}`;
+    }).join('<br/>');
+
+    descriptionParts.push(
+      `<br/><br/><strong>📰 Actualités récentes:</strong><br/>${newsList}`
+    );
+  }
+
+  // 4. DYNAMISME ÉCONOMIQUE (2-3 lignes)
+  if (localContext?.economic_activity && Array.isArray(localContext.economic_activity) && localContext.economic_activity.length > 0) {
+    const economic = localContext.economic_activity[0];
+    const economicText = economic.content ? economic.content.substring(0, 200) : '';
+    const dynamismLevel = localContext.economic_dynamism ? translateCategory('dynamism', localContext.economic_dynamism) : '';
+
+    if (economicText) {
+      descriptionParts.push(
+        `<br/><br/><strong>💼 Dynamisme économique ${dynamismLevel ? `(${dynamismLevel})` : ''}:</strong><br/>${economicText}`
+      );
+    }
+  }
+
+  // 5. SAISONNALITÉ & TOURISME (1-2 lignes)
+  if (localContext?.seasonality) {
+    const seasonality = localContext.seasonality;
+    if (seasonality.has_tourism || seasonality.has_events) {
+      const seasonalityParts: string[] = [];
+      if (seasonality.has_tourism) seasonalityParts.push('commune touristique');
+      if (seasonality.has_events) seasonalityParts.push('événements réguliers');
+      if (seasonality.seasonal_variation) seasonalityParts.push(seasonality.seasonal_variation);
+
+      descriptionParts.push(
+        `<br/><br/><strong>🎭 Saisonnalité:</strong> ${seasonalityParts.join(', ')}.`
+      );
+    }
+  }
+
+  // 6. CONTEXTE TAVILY (1-2 lignes) - conservé pour compatibilité
   const tavilyDescription = tavilyData.description
-    ? `<p style="margin-top: 15px; font-style: italic;">${tavilyData.description}...
-       ${tavilyData.sourceUrl ? `<a href="${tavilyData.sourceUrl}" target="_blank" style="color: #0066cc;">En savoir plus</a>` : ''}</p>`
+    ? `<br/><br/><em style="color: #666;">${tavilyData.description}... ` +
+      `${tavilyData.sourceUrl ? `<a href="${tavilyData.sourceUrl}" target="_blank" style="color: #0066cc;">En savoir plus</a>` : ''}</em>`
     : '';
+
+  // Assembler toutes les parties
+  const enrichedDescription = descriptionParts.join('') + tavilyDescription;
 
   return `
     <h2>🏘️ Présentation de la Commune</h2>
@@ -556,8 +656,7 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
       `}
     </div>
 
-    <p style="margin-top: 20px;">${demographicText}</p>
-    ${tavilyDescription}
+    <p style="margin-top: 20px; line-height: 1.8;">${enrichedDescription}</p>
   `;
 }
 
