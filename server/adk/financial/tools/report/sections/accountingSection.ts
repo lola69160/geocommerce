@@ -2,7 +2,24 @@
  * Accounting Section
  *
  * Generates the accounting analysis section with SIG, EBE retraitement, ratios, and benchmarks.
+ *
+ * ⚠️ RÈGLE FONDAMENTALE (2025-12-29):
+ * Les données historiques (années N, N-1, N-2...) proviennent UNIQUEMENT de comptable.sig
+ * qui contient les valeurs extraites des documents comptables (sans recalcul).
+ * Si une valeur n'est pas disponible, afficher "N/A" - PAS de fallback.
  */
+
+// ⚠️ DEPRECATED (2025-12-29) - NE PLUS UTILISER CETTE FONCTION
+// Les données historiques doivent provenir de comptable.sig uniquement.
+// Cette fonction est conservée pour référence mais ne doit plus être appelée.
+function getExtractedValueForYear(
+  _documentExtraction: any,
+  _year: string,
+  _field: string
+): number {
+  console.warn('[accountingSection] ⚠️ DEPRECATED: getExtractedValueForYear() ne doit plus être appelée - utiliser comptable.sig uniquement');
+  return 0; // Toujours retourner 0 - pas de fallback
+}
 
 /**
  * Generate the accounting section HTML
@@ -12,7 +29,8 @@ export function generateAccountingSection(
   evolutionChart: any,
   healthGauge: any,
   businessPlan?: any,
-  userComments?: any
+  userComments?: any,
+  documentExtraction?: any
 ): string {
   if (!comptable) {
     return '<h2>📈 Analyse Comptable</h2><p class="no-data">Données comptables non disponibles</p>';
@@ -25,7 +43,8 @@ export function generateAccountingSection(
     html += '<h3>Soldes Intermédiaires de Gestion (SIG)</h3>';
     html += '<table><thead><tr><th>Indicateur</th>';
 
-    const years = Object.keys(comptable.sig).sort().reverse();
+    // ✅ FIX Issue #3: Années en ordre croissant (2021, 2022, 2023) au lieu de décroissant
+    const years = Object.keys(comptable.sig).sort();
     years.forEach(y => {
       html += `<th class="text-right">${y}</th>`;
     });
@@ -69,35 +88,52 @@ export function generateAccountingSection(
       html += `<tr class="${rowClass}"><td style="${labelStyle}"><strong>${ind.label}</strong></td>`;
 
       // Colonnes années historiques
+      // ⚠️ EXTRACTION STRICTE: Pas de fallback vers documentExtraction
       years.forEach(y => {
-        let value = 0;
+        let value: number | undefined = undefined;
+        let isNA = false;
 
         if (ind.isSubRow) {
-          // Sous-lignes: extraire depuis userComments ou SIG
+          // Sous-lignes: extraire depuis SIG uniquement (userComments pour loyer actuel uniquement)
           if (ind.key === 'loyer') {
-            // Loyer annuel depuis userComments ou charges_locatives (afficher '-' si absent)
-            const loyerMensuel = userComments?.loyer?.loyer_actuel || userComments?.loyer?.futur_loyer_commercial;
-            value = loyerMensuel ? loyerMensuel * 12 : extractValue(comptable.sig[y]?.charges_locatives);
+            // Loyer: SIG charges_locatives > userComments loyer_actuel_mensuel * 12
+            const sigLoyer = extractValue(comptable.sig[y]?.charges_locatives);
+            const userLoyer = userComments?.loyer?.loyer_actuel_mensuel;
+            value = sigLoyer > 0 ? sigLoyer : (userLoyer ? userLoyer * 12 : 0);
           } else if (ind.key === 'salaire_gerant') {
-            // Salaire gérant: userComments > SIG charges_exploitant > 0
-            value = userComments?.salaire_dirigeant
-              || extractValue(comptable.sig[y]?.charges_exploitant)
-              || 0;
+            // Salaire gérant: SIG charges_exploitant uniquement
+            value = extractValue(comptable.sig[y]?.charges_exploitant) || 0;
           }
         } else if (ind.key === 'charges_personnel') {
           // Frais de Personnel = salaires_personnel + charges_sociales_personnel
+          // ⚠️ PAS DE FALLBACK - utiliser uniquement les valeurs de comptable.sig
           const salaires = extractValue(comptable.sig[y]?.salaires_personnel) || 0;
           const chargesSociales = extractValue(comptable.sig[y]?.charges_sociales_personnel) || 0;
           value = salaires + chargesSociales;
-          // Fallback sur le champ charges_personnel direct si disponible
+
+          // Si somme = 0, essayer le champ charges_personnel direct
           if (value === 0) {
             value = extractValue(comptable.sig[y]?.charges_personnel) || 0;
           }
         } else {
+          // ⚠️ EXTRACTION STRICTE: Utiliser comptable.sig uniquement
+          // PAS DE FALLBACK vers documentExtraction
           value = extractValue(comptable.sig[y]?.[ind.key]);
+
+          // Marquer comme N/A si la valeur n'existe pas (undefined ou null)
+          if (value === undefined || value === null) {
+            isNA = true;
+            value = 0;
+          }
         }
 
-        html += `<td class="text-right">${value > 0 ? value.toLocaleString('fr-FR') + ' €' : '-'}</td>`;
+        // Affichage: valeur formatée ou "-" (ou "N/A" si explicitement marqué)
+        if (isNA) {
+          html += `<td class="text-right text-muted">N/A</td>`;
+        } else {
+          const displayValue = value ?? 0;
+          html += `<td class="text-right">${displayValue > 0 ? displayValue.toLocaleString('fr-FR') + ' €' : '-'}</td>`;
+        }
       });
 
       // Colonne Budget Prévisionnel N+1

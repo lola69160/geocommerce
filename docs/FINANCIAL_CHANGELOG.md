@@ -6,6 +6,191 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ## Recent Improvements (2025-12-29)
 
+### Fix V4: ComptableAgent Instruction Update - SIG Data Flow (CRITICAL)
+
+**Problème:** Le tableau SIG dans le rapport HTML affichait "-" pour `marge_brute_globale`, `charges_externes`, `charges_exploitant` malgré une extraction réussie.
+
+**Cause Racine Identifiée:**
+L'instruction système de `ComptableAgent.ts` contenait un format JSON exemple **obsolète** :
+- Format ancien : `"chiffre_affaires": 500000` (nombre simple)
+- Format nouveau : `"chiffre_affaires": { "valeur": 500000, "pct_ca": 100 }`
+- Champs manquants : `marge_brute_globale`, `autres_achats_charges_externes`, `charges_exploitant`, `salaires_personnel`
+
+**Le LLM Gemini ne copiait pas les champs car ils n'étaient pas dans l'exemple !**
+
+**Flow du Problème:**
+```
+calculateSigTool.execute()
+    → Retourne { sig: { "2023": { marge_brute_globale: {valeur, pct_ca}, ...} } }
+         ↓
+ComptableAgent (LLM Gemini)
+    → Interprète selon l'instruction système (format ANCIEN)
+    → NE COPIE PAS les nouveaux champs ❌
+         ↓
+state.comptable.sig → Données incomplètes
+```
+
+**Solution Implémentée:**
+
+**1. Mise à jour du format SIG dans l'instruction (`ComptableAgent.ts` lignes 164-184)**
+```json
+"sig": {
+  "2024": {
+    "year": 2024,
+    "source": "compta_extraction",
+    "chiffre_affaires": { "valeur": 500000, "pct_ca": 100 },
+    "marge_commerciale": { "valeur": 200000, "pct_ca": 40 },
+    "marge_brute_globale": { "valeur": 340000, "pct_ca": 68 },
+    "autres_achats_charges_externes": { "valeur": 60000, "pct_ca": 12 },
+    "valeur_ajoutee": { "valeur": 180000, "pct_ca": 36 },
+    "salaires_personnel": { "valeur": 50000, "pct_ca": 10 },
+    "charges_sociales_personnel": { "valeur": 20000, "pct_ca": 4 },
+    "charges_exploitant": { "valeur": 35000, "pct_ca": 7 },
+    "ebe": { "valeur": 85000, "pct_ca": 17 },
+    "resultat_exploitation": { "valeur": 70000, "pct_ca": 14 },
+    "resultat_net": { "valeur": 55000, "pct_ca": 11 }
+  }
+}
+```
+
+**2. Nouvelle règle n°6 ajoutée (lignes 291-294)**
+```
+6. ⚠️ CRITIQUE SIG: Copier TOUS les champs retournés par calculateSig dans le JSON de sortie sig.
+   Le format est { "valeur": number, "pct_ca": number } pour chaque indicateur.
+   Ne PAS simplifier les valeurs - garder le format structuré exact retourné par le tool.
+   Champs OBLIGATOIRES: marge_brute_globale, autres_achats_charges_externes, charges_exploitant,
+                        salaires_personnel, charges_sociales_personnel
+```
+
+**Fichier modifié:** `server/adk/financial/agents/ComptableAgent.ts`
+
+**Impact:** Tous les tableaux dépendants (SIG, Valorisation, Business Plan) affichent désormais toutes les données extraites.
+
+---
+
+### Fix V3: Suppression des fallbacks dans calculateTabacValuationTool
+
+**Problème:** Le tableau "Méthode HYBRIDE Tabac/Presse/FDJ" affichait des valeurs **estimées** (8% du CA pour commissions, 25% pour CA boutique) au lieu de données extraites.
+
+**Solution:** Suppression des fallbacks (lignes 178-185, 243-250 de `calculateTabacValuationTool.ts`).
+
+**Avant (BUG):**
+```typescript
+if (commissionsNettes === 0) {
+  commissionsNettes = caTotal * 0.08;  // ❌ ESTIMATION INTERDITE
+}
+```
+
+**Après (FIX):**
+```typescript
+if (commissionsNettes === 0) {
+  console.warn('[calculateTabacValuation] ⚠️ Commissions nettes non fournies - aucune estimation');
+}
+```
+
+**Impact:** Le tableau affiche "0" ou "Non disponible" pour les données non extraites, au lieu de valeurs inventées.
+
+---
+
+### Fix V2: Correction de findExtractedSig dans calculateSigTool
+
+**Problème:** La fonction `findExtractedSig` perdait des champs lors du merge entre `key_values` et `sig`.
+
+**Solution:** Réécriture complète avec :
+1. Priorité `key_values` > `sig`
+2. Mapping explicite des champs (`charges_externes` → `autres_achats_charges_externes`)
+3. Ajout de `compte_de_resultat` aux `COMPTABLE_DOC_TYPES`
+
+**Fichier modifié:** `server/adk/financial/tools/accounting/calculateSigTool.ts`
+
+---
+
+### Fix: SIG Values Missing in HTML Report (accountingSection bypass)
+
+**Problème:** Les valeurs SIG extraites (`marge_brute_globale`, `charges_externes`, `charges_exploitant`) s'affichaient "-" dans le rapport HTML malgré une extraction réussie par `calculateSigTool`.
+
+**Cause Racine:** L'agent LLM `comptable` génère sa propre structure SIG résumée qui ne préserve pas tous les champs extraits par les outils. Le rapport HTML lisait depuis `state.comptable.sig` (sortie agent) au lieu des données d'extraction brutes.
+
+**Flow avant (BUG):**
+```
+Gemini Vision → extractedData.key_values → calculateSigTool (OK)
+                                          ↓
+                              comptable agent (LLM) → summarized SIG (loses fields!)
+                                          ↓
+                              accountingSection.ts → reads state.comptable.sig → "-"
+```
+
+**Flow après (FIX):**
+```
+Gemini Vision → extractedData.key_values → documentExtraction (state)
+                                          ↓
+                             accountingSection.ts → reads comptable.sig FIRST
+                                                  → FALLBACK to documentExtraction
+                                          ↓
+                             All values displayed ✅
+```
+
+**Solution implémentée:**
+
+**1. Nouvelle fonction helper (`accountingSection.ts`)**
+
+```typescript
+function getExtractedValueForYear(
+  documentExtraction: any,
+  year: string,
+  field: string
+): number {
+  // Cherche dans documentExtraction.documents[].extractedData.key_values
+  // Gère les alias de champs (charges_externes → autres_achats_charges_externes)
+  // Retourne 0 si non trouvé
+}
+```
+
+**2. Nouveau paramètre `documentExtraction`**
+
+```typescript
+export function generateAccountingSection(
+  comptable: any,
+  evolutionChart: any,
+  healthGauge: any,
+  businessPlan?: any,
+  userComments?: any,
+  documentExtraction?: any  // ✨ NOUVEAU
+): string
+```
+
+**3. Logique de fallback dans la boucle SIG**
+
+```typescript
+// Pour chaque indicateur et chaque année:
+value = extractValue(comptable.sig[y]?.[ind.key]);
+
+// Fallback si valeur manquante dans comptable.sig
+if (value === 0 || value === undefined) {
+  const fallbackFields = ['marge_brute_globale', 'autres_achats_charges_externes'];
+  if (fallbackFields.includes(ind.key)) {
+    value = getExtractedValueForYear(documentExtraction, y, ind.key);
+  }
+}
+```
+
+**Champs couverts par le fallback:**
+- `marge_brute_globale` (Marge Brute Globale)
+- `autres_achats_charges_externes` / `charges_externes` (Charges Externes)
+- `charges_exploitant` (Salaire Gérant)
+- `salaires_personnel` / `charges_sociales_personnel` (Frais de Personnel)
+
+**Fichiers modifiés:**
+
+| Fichier | Modification |
+|---------|--------------|
+| `sections/accountingSection.ts` | +55 lignes: helper `getExtractedValueForYear()`, nouveau paramètre, logique fallback |
+| `generateFinancialHtmlTool.ts` | +1 ligne: passage de `documentExtraction` à `generateAccountingSection()` |
+
+**Principe clé:** Le rapport HTML ne dépend plus de l'agent comptable pour les champs SIG critiques - il lit directement depuis les données extraites en fallback.
+
+---
+
 ### Transaction Cost Document Detection & Extraction
 
 Amélioration de la détection et extraction des documents de coûts de transaction (offres d'achat, projets de financement).

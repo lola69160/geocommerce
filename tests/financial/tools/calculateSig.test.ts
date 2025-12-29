@@ -6,6 +6,8 @@ describe('calculateSigTool', () => {
   let mockContext: ToolContext;
 
   beforeEach(() => {
+    // ✅ FIX V3 (2025-12-29): Utiliser key_values au lieu de tables
+    // Le nouveau comportement est extraction-only (pas de recalcul)
     mockContext = {
       state: {
         get: (key: string) => {
@@ -16,39 +18,57 @@ describe('calculateSigTool', () => {
                   year: 2023,
                   documentType: 'compte_de_resultat',
                   extractedData: {
-                    tables: [
-                      {
-                        name: 'compte_resultat',
-                        rows: [
-                          ['Chiffre d\'affaires', '450000'],
-                          ['Achats de marchandises', '270000'],
-                          ['Charges de personnel', '62000'],
-                          ['Impôts et taxes', '8000'],
-                          ['Dotations aux amortissements', '12000'],
-                          ['Résultat financier', '-4000'],
-                          ['Résultat exceptionnel', '1000'],
-                          ['Impôts sur les sociétés', '11000'],
-                        ]
-                      }
-                    ]
+                    // Format key_values: valeurs pré-extraites par Gemini Vision
+                    key_values: {
+                      chiffre_affaires: 450000,
+                      ventes_marchandises: 450000,
+                      achats_marchandises: 270000,
+                      marge_commerciale: 180000,
+                      valeur_ajoutee: 180000,
+                      charges_personnel: 62000,
+                      impots_taxes: 8000,
+                      ebe: 110000,
+                      dotations_amortissements: 12000,
+                      resultat_exploitation: 98000,
+                      resultat_financier: -4000,
+                      resultat_exceptionnel: 1000,
+                      resultat_net: 84000,
+                      // Champs additionnels (Issue #1 fix)
+                      marge_brute_globale: 180000,
+                      charges_externes: 25000,
+                      charges_exploitant: 35000,
+                      salaires_personnel: 50000,
+                      charges_sociales_personnel: 12000
+                    },
+                    sig: {
+                      chiffre_affaires: { valeur: 450000, pct_ca: 100 },
+                      ebe: { valeur: 110000, pct_ca: 24.44 },
+                      resultat_net: { valeur: 84000, pct_ca: 18.67 }
+                    }
                   }
                 },
                 {
                   year: 2022,
                   documentType: 'compte_de_resultat',
                   extractedData: {
-                    tables: [
-                      {
-                        name: 'compte_resultat',
-                        rows: [
-                          ['Chiffre d\'affaires', '420000'],
-                          ['Achats de marchandises', '252000'],
-                          ['Charges de personnel', '58000'],
-                          ['Impôts et taxes', '7500'],
-                          ['Dotations aux amortissements', '11000'],
-                        ]
-                      }
-                    ]
+                    key_values: {
+                      chiffre_affaires: 420000,
+                      ventes_marchandises: 420000,
+                      achats_marchandises: 252000,
+                      marge_commerciale: 168000,
+                      valeur_ajoutee: 168000,
+                      charges_personnel: 58000,
+                      impots_taxes: 7500,
+                      ebe: 102500,
+                      dotations_amortissements: 11000,
+                      resultat_exploitation: 91500,
+                      resultat_net: 78000
+                    },
+                    sig: {
+                      chiffre_affaires: { valeur: 420000, pct_ca: 100 },
+                      ebe: { valeur: 102500, pct_ca: 24.40 },
+                      resultat_net: { valeur: 78000, pct_ca: 18.57 }
+                    }
                   }
                 }
               ]
@@ -71,53 +91,45 @@ describe('calculateSigTool', () => {
     expect(result.sig['2022']).toBeDefined();
   });
 
-  it('should calculate correct marge commerciale', async () => {
+  it('should use extracted marge commerciale (no recalculation)', async () => {
     const result = await calculateSigTool.execute({}, mockContext);
 
     const sig2023 = result.sig['2023'];
 
-    // Marge commerciale = Ventes marchandises - Achats marchandises
-    // = 450000 - 270000 = 180000
+    // Marge commerciale extraite directement de key_values
     // Nouveau format: { valeur, pct_ca }
     expect(sig2023.marge_commerciale.valeur).toBe(180000);
     expect(sig2023.marge_commerciale.pct_ca).toBe(40); // 180000/450000 = 40%
   });
 
-  it('should calculate correct EBE', async () => {
+  it('should use extracted EBE (no recalculation)', async () => {
     const result = await calculateSigTool.execute({}, mockContext);
 
     const sig2023 = result.sig['2023'];
 
-    // Pour un commerce (pas de production)
-    // Valeur ajoutée = Marge commerciale (180000)
-    // EBE = Valeur ajoutée - Impôts & taxes (8000) - Charges personnel (62000)
-    // = 180000 - 8000 - 62000 = 110000
+    // EBE extrait directement de key_values
     // Nouveau format: { valeur, pct_ca }
     expect(sig2023.ebe.valeur).toBe(110000);
     expect(sig2023.ebe.pct_ca).toBeCloseTo(24.44, 1); // 110000/450000 ≈ 24.44%
   });
 
-  it('should calculate correct résultat d\'exploitation', async () => {
+  it('should use extracted résultat d\'exploitation (no recalculation)', async () => {
     const result = await calculateSigTool.execute({}, mockContext);
 
     const sig2023 = result.sig['2023'];
 
-    // Résultat d'exploitation = EBE - Dotations amortissements
-    // = 110000 - 12000 = 98000
+    // Résultat d'exploitation extrait directement
     // Nouveau format: { valeur, pct_ca }
     expect(sig2023.resultat_exploitation.valeur).toBe(98000);
     expect(sig2023.resultat_exploitation.pct_ca).toBeCloseTo(21.78, 1); // 98000/450000 ≈ 21.78%
   });
 
-  it('should calculate correct résultat net', async () => {
+  it('should use extracted résultat net (no recalculation)', async () => {
     const result = await calculateSigTool.execute({}, mockContext);
 
     const sig2023 = result.sig['2023'];
 
-    // Résultat courant = Résultat exploitation + Résultat financier
-    // = 98000 + (-4000) = 94000
-    // Résultat net = Résultat courant + Résultat exceptionnel - Impôts
-    // = 94000 + 1000 - 11000 = 84000
+    // Résultat net extrait directement
     // Nouveau format: { valeur, pct_ca }
     expect(sig2023.resultat_net.valeur).toBe(84000);
     expect(sig2023.resultat_net.pct_ca).toBeCloseTo(18.67, 1); // 84000/450000 ≈ 18.67%
@@ -149,11 +161,16 @@ describe('calculateSigTool', () => {
                   year: 2023,
                   documentType: 'bilan',
                   extractedData: {
-                    tables: [
-                      {
-                        rows: [['Chiffre d\'affaires', '100000']]
-                      }
-                    ]
+                    key_values: {
+                      chiffre_affaires: 100000,
+                      ebe: 25000,
+                      resultat_net: 15000
+                    },
+                    sig: {
+                      chiffre_affaires: { valeur: 100000, pct_ca: 100 },
+                      ebe: { valeur: 25000, pct_ca: 25 },
+                      resultat_net: { valeur: 15000, pct_ca: 15 }
+                    }
                   }
                 }
               ]
@@ -185,18 +202,25 @@ describe('calculateSigTool', () => {
                   year: 2023,
                   documentType: 'bilan',
                   extractedData: {
-                    tables: [
-                      { rows: [['Chiffre d\'affaires', '100000']] }
-                    ]
+                    key_values: {
+                      chiffre_affaires: 100000,
+                      ebe: 25000,
+                      resultat_net: 15000
+                    },
+                    sig: {
+                      chiffre_affaires: { valeur: 100000, pct_ca: 100 },
+                      ebe: { valeur: 25000, pct_ca: 25 },
+                      resultat_net: { valeur: 15000, pct_ca: 15 }
+                    }
                   }
                 },
                 {
                   year: 2023,
                   documentType: 'bail',  // Should be filtered
                   extractedData: {
-                    tables: [
-                      { rows: [['Loyer annuel', '24000']] }
-                    ]
+                    key_values: {
+                      loyer_annuel: 24000
+                    }
                   }
                 }
               ]
@@ -217,7 +241,7 @@ describe('calculateSigTool', () => {
     expect(result.sig['2023'].chiffre_affaires.valeur).toBe(100000);
   });
 
-  it('should handle negative values (pertes)', async () => {
+  it('should handle negative values (pertes) from extraction', async () => {
     const lossContext = {
       state: {
         get: (key: string) => {
@@ -228,17 +252,17 @@ describe('calculateSigTool', () => {
                   year: 2023,
                   documentType: 'compte_de_resultat',
                   extractedData: {
-                    tables: [
-                      {
-                        rows: [
-                          ['Chiffre d\'affaires', '100000'],
-                          ['Achats de marchandises', '80000'],
-                          ['Charges de personnel', '50000'],  // Plus élevé que marge
-                          ['Résultat financier', '-5000'],
-                          ['Résultat exceptionnel', '-2000'],
-                        ]
-                      }
-                    ]
+                    key_values: {
+                      chiffre_affaires: 100000,
+                      marge_commerciale: 20000,
+                      ebe: -30000, // Perte
+                      resultat_net: -40000
+                    },
+                    sig: {
+                      chiffre_affaires: { valeur: 100000, pct_ca: 100 },
+                      ebe: { valeur: -30000, pct_ca: -30 },
+                      resultat_net: { valeur: -40000, pct_ca: -40 }
+                    }
                   }
                 }
               ]
@@ -255,12 +279,13 @@ describe('calculateSigTool', () => {
     expect(result.error).toBeUndefined();
     const sig = result.sig['2023'];
 
-    // Marge = 100000 - 80000 = 20000
+    // Marge extraite directement
     // Nouveau format: { valeur, pct_ca }
     expect(sig.marge_commerciale.valeur).toBe(20000);
     expect(sig.marge_commerciale.pct_ca).toBe(20); // 20000/100000 = 20%
 
-    // EBE = 20000 - 50000 = -30000 (négatif)
+    // EBE négatif extrait directement
+    expect(sig.ebe.valeur).toBe(-30000);
     expect(sig.ebe.valeur).toBeLessThan(0);
   });
 
@@ -269,5 +294,18 @@ describe('calculateSigTool', () => {
 
     expect(result.yearsAnalyzed).toEqual([2023, 2022]);
     expect(result.yearsAnalyzed[0]).toBeGreaterThan(result.yearsAnalyzed[1]);
+  });
+
+  it('should extract additional SIG fields (marge_brute_globale, charges_externes, etc.)', async () => {
+    const result = await calculateSigTool.execute({}, mockContext);
+
+    const sig2023 = result.sig['2023'];
+
+    // ✅ Issue #1 fix: Ces champs doivent être extraits
+    expect(sig2023.marge_brute_globale?.valeur).toBe(180000);
+    expect(sig2023.autres_achats_charges_externes?.valeur).toBe(25000);
+    expect(sig2023.charges_exploitant?.valeur).toBe(35000);
+    expect(sig2023.salaires_personnel?.valeur).toBe(50000);
+    expect(sig2023.charges_sociales_personnel?.valeur).toBe(12000);
   });
 });

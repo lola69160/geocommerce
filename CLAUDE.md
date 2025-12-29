@@ -108,3 +108,51 @@ Special handling for Tabac commerce:
 - **Digitalisation**: Limited (+2-5% CA) due to delivery restrictions
 
 See [docs/FINANCIAL_CHANGELOG.md](docs/FINANCIAL_CHANGELOG.md) for implementation details.
+
+### Financial Pipeline - Règles de Données Extraites (CRITICAL)
+
+**Principe fondamental**: Les données historiques (N, N-1, N-2) proviennent UNIQUEMENT des extractions. Pas de recalcul, pas de fallback.
+
+#### Priorité des Sources
+| Priorité | Source | Usage |
+|----------|--------|-------|
+| 0 | SIG extrait des documents COMPTA | Données historiques ✅ |
+| 1 | `key_values` de Gemini Vision | Données historiques ✅ |
+| ❌ | Calcul/estimation | Données futures uniquement |
+
+#### Format SIG Standard
+```typescript
+// Tous les indicateurs utilisent ce format
+interface ValeurSig {
+  valeur: number;    // Valeur en euros
+  pct_ca: number;    // % du Chiffre d'Affaires
+}
+// Exemple: "ebe": { "valeur": 85000, "pct_ca": 17 }
+```
+
+#### Champs SIG Obligatoires
+- `marge_brute_globale`, `autres_achats_charges_externes`, `charges_exploitant`
+- `salaires_personnel`, `charges_sociales_personnel`
+
+#### Mapping des Champs
+| Extraction Gemini | SIG Output |
+|-------------------|------------|
+| `charges_externes` | `autres_achats_charges_externes` |
+| `charges_exploitant` | `charges_exploitant` (salaire gérant) |
+
+#### Règles Anti-Fallback
+```typescript
+// ❌ INTERDIT dans les tools de données historiques
+if (value === 0) { value = caTotal * 0.08; }
+
+// ✅ CORRECT
+if (value === 0) { console.warn('Valeur non extraite'); }
+```
+
+**Fichiers clés:**
+- `ComptableAgent.ts` - Instruction système avec format SIG
+- `calculateSigTool.ts` - Extraction sans recalcul
+- `calculateTabacValuationTool.ts` - Pas d'estimation 8%/25%
+- `accountingSection.ts` - Afficher "-" si manquant
+
+See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for complete priority rules.

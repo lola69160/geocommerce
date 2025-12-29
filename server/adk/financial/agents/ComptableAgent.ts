@@ -164,20 +164,22 @@ FORMAT DE SORTIE JSON (STRICT) :
   "sig": {
     "2024": {
       "year": 2024,
-      "chiffre_affaires": 500000,
-      "achats_marchandises": 300000,
-      "marge_commerciale": 200000,
-      "production": 0,
-      "valeur_ajoutee": 180000,
-      "charges_personnel": 80000,
-      "ebe": 85000,
-      "dotations_amortissements": 15000,
-      "resultat_exploitation": 70000,
-      "resultat_financier": -5000,
-      "resultat_courant": 65000,
-      "resultat_exceptionnel": 0,
-      "impots": 10000,
-      "resultat_net": 55000
+      "source": "compta_extraction",
+      "chiffre_affaires": { "valeur": 500000, "pct_ca": 100 },
+      "marge_commerciale": { "valeur": 200000, "pct_ca": 40 },
+      "marge_brute_globale": { "valeur": 340000, "pct_ca": 68 },
+      "autres_achats_charges_externes": { "valeur": 60000, "pct_ca": 12 },
+      "valeur_ajoutee": { "valeur": 180000, "pct_ca": 36 },
+      "salaires_personnel": { "valeur": 50000, "pct_ca": 10 },
+      "charges_sociales_personnel": { "valeur": 20000, "pct_ca": 4 },
+      "charges_exploitant": { "valeur": 35000, "pct_ca": 7 },
+      "ebe": { "valeur": 85000, "pct_ca": 17 },
+      "dotations_amortissements": { "valeur": 15000, "pct_ca": 3 },
+      "resultat_exploitation": { "valeur": 70000, "pct_ca": 14 },
+      "resultat_financier": { "valeur": -5000, "pct_ca": -1 },
+      "resultat_courant": { "valeur": 65000, "pct_ca": 13 },
+      "resultat_exceptionnel": { "valeur": 0, "pct_ca": 0 },
+      "resultat_net": { "valeur": 55000, "pct_ca": 11 }
     }
   },
 
@@ -286,6 +288,10 @@ RÈGLES :
 3. Pour alertes : comparer aux benchmarks sectoriels (comparisons[].position)
 4. Pour synthese : résumer en 3-5 phrases max les points clés, mentionner l'EBE Normatif si différent de l'EBE comptable
 5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
+6. ⚠️ CRITIQUE SIG: Copier TOUS les champs retournés par calculateSig dans le JSON de sortie sig.
+   Le format est { "valeur": number, "pct_ca": number } pour chaque indicateur.
+   Ne PAS simplifier les valeurs - garder le format structuré exact retourné par le tool.
+   Champs OBLIGATOIRES: marge_brute_globale, autres_achats_charges_externes, charges_exploitant, salaires_personnel, charges_sociales_personnel
 
 GESTION D'ERREURS :
 - Si aucun document dans state.documentExtraction :

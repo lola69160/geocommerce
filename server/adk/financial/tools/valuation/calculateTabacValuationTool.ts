@@ -175,17 +175,13 @@ export const calculateTabacValuationTool = new FunctionTool({
       let commissionsNettes = params.commissionsNettesAnnuelles || 0;
       let detailCommissions = params.detailCommissions;
 
-      // Si commissions non fournies, essayer d'extraire depuis les documents
-      if (commissionsNettes === 0 && documentExtraction?.documents) {
-        // TODO: Extraire commissions depuis les documents comptables
-        // Pour l'instant, on utilise une estimation basée sur le CA
-        // Ratio moyen: Commissions Tabac ≈ 8-10% du CA Tabac
-        const caTotal = comptable?.sig?.[Object.keys(comptable.sig)[0]]?.chiffre_affaires || 0;
-        if (caTotal > 0) {
-          // Estimation conservatrice: 8% du CA total
-          commissionsNettes = Math.round(caTotal * 0.08);
-          console.log('[calculateTabacValuation] Commissions estimées depuis CA:', commissionsNettes);
-        }
+      // ✅ FIX V3 (2025-12-29): Pas d'estimation - données extraites uniquement
+      // Les commissions doivent provenir de:
+      // 1. Paramètres explicites (commissionsNettesAnnuelles)
+      // 2. Extraction depuis documents comptables (future implémentation)
+      // Si absents → valeur = 0, le rapport affichera "Non disponible"
+      if (commissionsNettes === 0) {
+        console.warn('[calculateTabacValuation] ⚠️ Commissions nettes non fournies - aucune estimation');
       }
 
       if (commissionsNettes === 0) {
@@ -244,15 +240,13 @@ export const calculateTabacValuationTool = new FunctionTool({
       // ========================================
       let caActiviteBoutique = params.caActiviteBoutiqueAnnuel || 0;
 
-      // Si CA boutique non fourni, estimation depuis CA total
-      if (caActiviteBoutique === 0 && comptable?.sig) {
-        const caTotal = comptable.sig[Object.keys(comptable.sig)[0]]?.chiffre_affaires || 0;
-        if (caTotal > 0) {
-          // Estimation: CA Boutique ≈ 20-30% du CA total (dépend du commerce)
-          // On prend 25% comme estimation médiane
-          caActiviteBoutique = Math.round(caTotal * 0.25);
-          console.log('[calculateTabacValuation] CA Boutique estimé depuis CA total:', caActiviteBoutique);
-        }
+      // ✅ FIX V3 (2025-12-29): Pas d'estimation - données extraites uniquement
+      // Le CA boutique doit provenir de:
+      // 1. Paramètres explicites (caActiviteBoutiqueAnnuel)
+      // 2. Extraction depuis documents comptables (future implémentation)
+      // Si absent → valeur = 0, le rapport affichera "Non disponible"
+      if (caActiviteBoutique === 0) {
+        console.warn('[calculateTabacValuation] ⚠️ CA Boutique non fourni - aucune estimation');
       }
 
       const blocCommercial = {

@@ -36,6 +36,8 @@ const TransactionCostsOutputSchema = z.object({
     tva: z.number().describe('TVA sur honoraires et frais en €'),
     stock_fonds_roulement: z.number().describe('Stock et fonds de roulement en €'),
     loyer_avance: z.number().describe('Loyer d\'avance en €'),
+    // ✅ NEW (2025-12-29): Extraction du loyer annuel actuel depuis document transaction
+    loyer_annuel_actuel: z.number().describe('Loyer annuel actuel du local en €'),
     total_investissement: z.number().describe('Total de l\'investissement en €'),
     apport_requis: z.number().describe('Apport personnel minimum requis en €'),
     credit_sollicite: z.number().describe('Crédit sollicité en €'),
@@ -61,6 +63,7 @@ Le document présente généralement:
    - Stock et fonds de roulement
    - Travaux (si applicable)
    - Loyer d'avance
+   - **Loyer annuel actuel** (loyer du local mentionné dans le document)
    - TOTAL DE L'INVESTISSEMENT
 
 2. **FINANCEMENT SOLLICITÉ**
@@ -72,6 +75,10 @@ Le document présente généralement:
    - Taux du crédit (en %)
    - Mensualités hors assurances
    - Annuité hors assurances
+
+3. **INFORMATIONS LOCATIVES** (si mentionnées)
+   - Loyer annuel actuel
+   - Loyer mensuel actuel (à multiplier par 12 pour obtenir l'annuel)
 
 EXTRACTION DES MONTANTS:
 - Convertir TOUS les montants en NOMBRES (pas de strings)
@@ -182,6 +189,11 @@ export const extractTransactionCostsTool = new FunctionTool({
       const extracted = JSON.parse(text);
 
       // Valider et structurer les données
+      // ✅ NEW (2025-12-29): Extraction du loyer annuel actuel
+      // Si loyer mensuel fourni, convertir en annuel
+      const loyerMensuel = extracted.loyer_mensuel_actuel || extracted.loyer_mensuel || 0;
+      const loyerAnnuel = extracted.loyer_annuel_actuel || extracted.loyer_annuel || (loyerMensuel > 0 ? loyerMensuel * 12 : 0);
+
       const transactionCosts = {
         prix_fonds: extracted.prix_fonds || extracted.prix_du_fonds || 0,
         honoraires_ht: extracted.honoraires_ht || extracted.honoraires_negociation_ht || 0,
@@ -191,6 +203,7 @@ export const extractTransactionCostsTool = new FunctionTool({
         tva: extracted.tva || extracted.tva_20 || 0,
         stock_fonds_roulement: extracted.stock_fonds_roulement || extracted.stock_et_fonds_de_roulement || 0,
         loyer_avance: extracted.loyer_avance || 0,
+        loyer_annuel_actuel: loyerAnnuel,  // ✅ NEW
         total_investissement: extracted.total_investissement || extracted.total_arrondi || 0,
         apport_requis: extracted.apport_requis || extracted.apport_personnel_mini || 0,
         credit_sollicite: extracted.credit_sollicite || extracted.credit_sur_7_annes || 0,

@@ -149,7 +149,10 @@ function generateRentSimulation(sim: any): string {
     const la = sim.loyerActuel;
     if (la.annuel !== null && la.annuel !== undefined) {
       let sourceLabel = '';
-      if (la.source === 'comptabilite') {
+      if (la.source === 'document_transaction') {
+        // ✅ NEW (2025-12-29): Source prioritaire = document de transaction
+        sourceLabel = 'Document offre/transaction';
+      } else if (la.source === 'comptabilite') {
         sourceLabel = `Comptabilité ${la.anneeSource || ''}`;
       } else if (la.source === 'bail_document') {
         sourceLabel = 'Document bail';

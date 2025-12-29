@@ -134,8 +134,8 @@ export const generateFinancialHtmlTool = new FunctionTool({
         sections_included.push('strategic_commentary');
       }
 
-      // 3. Analyse comptable
-      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, businessPlan, userComments);
+      // 3. Analyse comptable (with documentExtraction fallback for missing SIG values)
+      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, businessPlan, userComments, documentExtraction);
       sections_included.push('accounting_analysis');
 
       // 4. Valorisation (avec userComments et options pour section Tabac complète)

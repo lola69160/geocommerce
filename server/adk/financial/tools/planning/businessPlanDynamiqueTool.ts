@@ -140,7 +140,10 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       const lastYearStr = lastYear.toString();
 
       // ========================================
-      // ÉTAPE 2: Récupérer les données actuelles
+      // ÉTAPE 2: Récupérer les données actuelles (EXTRACTION STRICTE)
+      // ⚠️ (2025-12-29): Les données historiques proviennent de comptable.sig
+      // qui contient UNIQUEMENT les valeurs extraites des documents comptables.
+      // Aucun recalcul n'est effectué sur ces données historiques.
       // ========================================
 
       // CA actuel (moyenne 3 ans ou dernière année)

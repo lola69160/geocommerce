@@ -98,12 +98,60 @@ export const calculateLoyerSimulationTool = new FunctionTool({
       }
 
       // ========================================
-      // ÉTAPE 2: Loyer actuel (depuis bail/comptabilité)
+      // ÉTAPE 2: Loyer actuel
+      // PRIORITÉ DES SOURCES (2025-12-29):
+      // 1. Document de transaction (cout_transaction) - extraction directe
+      // 2. Bail/comptabilité (immobilier.bail)
+      // 3. UserComments (loyer_actuel_mensuel * 12)
       // ========================================
+
+      // Lire documentExtraction pour transactionCosts
+      let documentExtraction = toolContext?.state.get('documentExtraction') as any;
+      if (typeof documentExtraction === 'string') {
+        try { documentExtraction = JSON.parse(documentExtraction); } catch (e) {}
+      }
+
+      // Source 1: Document de transaction (PRIORITAIRE)
+      const transactionCosts = documentExtraction?.transactionCosts;
+      const loyerFromTransaction = transactionCosts?.loyer_annuel_actuel || 0;
+
+      // Source 2: Bail/comptabilité
       const bail = immobilier?.bail;
-      const loyerActuelAnnuel = bail?.loyer_annuel_hc || params.loyerActuelAnnuel || null;
-      const loyerSource = bail?.loyer_source || 'non_disponible';
-      const loyerAnneeSource = bail?.loyer_annee_source || undefined;
+      const loyerFromBail = bail?.loyer_annuel_hc || 0;
+      const bailSource = bail?.loyer_source || 'non_disponible';
+      const bailAnneeSource = bail?.loyer_annee_source || undefined;
+
+      // Source 3: UserComments (loyer_actuel_mensuel * 12)
+      const loyerFromUserMensuel = userComments?.loyer?.loyer_actuel_mensuel || 0;
+      const loyerFromUser = loyerFromUserMensuel > 0 ? loyerFromUserMensuel * 12 : 0;
+
+      // Déterminer la source à utiliser (par priorité)
+      let loyerActuelAnnuel: number | null = null;
+      let loyerSource = 'non_disponible';
+      let loyerAnneeSource: string | undefined = undefined;
+
+      if (loyerFromTransaction > 0) {
+        // Priorité 1: Document de transaction
+        loyerActuelAnnuel = loyerFromTransaction;
+        loyerSource = 'document_transaction';
+        console.log('[calculateLoyerSimulation] ✅ Loyer depuis document transaction:', loyerFromTransaction);
+      } else if (loyerFromBail > 0) {
+        // Priorité 2: Bail/comptabilité
+        loyerActuelAnnuel = loyerFromBail;
+        loyerSource = bailSource;
+        loyerAnneeSource = bailAnneeSource;
+        console.log('[calculateLoyerSimulation] ✅ Loyer depuis bail/compta:', loyerFromBail);
+      } else if (loyerFromUser > 0) {
+        // Priorité 3: UserComments
+        loyerActuelAnnuel = loyerFromUser;
+        loyerSource = 'utilisateur';
+        console.log('[calculateLoyerSimulation] ✅ Loyer depuis userComments:', loyerFromUser);
+      } else if (params.loyerActuelAnnuel) {
+        // Fallback: paramètre d'entrée
+        loyerActuelAnnuel = params.loyerActuelAnnuel;
+        loyerSource = 'parametre';
+        console.log('[calculateLoyerSimulation] ⚠️ Loyer depuis paramètre:', params.loyerActuelAnnuel);
+      }
 
       const loyerActuel = {
         annuel: loyerActuelAnnuel,
@@ -112,7 +160,7 @@ export const calculateLoyerSimulationTool = new FunctionTool({
         anneeSource: loyerAnneeSource
       };
 
-      console.log('[calculateLoyerSimulation] Loyer actuel:', loyerActuel);
+      console.log('[calculateLoyerSimulation] Loyer actuel final:', loyerActuel);
 
       // ========================================
       // ÉTAPE 3: Nouveau loyer (UNIQUEMENT depuis userComments)

@@ -11,20 +11,35 @@ import { logSigCalculation } from '../../../utils/extractionLogger';
  * Calcule les Soldes Intermédiaires de Gestion (SIG) pour chaque année.
  * Les SIG sont les indicateurs clés de performance financière d'une entreprise.
  *
+ * ⚠️ RÈGLE FONDAMENTALE (2025-12-29):
+ * Les données historiques (années N, N-1, N-2...) doivent provenir UNIQUEMENT
+ * des extractions de documents comptables. AUCUN recalcul, AUCUN fallback.
+ * Seules les données futures (N+1, N+2...) peuvent être calculées/projetées.
+ *
  * PRIORITÉ D'EXTRACTION:
  * 0. SIG extrait directement des documents COMPTA préprocessés (recommandé)
- * 1. key_values de l'extraction Gemini Vision (fallback)
- * 2. Parsing des tableaux avec heuristiques (dernier recours)
+ * 1. key_values de l'extraction Gemini Vision (documents comptables uniquement)
  *
- * Formules des SIG (comptabilité française):
- * 1. Marge commerciale = Ventes marchandises - Achats marchandises
- * 2. Production = Production vendue + Production stockée + Production immobilisée
- * 3. Valeur ajoutée = Marge commerciale + Production - Consommations externes
- * 4. EBE = Valeur ajoutée + Subventions - Impôts & taxes - Charges personnel
- * 5. Résultat d'exploitation = EBE + Autres produits - Autres charges - Dotations amortissements
- * 6. Résultat courant = Résultat exploitation + Résultat financier
- * 7. Résultat net = Résultat courant + Résultat exceptionnel - Impôts
+ * DOCUMENTS COMPTABLES VALIDES:
+ * - liasse_fiscale, bilan, compte_resultat, compta
+ *
+ * DOCUMENTS EXCLUS (ne contiennent pas de données SIG):
+ * - projet_vente, cout_transaction, bail, autre, offre_achat
  */
+
+// Types de documents comptables valides pour l'extraction SIG
+const COMPTABLE_DOC_TYPES = ['liasse_fiscale', 'bilan', 'compte_resultat', 'compte_de_resultat', 'compta'];
+
+// Types de documents à EXCLURE (ne contiennent pas de données SIG historiques)
+const EXCLUDED_DOC_TYPES = ['projet_vente', 'cout_transaction', 'bail', 'autre', 'offre_achat'];
+
+// Priorité des documents (plus petit = plus prioritaire)
+const DOC_PRIORITY: Record<string, number> = {
+  'compta_preprocessed': 1,  // COMPTA2023.pdf (préprocessé par ComptaPreprocessingAgent)
+  'liasse_fiscale': 2,
+  'compte_resultat': 3,
+  'bilan': 4
+};
 
 const CalculateSigInputSchema = z.object({
   // Optionnel - le tool lira automatiquement depuis state.documentExtraction
@@ -115,16 +130,46 @@ export const calculateSigTool = new FunctionTool({
 
       const { documents } = documentExtraction;
 
-      // Grouper les documents par année
+      // ============================================================
+      // FILTRAGE STRICT: Seuls les documents comptables sont utilisés
+      // ============================================================
       const documentsByYear: { [year: number]: any[] } = {};
 
       for (const doc of documents) {
-        if (doc.year && doc.documentType !== 'bail' && doc.documentType !== 'autre') {
+        if (!doc.year) continue;
+
+        const docType = (doc.documentType || '').toLowerCase();
+        const filename = (doc.filename || '').toLowerCase();
+
+        // Vérifier si c'est un document comptable valide
+        const isPreprocessedCompta = filename.startsWith('compta');
+        const isComptableDocType = COMPTABLE_DOC_TYPES.includes(docType);
+        const isExcludedDocType = EXCLUDED_DOC_TYPES.includes(docType);
+
+        // EXCLURE les documents non-comptables
+        if (isExcludedDocType) {
+          console.log(`[calculateSig] ⛔ EXCLUS: ${doc.filename} (type: ${docType}) - document non-comptable`);
+          continue;
+        }
+
+        // INCLURE uniquement les documents comptables
+        if (isPreprocessedCompta || isComptableDocType) {
           if (!documentsByYear[doc.year]) {
             documentsByYear[doc.year] = [];
           }
+          // Marquer les documents préprocessés pour priorité
+          doc._isPreprocessed = isPreprocessedCompta;
+          doc._priority = isPreprocessedCompta ? DOC_PRIORITY['compta_preprocessed'] : (DOC_PRIORITY[docType] || 99);
           documentsByYear[doc.year].push(doc);
+          console.log(`[calculateSig] ✅ INCLUS: ${doc.filename} (type: ${docType}, année: ${doc.year}, priorité: ${doc._priority})`);
+        } else {
+          console.log(`[calculateSig] ⚠️ IGNORÉ: ${doc.filename} (type: ${docType}) - type non reconnu comme comptable`);
         }
+      }
+
+      // Trier les documents par priorité pour chaque année (préprocessés en premier)
+      for (const year of Object.keys(documentsByYear)) {
+        documentsByYear[parseInt(year)].sort((a, b) => (a._priority || 99) - (b._priority || 99));
       }
 
       const years = Object.keys(documentsByYear).map(y => parseInt(y)).sort((a, b) => b - a);
@@ -158,67 +203,77 @@ export const calculateSigTool = new FunctionTool({
         }
 
         // ============================================================
-        // PRIORITÉ 1 & 2: key_values ou parsing de tableaux
+        // PRIORITÉ 1: key_values de l'extraction Gemini Vision
+        // ⚠️ EXTRACTION STRICTE: Pas de recalcul pour données historiques
         // ============================================================
         const values = extractAccountingValues(yearDocs);
 
-        // ✅ FIX: Utiliser les valeurs directes extraites si disponibles, sinon calculer
-        // Cela évite les erreurs de cascade quand ventes_marchandises n'est pas extrait correctement
-        const production = values.production_vendue + values.production_stockee + values.production_immobilisee;
+        console.log(`[calculateSig] 📊 PRIORITÉ 1: Using Vision key_values for year ${year}`);
+        console.log(`[calculateSig]   └─ Source: ${values.source}`);
 
-        // Marge commerciale: utiliser valeur directe SI disponible ET non nulle
-        const marge_commerciale = values.marge_commerciale_directe > 0
-          ? values.marge_commerciale_directe
-          : (values.ventes_marchandises - values.achats_marchandises);
+        // ⚠️ RÈGLE FONDAMENTALE: Utiliser UNIQUEMENT les valeurs extraites
+        // AUCUN RECALCUL pour les données historiques
+        const marge_commerciale = values.marge_commerciale_directe;
+        const valeur_ajoutee = values.valeur_ajoutee_directe;
+        const ebe = values.ebe_direct;
+        const resultat_exploitation = values.resultat_exploitation_direct;
+        const resultat_net = values.resultat_net_direct;
 
-        // Valeur ajoutée: utiliser valeur directe SI disponible ET non nulle
-        const valeur_ajoutee = values.valeur_ajoutee_directe > 0
-          ? values.valeur_ajoutee_directe
-          : (marge_commerciale + production - values.consommations_externes);
+        // Log des valeurs extraites (pour audit)
+        console.log(`[calculateSig]   └─ Valeurs extraites (sans recalcul):`);
+        console.log(`[calculateSig]       CA: ${values.chiffre_affaires}€`);
+        console.log(`[calculateSig]       Marge commerciale: ${marge_commerciale}€`);
+        console.log(`[calculateSig]       Valeur ajoutée: ${valeur_ajoutee}€`);
+        console.log(`[calculateSig]       EBE: ${ebe}€`);
+        console.log(`[calculateSig]       Résultat exploitation: ${resultat_exploitation}€`);
+        console.log(`[calculateSig]       Résultat net: ${resultat_net}€`);
 
-        // EBE: utiliser valeur directe SI disponible (peut être 0 ou négatif légitimement)
-        const ebe = values.ebe_direct !== 0
-          ? values.ebe_direct
-          : (valeur_ajoutee + values.subventions - values.impots_taxes - values.charges_personnel);
-
-        // Résultat d'exploitation: utiliser valeur directe SI disponible
-        const resultat_exploitation = values.resultat_exploitation_direct !== 0
-          ? values.resultat_exploitation_direct
-          : (ebe + values.autres_produits - values.autres_charges - values.dotations_amortissements);
-
-        const resultat_courant = resultat_exploitation + values.resultat_financier;
-
-        // Résultat net: utiliser valeur directe SI disponible
-        const resultat_net = values.resultat_net_direct !== 0
-          ? values.resultat_net_direct
-          : (resultat_courant + values.resultat_exceptionnel - values.impots_societes);
-
-        // ✅ VALIDATION: Détecter les erreurs de calcul suspectes
-        if (marge_commerciale >= values.chiffre_affaires * 0.95 && values.chiffre_affaires > 0) {
-          console.warn(`[calculateSig] ⚠️ ALERTE: marge_commerciale (${marge_commerciale}) ≈ CA (${values.chiffre_affaires}) - possible erreur de calcul!`);
+        // Avertissement si valeurs critiques manquantes (mais pas de fallback)
+        if (values.chiffre_affaires === 0) {
+          console.warn(`[calculateSig] ⚠️ ATTENTION: CA non extrait pour ${year} - vérifier les documents`);
         }
-        if (valeur_ajoutee >= values.chiffre_affaires * 0.95 && values.chiffre_affaires > 0) {
-          console.warn(`[calculateSig] ⚠️ ALERTE: valeur_ajoutee (${valeur_ajoutee}) ≈ CA (${values.chiffre_affaires}) - possible erreur de calcul!`);
+        if (ebe === 0 && marge_commerciale === 0) {
+          console.warn(`[calculateSig] ⚠️ ATTENTION: EBE et Marge à 0 pour ${year} - vérifier l'extraction`);
         }
 
         // Calculer les % CA
         const ca = values.chiffre_affaires || 1; // Éviter division par 0
         const calcPctCa = (v: number) => ca > 0 ? Math.round((v / ca) * 10000) / 100 : 0;
 
+        // Résultat courant = Résultat exploitation (si disponible) ou 0
+        const resultat_courant = resultat_exploitation || 0;
+
         sig[year.toString()] = {
           year,
-          source: values.source || 'table_parsing',
+          source: values.source || 'vision_key_values',
 
-          // Nouvelles valeurs avec % CA
+          // Valeurs extraites (SANS recalcul) avec % CA
           chiffre_affaires: { valeur: values.chiffre_affaires, pct_ca: 100 },
-          marge_commerciale: { valeur: Math.round(marge_commerciale), pct_ca: calcPctCa(marge_commerciale) },
-          valeur_ajoutee: { valeur: Math.round(valeur_ajoutee), pct_ca: calcPctCa(valeur_ajoutee) },
-          ebe: { valeur: Math.round(ebe), pct_ca: calcPctCa(ebe) },
-          resultat_exploitation: { valeur: Math.round(resultat_exploitation), pct_ca: calcPctCa(resultat_exploitation) },
-          resultat_courant: { valeur: Math.round(resultat_courant), pct_ca: calcPctCa(resultat_courant) },
-          resultat_net: { valeur: Math.round(resultat_net), pct_ca: calcPctCa(resultat_net) },
+          marge_commerciale: { valeur: marge_commerciale || 0, pct_ca: calcPctCa(marge_commerciale || 0) },
+          valeur_ajoutee: { valeur: valeur_ajoutee || 0, pct_ca: calcPctCa(valeur_ajoutee || 0) },
+          ebe: { valeur: ebe || 0, pct_ca: calcPctCa(ebe || 0) },
+          resultat_exploitation: { valeur: resultat_exploitation || 0, pct_ca: calcPctCa(resultat_exploitation || 0) },
+          resultat_courant: { valeur: resultat_courant, pct_ca: calcPctCa(resultat_courant) },
+          resultat_net: { valeur: resultat_net || 0, pct_ca: calcPctCa(resultat_net || 0) },
 
-          // Champs optionnels
+          // Champs additionnels extraits directement (SANS recalcul)
+          marge_brute_globale: values.marge_brute_globale_direct
+            ? { valeur: values.marge_brute_globale_direct, pct_ca: calcPctCa(values.marge_brute_globale_direct) }
+            : undefined,
+          autres_achats_charges_externes: values.autres_achats_charges_externes_direct
+            ? { valeur: values.autres_achats_charges_externes_direct, pct_ca: calcPctCa(values.autres_achats_charges_externes_direct) }
+            : undefined,
+          charges_exploitant: values.charges_exploitant_direct
+            ? { valeur: values.charges_exploitant_direct, pct_ca: calcPctCa(values.charges_exploitant_direct) }
+            : undefined,
+          salaires_personnel: values.salaires_personnel_direct
+            ? { valeur: values.salaires_personnel_direct, pct_ca: calcPctCa(values.salaires_personnel_direct) }
+            : undefined,
+          charges_sociales_personnel: values.charges_sociales_personnel_direct
+            ? { valeur: values.charges_sociales_personnel_direct, pct_ca: calcPctCa(values.charges_sociales_personnel_direct) }
+            : undefined,
+
+          // Champs optionnels extraits
           impots_taxes: values.impots_taxes ? { valeur: values.impots_taxes, pct_ca: calcPctCa(values.impots_taxes) } : undefined,
           dotations_amortissements: values.dotations_amortissements ? { valeur: values.dotations_amortissements, pct_ca: calcPctCa(values.dotations_amortissements) } : undefined,
           resultat_financier: values.resultat_financier ? { valeur: values.resultat_financier, pct_ca: calcPctCa(values.resultat_financier) } : undefined,
@@ -227,7 +282,7 @@ export const calculateSigTool = new FunctionTool({
           // Compatibilité avec l'ancien format
           _legacy: {
             achats_marchandises: values.achats_marchandises,
-            production: Math.round(production),
+            production: 0,  // Non utilisé car pas de recalcul
             charges_personnel: values.charges_personnel,
             impots: values.impots_societes
           }
@@ -311,6 +366,12 @@ function extractAccountingValues(yearDocs: any[]): {
   ebe_direct: number;
   resultat_exploitation_direct: number;
   resultat_net_direct: number;
+  // NEW: Additional SIG fields for complete extraction
+  marge_brute_globale_direct: number;
+  autres_achats_charges_externes_direct: number;
+  charges_exploitant_direct: number;
+  salaires_personnel_direct: number;
+  charges_sociales_personnel_direct: number;
 } {
   // PRIORITÉ 1: Utiliser key_values de Vision si disponible
   let hasKeyValues = false;
@@ -350,12 +411,18 @@ function extractAccountingValues(yearDocs: any[]): {
           resultat_financier: 0,
           resultat_exceptionnel: 0,
           impots_societes: 0,
-          // ✅ NEW: Direct SIG values from Gemini extraction (use these if available instead of calculating)
+          // ✅ Direct SIG values from Gemini extraction (use these if available instead of calculating)
           marge_commerciale_directe: kv.marge_commerciale || 0,
           valeur_ajoutee_directe: kv.valeur_ajoutee || 0,
           ebe_direct: kv.ebe || 0,
           resultat_exploitation_direct: kv.resultat_exploitation || 0,
-          resultat_net_direct: kv.resultat_net || 0
+          resultat_net_direct: kv.resultat_net || 0,
+          // ✅ NEW: Additional SIG fields for complete extraction (Issue #1 fix)
+          marge_brute_globale_direct: kv.marge_brute_globale || 0,
+          autres_achats_charges_externes_direct: kv.autres_achats_charges_externes || kv.charges_externes || 0,
+          charges_exploitant_direct: kv.charges_exploitant || 0,
+          salaires_personnel_direct: kv.salaires_personnel || 0,
+          charges_sociales_personnel_direct: kv.charges_sociales_personnel || 0
         };
       } else {
         console.log('[calculateSig] ⚠️ Vision key_values found but incomplete (no CA/EBE):', {
@@ -398,6 +465,12 @@ function extractAccountingValues(yearDocs: any[]): {
     ebe_direct: number;
     resultat_exploitation_direct: number;
     resultat_net_direct: number;
+    // NEW: Additional SIG fields
+    marge_brute_globale_direct: number;
+    autres_achats_charges_externes_direct: number;
+    charges_exploitant_direct: number;
+    salaires_personnel_direct: number;
+    charges_sociales_personnel_direct: number;
   } = {
     source: 'table_parsing',
     chiffre_affaires: 0,
@@ -420,7 +493,13 @@ function extractAccountingValues(yearDocs: any[]): {
     valeur_ajoutee_directe: 0,
     ebe_direct: 0,
     resultat_exploitation_direct: 0,
-    resultat_net_direct: 0
+    resultat_net_direct: 0,
+    // NEW: Additional SIG fields
+    marge_brute_globale_direct: 0,
+    autres_achats_charges_externes_direct: 0,
+    charges_exploitant_direct: 0,
+    salaires_personnel_direct: 0,
+    charges_sociales_personnel_direct: 0
   };
 
   // Parser les tableaux extraits
@@ -470,15 +549,13 @@ function extractAccountingValues(yearDocs: any[]): {
     }
   }
 
-  // Fallback : si CA non trouvé, utiliser production_vendue
-  if (values.chiffre_affaires === 0 && values.production_vendue > 0) {
-    values.chiffre_affaires = values.production_vendue;
-  }
-
-  // Fallback : si ventes_marchandises non trouvé, utiliser CA
-  if (values.ventes_marchandises === 0 && values.chiffre_affaires > 0) {
-    values.ventes_marchandises = values.chiffre_affaires;
-  }
+  // ⚠️ SUPPRESSION DES FALLBACKS (2025-12-29)
+  // Les données historiques doivent provenir UNIQUEMENT de l'extraction.
+  // Pas de substitution automatique qui pourrait corrompre les données.
+  //
+  // ANCIENS FALLBACKS SUPPRIMÉS:
+  // - ventes_marchandises = CA (causait marge = 0 ou erreurs)
+  // - CA = production_vendue (mélangeait types de CA)
 
   return values;
 }
@@ -528,92 +605,103 @@ function normalizeToValeurSig(field: any, ca: number = 1): { valeur: number; pct
  * Recherche un SIG extrait directement dans les documents COMPTA.
  * Retourne le SIG si trouvé et valide (avec au moins CA, EBE, RN).
  *
- * IMPORTANT: Accepte DEUX formats pour chaque champ:
- * - Format structuré: { valeur: number, pct_ca: number }
- * - Format simple: number
+ * FIX V3 (2025-12-29): Réécriture complète pour corriger la perte de données
+ * - PRIORITÉ 1: key_values (nombres simples, plus fiables)
+ * - PRIORITÉ 2: sig (format {valeur, pct_ca})
+ * - Mapping explicite des champs avec alias (charges_externes → autres_achats_charges_externes)
  */
 function findExtractedSig(yearDocs: any[]): SigExtraction | null {
   for (const doc of yearDocs) {
-    // Vérifier si le document a un SIG extrait directement
     const sig = doc.extractedData?.sig;
+    const keyValues = doc.extractedData?.key_values;
 
-    if (!sig) continue;
+    // Besoin d'au moins une source de données
+    if (!sig && !keyValues) continue;
 
-    // Extraire les valeurs en acceptant BOTH formats (number ou {valeur, pct_ca})
-    const caValue = extractSigValue(sig.chiffre_affaires);
-    const ebeValue = extractSigValue(sig.ebe);
-    const rnValue = extractSigValue(sig.resultat_net);
-
-    // Vérifier la présence des champs critiques
-    const hasCa = caValue !== undefined && caValue > 0;
-    const hasEbe = ebeValue !== undefined; // EBE peut être 0 ou négatif
-    const hasRn = rnValue !== undefined; // RN peut être 0 ou négatif
-
-    if (hasCa && hasEbe && hasRn) {
-      console.log(`[findExtractedSig] ✅ Found valid SIG extraction in document: ${doc.filename || doc.name || 'unknown'}`);
-
-      // DEBUG: Log all available SIG fields BEFORE normalization
-      console.log(`[findExtractedSig] 🔍 DEBUG - Raw SIG fields:`, Object.keys(sig));
-      console.log(`[findExtractedSig] 🔍 DEBUG - marge_commerciale raw:`, sig.marge_commerciale);
-      console.log(`[findExtractedSig] 🔍 DEBUG - marge_brute_globale raw:`, sig.marge_brute_globale);
-      console.log(`[findExtractedSig] 🔍 DEBUG - valeur_ajoutee raw:`, sig.valeur_ajoutee);
-      console.log(`[findExtractedSig] 🔍 DEBUG - resultat_exploitation raw:`, sig.resultat_exploitation);
-      console.log(`[findExtractedSig] 🔍 DEBUG - autres_achats_charges_externes raw:`, sig.autres_achats_charges_externes);
-      console.log(`[findExtractedSig] 🔍 DEBUG - salaires_personnel raw:`, sig.salaires_personnel);
-      console.log(`[findExtractedSig] 🔍 DEBUG - charges_sociales_personnel raw:`, sig.charges_sociales_personnel);
-      console.log(`[findExtractedSig] 🔍 DEBUG - charges_exploitant raw:`, sig.charges_exploitant);
-
-      // Normaliser tous les champs au format {valeur, pct_ca}
-      const normalizedSig = normalizeSigToValeurFormat(sig, caValue);
-
-      // DEBUG: Log normalized SIG fields
-      console.log(`[findExtractedSig] 🔍 DEBUG - Normalized SIG:`, {
-        marge_commerciale: normalizedSig.marge_commerciale,
-        marge_brute_globale: normalizedSig.marge_brute_globale,
-        valeur_ajoutee: normalizedSig.valeur_ajoutee,
-        resultat_exploitation: normalizedSig.resultat_exploitation,
-        charges_exploitant: normalizedSig.charges_exploitant
-      });
-
-      // Log des indicateurs clés
-      const indicators = [
-        `CA: ${caValue}€`,
-        `EBE: ${ebeValue}€`,
-        `VA: ${extractSigValue(sig.valeur_ajoutee) || 0}€`,
-        `Marge Brute Globale: ${extractSigValue(sig.marge_brute_globale) || 0}€`,
-        `RN: ${rnValue}€`
-      ];
-      console.log(`[findExtractedSig]   └─ Indicators: ${indicators.join(', ')}`);
-
-      // Log du salaire dirigeant si présent
-      const chargesExploitant = extractSigValue(sig.charges_exploitant);
-      if (chargesExploitant) {
-        console.log(`[findExtractedSig]   └─ ⭐ Charges exploitant (salaire dirigeant): ${chargesExploitant}€`);
+    // Helper pour extraire une valeur avec priorité key_values > sig
+    const getValue = (kvField: string, sigField?: string): number | undefined => {
+      // Priorité 1: key_values (nombres simples)
+      if (keyValues && keyValues[kvField] !== undefined && keyValues[kvField] !== null && keyValues[kvField] !== 0) {
+        return keyValues[kvField];
       }
-
-      // Log des charges personnel si présentes
-      const salairesPersonnel = extractSigValue(sig.salaires_personnel);
-      const chargesSocialesPersonnel = extractSigValue(sig.charges_sociales_personnel);
-      if (salairesPersonnel || chargesSocialesPersonnel) {
-        console.log(`[findExtractedSig]   └─ 💼 Charges personnel: Salaires=${salairesPersonnel || 0}€, Charges sociales=${chargesSocialesPersonnel || 0}€`);
+      // Priorité 2: sig (format {valeur, pct_ca} ou number)
+      const sigKey = sigField || kvField;
+      if (sig && sig[sigKey] !== undefined) {
+        return extractSigValue(sig[sigKey]);
       }
+      return undefined;
+    };
 
-      return normalizedSig as SigExtraction;
+    // Vérifier les champs critiques (CA obligatoire, EBE/RN peuvent être 0)
+    const ca = getValue('chiffre_affaires') || getValue('ca');
+    const ebe = getValue('ebe');
+    const rn = getValue('resultat_net');
+
+    if (!ca || ca === 0) {
+      console.log(`[findExtractedSig] ⚠️ Document ${doc.filename || 'unknown'}: CA manquant ou 0`);
+      continue;
     }
 
-    // Log si SIG trouvé mais incomplet
-    if (sig && (!hasCa || !hasEbe || !hasRn)) {
-      console.log(`[findExtractedSig] ⚠️ Found SIG but incomplete:`, {
-        doc: doc.filename || doc.name || 'unknown',
-        hasCa,
-        hasEbe,
-        hasRn,
-        caValue,
-        ebeValue,
-        rnValue,
-        keys: Object.keys(sig)
-      });
+    if (ebe === undefined || rn === undefined) {
+      console.log(`[findExtractedSig] ⚠️ Document ${doc.filename || 'unknown'}: EBE ou RN manquant`);
+      continue;
     }
+
+    // Helper pour créer {valeur, pct_ca}
+    const toValeurSig = (val: number | undefined): { valeur: number; pct_ca: number } | undefined => {
+      if (val === undefined || val === null) return undefined;
+      return { valeur: val, pct_ca: ca > 0 ? Math.round((val / ca) * 10000) / 100 : 0 };
+    };
+
+    console.log(`[findExtractedSig] ✅ Building SIG from doc: ${doc.filename || 'unknown'}`);
+    console.log(`[findExtractedSig]   └─ key_values fields:`, keyValues ? Object.keys(keyValues) : 'none');
+    console.log(`[findExtractedSig]   └─ sig fields:`, sig ? Object.keys(sig) : 'none');
+
+    // Construire le SIG avec mapping explicite des champs
+    const builtSig: SigExtraction = {
+      chiffre_affaires: toValeurSig(ca),
+      ventes_marchandises: toValeurSig(getValue('ventes_marchandises')),
+      cout_achat_marchandises_vendues: toValeurSig(getValue('cout_achat_marchandises_vendues')),
+      marge_commerciale: toValeurSig(getValue('marge_commerciale')),
+      production_exercice: toValeurSig(getValue('production_exercice') || getValue('production_vendue')),
+      marge_brute_globale: toValeurSig(getValue('marge_brute_globale')),
+
+      // ✅ CRITIQUE: Mapping charges_externes → autres_achats_charges_externes
+      autres_achats_charges_externes: toValeurSig(
+        getValue('charges_externes') || getValue('autres_achats_charges_externes')
+      ),
+
+      valeur_ajoutee: toValeurSig(getValue('valeur_ajoutee')),
+      impots_taxes: toValeurSig(getValue('impots_taxes')),
+
+      // ✅ CRITIQUE: Charges personnel
+      salaires_personnel: toValeurSig(getValue('salaires_personnel')),
+      charges_sociales_personnel: toValeurSig(getValue('charges_sociales_personnel')),
+
+      // ✅ CRITIQUE: Charges exploitant (salaire dirigeant)
+      charges_exploitant: toValeurSig(getValue('charges_exploitant')),
+
+      ebe: toValeurSig(ebe),
+      dotations_amortissements: toValeurSig(getValue('dotations_amortissements')),
+      resultat_exploitation: toValeurSig(getValue('resultat_exploitation')),
+      produits_financiers: toValeurSig(getValue('produits_financiers')),
+      charges_financieres: toValeurSig(getValue('charges_financieres')),
+      resultat_courant: toValeurSig(getValue('resultat_courant')),
+      produits_exceptionnels: toValeurSig(getValue('produits_exceptionnels')),
+      charges_exceptionnelles: toValeurSig(getValue('charges_exceptionnelles')),
+      resultat_exceptionnel: toValeurSig(getValue('resultat_exceptionnel')),
+      impots_sur_benefices: toValeurSig(getValue('impots_sur_benefices')),
+      resultat_net: toValeurSig(rn)
+    };
+
+    // Log des indicateurs clés
+    console.log(`[findExtractedSig]   └─ CA: ${ca}€, EBE: ${ebe}€, RN: ${rn}€`);
+    console.log(`[findExtractedSig]   └─ Marge Brute Globale: ${builtSig.marge_brute_globale?.valeur || 'N/A'}€`);
+    console.log(`[findExtractedSig]   └─ Charges Externes: ${builtSig.autres_achats_charges_externes?.valeur || 'N/A'}€`);
+    console.log(`[findExtractedSig]   └─ Charges Exploitant: ${builtSig.charges_exploitant?.valeur || 'N/A'}€`);
+    console.log(`[findExtractedSig]   └─ Salaires Personnel: ${builtSig.salaires_personnel?.valeur || 'N/A'}€`);
+
+    return builtSig;
   }
 
   return null;
@@ -622,9 +710,16 @@ function findExtractedSig(yearDocs: any[]): SigExtraction | null {
 /**
  * Normalise un SIG extrait (qui peut avoir des champs number ou {valeur, pct_ca})
  * vers le format standard SigExtraction avec tous les champs en {valeur, pct_ca}.
+ *
+ * Gère également les alias de champs (Gemini peut extraire avec des noms différents).
  */
 function normalizeSigToValeurFormat(sig: any, ca: number): any {
   const normalized: any = {};
+
+  // Mapping des alias de champs (Gemini peut utiliser des noms différents)
+  const fieldAliases: Record<string, string> = {
+    'charges_externes': 'autres_achats_charges_externes',
+  };
 
   // Liste des champs à normaliser
   const fields = [
@@ -638,9 +733,18 @@ function normalizeSigToValeurFormat(sig: any, ca: number): any {
     'impots_sur_benefices', 'resultat_net'
   ];
 
+  // Étape 1: Normaliser les champs avec leur nom exact
   for (const field of fields) {
     if (sig[field] !== undefined && sig[field] !== null) {
       normalized[field] = normalizeToValeurSig(sig[field], ca);
+    }
+  }
+
+  // Étape 2: Appliquer les alias (pour les champs extraits avec des noms différents)
+  for (const [alias, target] of Object.entries(fieldAliases)) {
+    if (!normalized[target] && sig[alias] !== undefined && sig[alias] !== null) {
+      normalized[target] = normalizeToValeurSig(sig[alias], ca);
+      console.log(`[normalizeSigToValeurFormat] 🔄 Mapped alias '${alias}' → '${target}':`, normalized[target]);
     }
   }
 

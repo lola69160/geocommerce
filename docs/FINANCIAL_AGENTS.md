@@ -119,18 +119,28 @@ Ce document détaille les 7 agents du Financial Pipeline.
 - `calculateHealthScoreTool` - Score 0-100 (4 dimensions)
 
 ### Output (`state.comptable`)
+
+**Format SIG (2025-12-29):** Chaque indicateur SIG utilise le format `{ valeur: number, pct_ca: number }`.
+
 ```json
 {
   "analysisDate": "2025-12-26",
   "yearsAnalyzed": [2024, 2023, 2022],
   "sig": {
     "2024": {
-      "chiffre_affaires": 500000,
-      "marge_commerciale": 200000,
-      "valeur_ajoutee": 180000,
-      "ebe": 85000,
-      "resultat_exploitation": 70000,
-      "resultat_net": 55000
+      "year": 2024,
+      "source": "compta_extraction",
+      "chiffre_affaires": { "valeur": 500000, "pct_ca": 100 },
+      "marge_commerciale": { "valeur": 200000, "pct_ca": 40 },
+      "marge_brute_globale": { "valeur": 340000, "pct_ca": 68 },
+      "autres_achats_charges_externes": { "valeur": 60000, "pct_ca": 12 },
+      "valeur_ajoutee": { "valeur": 180000, "pct_ca": 36 },
+      "salaires_personnel": { "valeur": 50000, "pct_ca": 10 },
+      "charges_sociales_personnel": { "valeur": 20000, "pct_ca": 4 },
+      "charges_exploitant": { "valeur": 35000, "pct_ca": 7 },
+      "ebe": { "valeur": 85000, "pct_ca": 17 },
+      "resultat_exploitation": { "valeur": 70000, "pct_ca": 14 },
+      "resultat_net": { "valeur": 55000, "pct_ca": 11 }
     }
   },
   "evolution": {

@@ -9,7 +9,7 @@ SearchCommerce intègre un **pipeline d'analyse financière autonome** basé sur
 | Document | Contenu |
 |----------|---------|
 | **[FINANCIAL_AGENTS.md](FINANCIAL_AGENTS.md)** | Documentation détaillée des 7 agents (tools, input/output, workflow) |
-| **[FINANCIAL_CHANGELOG.md](FINANCIAL_CHANGELOG.md)** | Historique des améliorations (2025-12-27, 2025-12-28) |
+| **[FINANCIAL_CHANGELOG.md](FINANCIAL_CHANGELOG.md)** | Historique des améliorations (2025-12-27 à 2025-12-29) |
 
 ---
 
@@ -305,6 +305,83 @@ app.post('/api/analyze-financial', async (req, res) => {
     }
   });
 });
+```
+
+---
+
+## Règles de Priorité des Données Extraites
+
+### Principe Fondamental
+
+**Les données historiques (années N, N-1, N-2...) doivent provenir UNIQUEMENT des extractions de documents comptables. AUCUN recalcul, AUCUN fallback.**
+
+Seules les données **futures** (N+1, N+2...) peuvent être calculées/projetées.
+
+### Hiérarchie des Sources de Données
+
+| Priorité | Source | Description | Usage |
+|----------|--------|-------------|-------|
+| **0** | SIG extrait des documents COMPTA | Documents préprocessés (COMPTA2023.pdf) | Données historiques ✅ |
+| **1** | `key_values` de Gemini Vision | Extraction directe des PDFs | Données historiques ✅ |
+| **2** | Parsing de tableaux | Heuristiques sur tables extraites | Fallback uniquement |
+| **❌** | Calcul/estimation | Formules ou pourcentages | Données futures uniquement |
+
+### Format SIG Standard
+
+Tous les indicateurs SIG utilisent le format structuré `{valeur, pct_ca}` :
+
+```typescript
+interface ValeurSig {
+  valeur: number;    // Valeur absolue en euros
+  pct_ca: number;    // Pourcentage du Chiffre d'Affaires
+}
+
+// Exemple
+"ebe": { "valeur": 85000, "pct_ca": 17 }  // EBE = 85 000 € = 17% du CA
+```
+
+### Mapping des Champs
+
+| Extraction Gemini | key_values | SIG Output | Description |
+|-------------------|------------|------------|-------------|
+| `marge_brute_globale` | `marge_brute_globale` | `marge_brute_globale` | Marge Brute Globale |
+| `charges_externes` | `charges_externes` | `autres_achats_charges_externes` | Charges Externes |
+| `charges_exploitant` | `charges_exploitant` | `charges_exploitant` | Salaire Gérant |
+| `salaires_personnel` | `salaires_personnel` | `salaires_personnel` | Salaires Personnel |
+| `charges_sociales_personnel` | `charges_sociales_personnel` | `charges_sociales_personnel` | Charges Sociales |
+
+### Règles Anti-Fallback
+
+**Interdit dans les tools de données historiques :**
+```typescript
+// ❌ INTERDIT - Ne jamais estimer des données historiques
+if (value === 0) {
+  value = caTotal * 0.08;  // Estimation interdite !
+}
+
+// ✅ CORRECT - Afficher N/A ou 0
+if (value === 0) {
+  console.warn('[tool] ⚠️ Valeur non extraite');
+}
+```
+
+**Fichiers concernés :**
+- `calculateSigTool.ts` : Pas de recalcul des SIG
+- `calculateTabacValuationTool.ts` : Pas d'estimation 8%/25%
+- `accountingSection.ts` : Afficher "-" ou "N/A" si manquant
+
+### Flow de Données Correct
+
+```
+Gemini Vision → extractedData.key_values
+                       ↓
+              calculateSigTool (EXTRACTION uniquement)
+                       ↓
+              ComptableAgent (copie TOUS les champs)
+                       ↓
+              state.comptable.sig
+                       ↓
+              accountingSection.ts → Affichage
 ```
 
 ---
