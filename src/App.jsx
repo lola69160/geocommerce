@@ -4,6 +4,7 @@ import SearchPanel from './components/SearchPanel';
 import Map from './components/Map';
 import CartWidget from './components/CartWidget';
 import NoteModal from './components/NoteModal';
+import DocumentUploadModal from './components/DocumentUploadModal';
 import { searchBusinesses } from './services/api';
 import { enrichWithBodacc } from './services/enrichmentService';
 import * as storageService from './services/storageService';
@@ -27,6 +28,8 @@ function App() {
   const [notes, setNotes] = useState({});
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteModalBusiness, setNoteModalBusiness] = useState(null);
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [documentModalBusiness, setDocumentModalBusiness] = useState(null);
 
   // Load cart and notes on mount
   React.useEffect(() => {
@@ -85,6 +88,11 @@ function App() {
   const handleOpenNoteModal = (business) => {
     setNoteModalBusiness(business);
     setNoteModalOpen(true);
+  };
+
+  const handleOpenDocumentModal = (business) => {
+    setDocumentModalBusiness(business);
+    setDocumentModalOpen(true);
   };
 
   const handleSaveNote = async (noteText) => {
@@ -158,6 +166,7 @@ function App() {
             notes={notes}
             cart={cart}
             onOpenNoteModal={handleOpenNoteModal}
+            onOpenDocumentModal={handleOpenDocumentModal}
             onAddToCart={handleAddToCart}
           />
         }
@@ -171,6 +180,7 @@ function App() {
             notes={notes}
             cart={cart}
             onOpenNoteModal={handleOpenNoteModal}
+            onOpenDocumentModal={handleOpenDocumentModal}
             onAddToCart={handleAddToCart}
           />
         }
@@ -189,6 +199,12 @@ function App() {
         onSave={handleSaveNote}
         initialNote={noteModalBusiness ? notes[noteModalBusiness.siren || noteModalBusiness.siret] : ''}
         businessName={noteModalBusiness ? (noteModalBusiness.nom_complet || noteModalBusiness.enseigne) : ''}
+      />
+
+      <DocumentUploadModal
+        isOpen={documentModalOpen}
+        onClose={() => setDocumentModalOpen(false)}
+        business={documentModalBusiness}
       />
     </>
   );

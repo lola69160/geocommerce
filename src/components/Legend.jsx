@@ -1,58 +1,66 @@
 import React from 'react';
 import { AGE_RANGES, getLegendColor } from '../utils/ageUtils';
 
+/**
+ * Legend Component - Tech Premium Design System
+ *
+ * Map legend showing business age color coding.
+ * Features:
+ * - Dark glassmorphism styling
+ * - Compact layout
+ * - Smooth transitions
+ */
 const Legend = () => {
-    return (
-        <div
-            className="glass-panel"
-            style={{
-                position: 'absolute',
-                bottom: '20px',
-                right: '20px',
-                zIndex: 1000,
-                padding: '12px 16px',
-                minWidth: '180px',
-                fontSize: '0.85rem'
-            }}
-        >
-            <div style={{
-                fontWeight: '600',
-                marginBottom: '8px',
-                color: 'var(--text-primary)',
-                fontSize: '0.9rem'
-            }}>
-                Âge des commerces
-            </div>
+  return (
+    <div className={`
+      absolute bottom-5 right-5
+      z-fixed
+      p-3
+      min-w-[160px]
+      bg-[rgba(18,18,26,0.9)]
+      backdrop-blur-lg
+      border border-[rgba(255,255,255,0.08)]
+      rounded-xl
+      shadow-dark-xl
+      animate-fade-in-up
+    `}>
+      {/* Title */}
+      <h4 className="font-display font-semibold text-sm text-text-primary mb-2.5">
+        Age des commerces
+      </h4>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {AGE_RANGES.map((range, index) => (
-                    <div
-                        key={index}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '50%',
-                                backgroundColor: getLegendColor(range.min, range.max),
-                                border: '2px solid white',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                flexShrink: 0
-                            }}
-                        />
-                        <span style={{ color: 'var(--text-secondary)' }}>
-                            {range.label}
-                        </span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+      {/* Legend items */}
+      <div className="flex flex-col gap-2">
+        {AGE_RANGES.map((range, index) => (
+          <div
+            key={index}
+            className="flex items-center gap-2.5 group"
+          >
+            {/* Color indicator */}
+            <div
+              className={`
+                w-4 h-4
+                rounded-full
+                flex-shrink-0
+                border-2 border-surface-700
+                shadow-dark-sm
+                transition-transform duration-fast
+                group-hover:scale-110
+              `}
+              style={{
+                backgroundColor: getLegendColor(range.min, range.max),
+              }}
+            />
+
+            {/* Label */}
+            <span className="text-xs text-text-muted group-hover:text-text-secondary transition-colors">
+              {range.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export default Legend;

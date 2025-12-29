@@ -1,190 +1,304 @@
 import React, { useState } from 'react';
-import { ShoppingCart, FileText, X, Trash2, Loader, Star } from 'lucide-react';
+import { ShoppingCart, FileText, X, Trash2, Loader2, Sparkles, MapPin, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { generateMarkdownReport } from '../utils/reportGenerator';
 import ProfessionalAnalysisModal from './ProfessionalAnalysisModal';
+import { Button, Card, CountBadge } from './ui';
 
+/**
+ * CartWidget Component - Tech Premium Design System
+ *
+ * Floating cart panel with slide-out animation.
+ * Features:
+ * - Floating button with count badge
+ * - Slide-out panel with glass effect
+ * - Cart items with professional analysis button
+ * - Report generation with progress
+ */
 const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [progress, setProgress] = useState('');
-    const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
-    const [currentAnalysisBusiness, setCurrentAnalysisBusiness] = useState(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [currentAnalysisBusiness, setCurrentAnalysisBusiness] = useState(null);
 
-    const cartItems = Object.values(cart);
-    const cartCount = cartItems.length;
+  const cartItems = Object.values(cart);
+  const cartCount = cartItems.length;
 
-    if (cartCount === 0) return null;
+  if (cartCount === 0) return null;
 
-    const handleGenerateReport = async () => {
-        setLoading(true);
-        setProgress('Préparation...');
+  const handleGenerateReport = async () => {
+    setLoading(true);
+    setProgress('Préparation...');
+
+    try {
+      const enrichedItems = [];
+      let count = 0;
+
+      for (const item of cartItems) {
+        count++;
+        setProgress(`Analyse ${count}/${cartCount}...`);
 
         try {
-            const enrichedItems = [];
-            let count = 0;
-
-            for (const item of cartItems) {
-                count++;
-                setProgress(`Analyse ${count}/${cartCount}...`);
-
-                try {
-                    // Call backend to analyze business (Orchestration of 4 modules)
-                    const response = await axios.post('http://localhost:3001/api/analyze-business', {
-                        businessData: item
-                    });
-
-                    // Add analyzed data to the list
-                    enrichedItems.push(response.data);
-
-                } catch (err) {
-                    console.error(`Failed to analyze ${item.nom_complet}`, err);
-                    // Fallback: keep original item with empty analysis structure
-                    enrichedItems.push({
-                        identity: {
-                            legal_name: item.nom_complet || item.nom_raison_sociale || 'Nom Inconnu',
-                            commercial_name: item.enseigne || item.nom_complet || 'Nom Inconnu',
-                            siret: item.siret
-                        },
-                        assets: { photos: [], reviews: [], rating: null, user_rating_total: 0 },
-                        intelligence: "Analyse échouée.",
-                        openData: item
-                    });
-                }
-            }
-
-            setProgress('Génération du PDF...');
-            generateMarkdownReport(enrichedItems);
-
-        } catch (error) {
-            console.error('Error generating report:', error);
-            alert('Une erreur est survenue lors de la génération du rapport.');
-        } finally {
-            setLoading(false);
-            setProgress('');
+          const response = await axios.post('http://localhost:3001/api/analyze-business', {
+            businessData: item
+          });
+          enrichedItems.push(response.data);
+        } catch (err) {
+          console.error(`Failed to analyze ${item.nom_complet}`, err);
+          enrichedItems.push({
+            identity: {
+              legal_name: item.nom_complet || item.nom_raison_sociale || 'Nom Inconnu',
+              commercial_name: item.enseigne || item.nom_complet || 'Nom Inconnu',
+              siret: item.siret
+            },
+            assets: { photos: [], reviews: [], rating: null, user_rating_total: 0 },
+            intelligence: "Analyse échouée.",
+            openData: item
+          });
         }
-    };
+      }
 
-    const handleProfessionalAnalysis = (business) => {
-        console.log('🔍 Opening professional analysis for:', business);
-        setCurrentAnalysisBusiness(business);
-        setAnalysisModalOpen(true);
-        console.log('✅ Modal state set to open');
-    };
+      setProgress('Génération du PDF...');
+      generateMarkdownReport(enrichedItems);
 
-    return (
-        <>
-            {/* Widget Button (Visible when closed) */}
-            <div className={`fixed top-4 right-4 z-[1000] transition-all duration-300 ${isOpen ? 'translate-x-[200%]' : 'translate-x-0'}`}>
+    } catch (error) {
+      console.error('Error generating report:', error);
+      alert('Une erreur est survenue lors de la génération du rapport.');
+    } finally {
+      setLoading(false);
+      setProgress('');
+    }
+  };
+
+  const handleProfessionalAnalysis = (business) => {
+    console.log('Opening professional analysis for:', business);
+    setCurrentAnalysisBusiness(business);
+    setAnalysisModalOpen(true);
+  };
+
+  return (
+    <>
+      {/* Floating Cart Button */}
+      <div className={`
+        fixed top-4 right-4 z-[1000]
+        transition-all duration-normal ease-out
+        ${isOpen ? 'translate-x-[200%] opacity-0' : 'translate-x-0 opacity-100'}
+      `}>
+        <button
+          onClick={() => setIsOpen(true)}
+          className={`
+            relative
+            p-4
+            rounded-2xl
+            bg-gradient-to-r from-cyan-500 to-cyan-600
+            text-white
+            shadow-dark-xl
+            hover:shadow-glow-cyan
+            hover:from-cyan-400 hover:to-cyan-500
+            transition-all duration-fast
+            active:scale-95
+            group
+          `}
+        >
+          <ShoppingCart size={24} />
+
+          {/* Count Badge */}
+          <span className={`
+            absolute -top-1 -right-1
+            min-w-[22px] h-[22px]
+            flex items-center justify-center
+            bg-red-500
+            text-white text-xs font-bold
+            rounded-full
+            border-2 border-surface-900
+            shadow-dark-sm
+            animate-bounce-in
+          `}>
+            {cartCount}
+          </span>
+
+          {/* Tooltip */}
+          <span className={`
+            absolute right-full mr-3 top-1/2 -translate-y-1/2
+            px-3 py-1.5
+            bg-surface-800
+            text-text-primary text-xs font-medium
+            rounded-lg
+            border border-[rgba(255,255,255,0.1)]
+            shadow-dark-lg
+            whitespace-nowrap
+            opacity-0 group-hover:opacity-100
+            -translate-x-2 group-hover:translate-x-0
+            transition-all duration-fast
+            pointer-events-none
+          `}>
+            Voir le panier
+          </span>
+        </button>
+      </div>
+
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          className={`
+            fixed inset-0 z-[1001]
+            bg-black/60
+            backdrop-blur-sm
+            animate-fade-in
+          `}
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Cart Panel */}
+      <div className={`
+        fixed inset-y-0 right-0 z-[1002]
+        w-96 max-w-[90vw]
+        bg-surface-800
+        border-l border-[rgba(255,255,255,0.06)]
+        shadow-dark-2xl
+        flex flex-col
+        transform transition-transform duration-normal ease-out
+        ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+      `}>
+        {/* Header */}
+        <div className="p-4 border-b border-[rgba(255,255,255,0.06)] bg-surface-900/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-cyan-500/15">
+                <ShoppingCart size={20} className="text-cyan-400" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-lg text-text-primary">
+                  Mon Panier
+                </h2>
+                <p className="text-xs text-text-muted">
+                  {cartCount} entreprise{cartCount > 1 ? 's' : ''} sélectionnée{cartCount > 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsOpen(false)}
+              className={`
+                p-2
+                rounded-lg
+                text-text-muted
+                hover:text-text-primary
+                hover:bg-surface-700
+                transition-colors duration-fast
+              `}
+              aria-label="Fermer le panier"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {cartItems.map((item, index) => (
+            <Card
+              key={item.siren || item.siret}
+              variant="default"
+              hover
+              glow
+              padding="none"
+              className="animate-fade-in-up"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              <div className="p-3">
+                {/* Item Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-sm text-text-primary line-clamp-2">
+                      {item.nom_complet || item.enseigne || "Entreprise sans nom"}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-1 text-xs text-text-muted">
+                      <MapPin size={12} className="text-cyan-500" />
+                      <span>{item.adresse_code_postal} {item.adresse_ville}</span>
+                    </div>
+                  </div>
+
+                  {/* Remove Button */}
+                  <button
+                    onClick={() => onRemoveFromCart(item.siren || item.siret)}
+                    className={`
+                      p-1.5
+                      rounded-lg
+                      text-text-muted
+                      hover:text-red-400
+                      hover:bg-red-500/15
+                      transition-colors duration-fast
+                    `}
+                    title="Retirer du panier"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {/* Professional Analysis Button */}
                 <button
-                    onClick={() => setIsOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg flex items-center justify-center transition-colors relative group"
+                  onClick={() => handleProfessionalAnalysis(item)}
+                  className={`
+                    w-full mt-3
+                    flex items-center justify-center gap-2
+                    px-3 py-2
+                    rounded-lg
+                    bg-gradient-to-r from-violet-500/20 to-violet-600/20
+                    text-violet-400
+                    border border-violet-500/30
+                    font-medium text-xs
+                    hover:from-violet-500/30 hover:to-violet-600/30
+                    hover:border-violet-500/50
+                    transition-all duration-fast
+                    active:scale-98
+                    group
+                  `}
                 >
-                    <ShoppingCart size={24} />
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-sm">
-                        {cartCount}
-                    </span>
-                    <span className="absolute right-full mr-3 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                        Voir le panier
-                    </span>
+                  <Sparkles size={14} className="group-hover:animate-pulse" />
+                  <span>Analyse Professionnelle</span>
+                  <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                 </button>
-            </div>
+              </div>
+            </Card>
+          ))}
+        </div>
 
-            {/* Cart Panel */}
-            <div className={`fixed inset-y-0 right-0 w-96 bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-[1001] flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                {/* Header */}
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800">
-                    <div className="flex items-center space-x-2 text-gray-800 dark:text-white">
-                        <ShoppingCart size={20} className="text-blue-600" />
-                        <h2 className="font-bold text-lg">Mon Panier ({cartCount})</h2>
-                    </div>
-                    <button
-                        onClick={() => setIsOpen(false)}
-                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500 dark:text-gray-400"
-                        aria-label="Fermer le panier"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
+        {/* Footer */}
+        <div className="p-4 border-t border-[rgba(255,255,255,0.06)] bg-surface-900/50 space-y-4">
+          {/* Summary */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-text-muted">Total entreprises</span>
+            <span className="font-mono font-bold text-cyan-400">
+              {cartCount}
+            </span>
+          </div>
 
-                {/* List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {cartItems.map((item) => (
-                        <div key={item.siren || item.siret} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 group hover:shadow-md transition-all hover:border-blue-300 dark:hover:border-blue-700">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1 pr-3">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">
-                                        {item.nom_complet || item.enseigne || "Entreprise sans nom"}
-                                    </h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
-                                        {item.adresse_code_postal} {item.adresse_ville}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => onRemoveFromCart(item.siren || item.siret)}
-                                    className="text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-1.5 rounded transition-all"
-                                    title="Retirer du panier"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                            <button
-                                onClick={() => handleProfessionalAnalysis(item)}
-                                className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded-lg font-medium text-xs transition-all shadow-sm hover:shadow-md mt-2"
-                            >
-                                <Star size={14} />
-                                <span>Analyse Professionnelle</span>
-                            </button>
-                        </div>
-                    ))}
-                </div>
+          {/* Generate Report Button */}
+          <Button
+            onClick={handleGenerateReport}
+            disabled={loading}
+            variant="primary"
+            size="lg"
+            fullWidth
+            glow={!loading}
+            icon={loading ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+          >
+            {loading ? progress : 'Générer le rapport'}
+          </Button>
+        </div>
+      </div>
 
-                {/* Footer */}
-                <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 space-y-3">
-                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>Total entreprises</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">{cartCount}</span>
-                    </div>
-                    <button
-                        onClick={handleGenerateReport}
-                        disabled={loading}
-                        className={`w-full flex items-center justify-center space-x-2 text-white py-3 rounded-lg font-medium transition-colors shadow-md ${loading
-                            ? 'bg-blue-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg active:transform active:scale-[0.98]'
-                            }`}
-                    >
-                        {loading ? (
-                            <>
-                                <Loader size={18} className="animate-spin" />
-                                <span>{progress}</span>
-                            </>
-                        ) : (
-                            <>
-                                <FileText size={18} />
-                                <span>Générer le rapport</span>
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* Overlay */}
-            {isOpen && (
-                <div
-                    className="fixed inset-0 bg-black/40 z-[1000] backdrop-blur-[2px] transition-opacity"
-                    onClick={() => setIsOpen(false)}
-                />
-            )}
-
-            {/* Professional Analysis Modal */}
-            <ProfessionalAnalysisModal
-                isOpen={analysisModalOpen}
-                onClose={() => setAnalysisModalOpen(false)}
-                business={currentAnalysisBusiness}
-            />
-        </>
-    );
+      {/* Professional Analysis Modal */}
+      <ProfessionalAnalysisModal
+        isOpen={analysisModalOpen}
+        onClose={() => setAnalysisModalOpen(false)}
+        business={currentAnalysisBusiness}
+      />
+    </>
+  );
 };
 
 export default CartWidget;
