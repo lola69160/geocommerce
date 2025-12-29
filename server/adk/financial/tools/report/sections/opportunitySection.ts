@@ -1,0 +1,334 @@
+/**
+ * Opportunity Section Generator
+ *
+ * Generates the "Opportunite de Reprise & Restructuration" section
+ * with Gemini-generated strategic text and transaction costs table.
+ */
+
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+/**
+ * Call Gemini to generate strategic text
+ * Note: GoogleGenerativeAI is instantiated inside the function to ensure
+ * the API key is loaded at runtime (not at module load time)
+ */
+async function generateStrategicText(prompt: string): Promise<string> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('[opportunitySection] GEMINI_API_KEY not set');
+      return '';
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      },
+    });
+
+    const response = result.response;
+    const text = response.text();
+    return text.trim();
+  } catch (error) {
+    console.error('[opportunitySection] Gemini call failed:', error);
+    return '';
+  }
+}
+
+/**
+ * Generate "La Cible" text based on comptable data
+ */
+async function generateLaCibleText(comptable: any, userComments: any): Promise<string> {
+  // Extract key data
+  const years = comptable?.sig ? Object.keys(comptable.sig).sort().reverse() : [];
+  const lastYear = years[0] || '2023';
+
+  const extractValue = (val: any) => typeof val === 'object' && val !== null ? val.valeur : (val || 0);
+  const sigLastYear = comptable?.sig?.[lastYear] || {};
+
+  const ebeComptable = comptable?.ebeRetraitement?.ebe_comptable || extractValue(sigLastYear?.ebe) || 0;
+  const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || 0;
+  const caActuel = extractValue(sigLastYear?.chiffre_affaires) || 0;
+  const margeEbe = comptable?.ratios?.marge_ebe_pct || (caActuel > 0 ? (ebeComptable / caActuel * 100) : 0);
+  const tendance = comptable?.evolution?.tendance || 'stable';
+  const caEvolution = comptable?.evolution?.ca_evolution_pct || 0;
+
+  // Loyer data
+  const loyerActuel = userComments?.loyer?.loyer_actuel || 0;
+  const loyerNegocie = userComments?.loyer?.futur_loyer_commercial || 0;
+
+  // Masse salariale (from SIG)
+  const chargesPersonnel = extractValue(sigLastYear?.charges_personnel) || 0;
+
+  const prompt = `Tu es un analyste financier expert en transmission d'entreprises. Genere un paragraphe de 2-3 phrases analysant cette cible d'acquisition.
+
+DONNEES COMPTABLES:
+- Chiffre d'affaires: ${caActuel.toLocaleString('fr-FR')} EUR
+- Tendance CA: ${tendance} (${caEvolution > 0 ? '+' : ''}${caEvolution.toFixed(1)}%)
+- EBE Comptable: ${ebeComptable.toLocaleString('fr-FR')} EUR (marge: ${margeEbe.toFixed(1)}%)
+- EBE Normatif (apres retraitement): ${ebeNormatif.toLocaleString('fr-FR')} EUR
+${loyerActuel > 0 ? `- Loyer actuel: ${loyerActuel.toLocaleString('fr-FR')} EUR/mois` : ''}
+${loyerNegocie > 0 ? `- Loyer negocie: ${loyerNegocie.toLocaleString('fr-FR')} EUR/mois` : ''}
+${chargesPersonnel > 0 ? `- Masse salariale: ${chargesPersonnel.toLocaleString('fr-FR')} EUR/an` : ''}
+
+TON: Professionnel, factuel, oriente opportunite de restructuration.
+FORMAT: Commence par "Activite [adjectif] (CA [tendance]), [suite de l'analyse]..."
+LONGUEUR: 2-3 phrases maximum.
+IMPORTANT: Mets en evidence les points a restructurer (loyer, masse salariale, charges) qui expliquent l'ecart entre EBE comptable et normatif.`;
+
+  const text = await generateStrategicText(prompt);
+
+  // Fallback if Gemini fails
+  if (!text) {
+    const tendanceLabel = tendance === 'croissance' ? 'en croissance' : tendance === 'baisse' ? 'en baisse' : 'stable';
+    const problemPoints: string[] = [];
+
+    if (loyerActuel > 0 && loyerNegocie > 0 && loyerNegocie < loyerActuel) {
+      problemPoints.push(`loyer hors marche (${loyerActuel.toLocaleString('fr-FR')} EUR vs ${loyerNegocie.toLocaleString('fr-FR')} EUR negocie)`);
+    }
+    if (ebeNormatif > ebeComptable * 1.3) {
+      problemPoints.push('charges de structure optimisables');
+    }
+
+    const problems = problemPoints.length > 0
+      ? `, mais rentabilite degradee par ${problemPoints.join(' et ')}`
+      : '';
+
+    return `Activite ${tendanceLabel} (CA ${caEvolution > 0 ? '+' : ''}${caEvolution.toFixed(0)}%)${problems}. L'EBE normatif de ${ebeNormatif.toLocaleString('fr-FR')} EUR (vs ${ebeComptable.toLocaleString('fr-FR')} EUR comptable) revele un potentiel de restructuration significatif.`;
+  }
+
+  return text;
+}
+
+/**
+ * Generate "Le Projet" text based on userComments
+ */
+async function generateLeProjetText(userComments: any): Promise<string> {
+  const commentaires = userComments?.autres || '';
+
+  if (!commentaires || commentaires.trim().length < 10) {
+    return '';
+  }
+
+  const prompt = `Tu es un conseiller en transmission d'entreprises. Reformule ce commentaire de l'acheteur potentiel de facon professionnelle et persuasive.
+
+COMMENTAIRE BRUT DE L'ACHETEUR:
+"${commentaires}"
+
+TON: Professionnel, ambitieux, oriente transformation et creation de valeur.
+FORMAT: Paragraphe structure presentant le projet de reprise.
+LONGUEUR: 3-4 phrases maximum.
+IMPORTANT: Mets en avant la vision strategique et les leviers de croissance envisages.`;
+
+  const text = await generateStrategicText(prompt);
+
+  // Fallback: just clean up the original text
+  if (!text) {
+    return commentaires;
+  }
+
+  return text;
+}
+
+/**
+ * Generate the Projet Vendeur table HTML
+ */
+function generateProjetVendeurTable(transactionCosts: any): string {
+  if (!transactionCosts || !transactionCosts.prix_fonds) {
+    return `
+      <div class="opportunity-missing">
+        Document "Cout de transaction" non fourni. Les details du projet vendeur ne peuvent pas etre affiches.
+      </div>
+    `;
+  }
+
+  const prixFonds = transactionCosts.prix_fonds || 0;
+  const honorairesHT = transactionCosts.honoraires_ht || 0;
+  const fraisActeHT = transactionCosts.frais_acte_ht || 0;
+  const debours = transactionCosts.debours || 0;
+  const droitsEnregistrement = transactionCosts.droits_enregistrement || 0;
+  const tva = transactionCosts.tva || 0;
+  const stockFdR = transactionCosts.stock_fonds_roulement || 0;
+  const loyerAvance = transactionCosts.loyer_avance || 0;
+  const totalInvestissement = transactionCosts.total_investissement || 0;
+
+  const totalHonoraires = honorairesHT + fraisActeHT + debours + droitsEnregistrement + tva;
+  const totalStockFdR = stockFdR + loyerAvance;
+
+  return `
+    <table class="projet-vendeur-table">
+      <thead>
+        <tr>
+          <th>Element</th>
+          <th>Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Prix de vente du fonds</td>
+          <td class="amount">${prixFonds.toLocaleString('fr-FR')} EUR</td>
+        </tr>
+        <tr>
+          <td>Honoraires & frais d'acquisition</td>
+          <td class="amount">${totalHonoraires.toLocaleString('fr-FR')} EUR</td>
+        </tr>
+        ${totalHonoraires > 0 ? `
+        <tr>
+          <td class="detail" colspan="2">
+            (Negociation ${honorairesHT.toLocaleString('fr-FR')} EUR + Acte ${fraisActeHT.toLocaleString('fr-FR')} EUR + Droits ${droitsEnregistrement.toLocaleString('fr-FR')} EUR + Debours ${debours.toLocaleString('fr-FR')} EUR + TVA ${tva.toLocaleString('fr-FR')} EUR)
+          </td>
+        </tr>
+        ` : ''}
+        <tr>
+          <td>Stocks & fonds de roulement</td>
+          <td class="amount">${totalStockFdR.toLocaleString('fr-FR')} EUR</td>
+        </tr>
+        ${loyerAvance > 0 ? `
+        <tr>
+          <td class="detail" colspan="2">
+            (Stock ${stockFdR.toLocaleString('fr-FR')} EUR + Loyer d'avance ${loyerAvance.toLocaleString('fr-FR')} EUR)
+          </td>
+        </tr>
+        ` : ''}
+        <tr class="total-row">
+          <td><strong>TOTAL INVESTISSEMENT</strong></td>
+          <td class="amount"><strong>${totalInvestissement.toLocaleString('fr-FR')} EUR</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+/**
+ * Generate Key Figures (Chiffres Cles Projetes) HTML
+ */
+function generateKeyFigures(comptable: any, businessPlan: any, transactionCosts: any, userComments: any): string {
+  // Extract values
+  const ebeComptable = comptable?.ebeRetraitement?.ebe_comptable || 0;
+  const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || 0;
+
+  // Year 1 projections
+  const projectionAnnee1 = businessPlan?.projections?.[1];
+  const ebeAnnee1 = projectionAnnee1?.ebe_normatif || ebeNormatif;
+
+  // Last accounting year
+  const years = comptable?.sig ? Object.keys(comptable.sig).sort().reverse() : [];
+  const lastYear = years[0] || '2023';
+
+  // Apport personnel from userComments or transactionCosts
+  const apportPersonnel = userComments?.apport_personnel || transactionCosts?.apport_requis || 0;
+
+  // Loan capacity assessment
+  const annuitePrevue = businessPlan?.financement?.annuite || (transactionCosts?.mensualites ? transactionCosts.mensualites * 12 : 0);
+  const capaciteRemboursement = ebeAnnee1 - annuitePrevue;
+  const ratioEndettement = ebeAnnee1 > 0 ? (annuitePrevue / ebeAnnee1 * 100) : 100;
+
+  // Determine if capacity is secure
+  const isSecure = ratioEndettement < 50;
+  const isWarning = ratioEndettement >= 50 && ratioEndettement < 70;
+
+  // Evolution calculation
+  const evolutionEbe = ebeComptable > 0 ? ((ebeAnnee1 - ebeComptable) / ebeComptable * 100) : 0;
+
+  return `
+    <div class="key-figures-grid">
+      <div class="key-figure-card highlight">
+        <div class="label">EBE Previsionnel N+1</div>
+        <div class="value green">${ebeAnnee1.toLocaleString('fr-FR')} EUR</div>
+        <div class="comparison">
+          vs ${ebeComptable.toLocaleString('fr-FR')} EUR en ${lastYear}
+          ${evolutionEbe > 0 ? `<span class="positive">(+${evolutionEbe.toFixed(0)}%)</span>` : ''}
+        </div>
+      </div>
+
+      <div class="key-figure-card">
+        <div class="label">Capacite de remboursement</div>
+        ${isSecure ? `
+          <div class="badge-secure">SECURISEE</div>
+          <div class="comparison">Ratio endettement: ${ratioEndettement.toFixed(0)}%</div>
+        ` : isWarning ? `
+          <div class="badge-warning">A SURVEILLER</div>
+          <div class="comparison">Ratio endettement: ${ratioEndettement.toFixed(0)}%</div>
+        ` : `
+          <div class="value" style="color: #dc2626;">TENDUE</div>
+          <div class="comparison">Ratio endettement: ${ratioEndettement.toFixed(0)}%</div>
+        `}
+      </div>
+
+      ${apportPersonnel > 0 ? `
+      <div class="key-figure-card">
+        <div class="label">Apport personnel</div>
+        <div class="value blue">${apportPersonnel.toLocaleString('fr-FR')} EUR</div>
+        ${transactionCosts?.total_investissement ? `
+        <div class="comparison">
+          ${((apportPersonnel / transactionCosts.total_investissement) * 100).toFixed(0)}% du total
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+/**
+ * Generate the complete Opportunity Section
+ */
+export async function generateOpportunitySection(
+  comptable: any,
+  valorisation: any,
+  businessPlan: any,
+  userComments: any,
+  transactionCosts: any
+): Promise<string> {
+  console.log('[opportunitySection] Generating opportunity section...');
+
+  // Generate La Cible text (async Gemini call)
+  const laCibleText = await generateLaCibleText(comptable, userComments);
+
+  // Generate Le Projet text (async Gemini call) - only if userComments.autres exists
+  const leProjetText = await generateLeProjetText(userComments);
+
+  // Generate static sections
+  const projetVendeurTable = generateProjetVendeurTable(transactionCosts);
+  const keyFiguresHtml = generateKeyFigures(comptable, businessPlan, transactionCosts, userComments);
+
+  console.log('[opportunitySection] Section generated successfully');
+
+  return `
+<div class="opportunity-section">
+  <h3 class="opportunity-title">OPPORTUNITE DE REPRISE & RESTRUCTURATION</h3>
+
+  <!-- 1. La Cible -->
+  <div class="opportunity-subsection">
+    <h4>LA CIBLE</h4>
+    <p>${laCibleText}</p>
+  </div>
+
+  ${leProjetText ? `
+  <!-- 2. Le Projet -->
+  <div class="opportunity-subsection">
+    <h4>LE PROJET</h4>
+    <p>${leProjetText}</p>
+  </div>
+  ` : ''}
+
+  <!-- 3. Projet Vendeur -->
+  <div class="opportunity-subsection">
+    <h4>PROJET VENDEUR</h4>
+    ${projetVendeurTable}
+  </div>
+
+  <!-- 4. Chiffres Cles Projetes -->
+  <div class="opportunity-subsection">
+    <h4>CHIFFRES CLES PROJETES</h4>
+    ${keyFiguresHtml}
+  </div>
+</div>
+`;
+}
+
+export default generateOpportunitySection;
