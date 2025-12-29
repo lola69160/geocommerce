@@ -7,14 +7,20 @@
 /**
  * Generate the accounting section HTML
  */
-export function generateAccountingSection(comptable: any, evolutionChart: any, healthGauge: any): string {
+export function generateAccountingSection(
+  comptable: any,
+  evolutionChart: any,
+  healthGauge: any,
+  businessPlan?: any,
+  userComments?: any
+): string {
   if (!comptable) {
     return '<h2>📈 Analyse Comptable</h2><p class="no-data">Données comptables non disponibles</p>';
   }
 
   let html = '<h2>📈 Analyse Comptable</h2>';
 
-  // Tableau SIG
+  // Tableau SIG avec colonne Budget Prévisionnel N+1
   if (comptable.sig) {
     html += '<h3>Soldes Intermédiaires de Gestion (SIG)</h3>';
     html += '<table><thead><tr><th>Indicateur</th>';
@@ -23,29 +29,125 @@ export function generateAccountingSection(comptable: any, evolutionChart: any, h
     years.forEach(y => {
       html += `<th class="text-right">${y}</th>`;
     });
+
+    // Colonne Budget Prévisionnel N+1 (si Business Plan disponible)
+    const hasBusinessPlan = businessPlan?.projections?.[1];
+    if (hasBusinessPlan) {
+      html += `<th class="text-right budget-header">BUDGET N+1<br/><small>(Scénario retenu)</small></th>`;
+    }
     html += '</tr></thead><tbody>';
 
+    // Helper pour extraire valeur SIG (nouveau ou ancien format)
+    const extractValue = (rawValue: any) =>
+      typeof rawValue === 'object' && rawValue !== null ? rawValue.valeur : (rawValue || 0);
+
+    // Indicateurs principaux avec sous-lignes pour détails
     const indicators = [
-      { key: 'chiffre_affaires', label: 'Chiffre d\'Affaires' },
-      { key: 'marge_commerciale', label: 'Marge Commerciale' },
-      { key: 'valeur_ajoutee', label: 'Valeur Ajoutée' },
-      { key: 'ebe', label: 'EBE' },
-      { key: 'resultat_exploitation', label: 'Résultat d\'Exploitation' },
-      { key: 'resultat_net', label: 'Résultat Net' }
+      { key: 'chiffre_affaires', label: 'Chiffre d\'Affaires', bpKey: 'ca' },
+      { key: 'marge_commerciale', label: 'Marge Commerciale', bpKey: null },
+      { key: 'marge_brute_globale', label: 'Marge Brute Globale', bpKey: 'marge_brute' },
+      { key: 'autres_achats_charges_externes', label: 'Charges Externes', bpKey: 'charges_fixes' },
+      { key: 'loyer', label: '└─ dont Loyer', isSubRow: true, bpKey: 'loyer' },
+      { key: 'charges_personnel', label: 'Frais de Personnel', bpKey: 'salaires' },
+      { key: 'salaire_gerant', label: '└─ dont Salaire Gérant', isSubRow: true, bpKey: 'salaire_dirigeant' },
+      { key: 'ebe', label: 'EBE (EBITDA)', bpKey: 'ebe_normatif', highlight: true },
+      { key: 'resultat_exploitation', label: 'Résultat d\'Exploitation', bpKey: null },
+      { key: 'resultat_net', label: 'Résultat Net', bpKey: null }
     ];
 
+    // Dernière année pour extraire les données actuelles
+    const lastYear = years[0];
+    const sigLastYear = comptable.sig[lastYear] || {};
+
+    // Projection Année 1 (Reprise)
+    const proj = businessPlan?.projections?.[1];
+
     indicators.forEach(ind => {
-      html += `<tr><td><strong>${ind.label}</strong></td>`;
+      const rowClass = ind.isSubRow ? 'sub-row' : '';
+      const labelStyle = ind.isSubRow ? 'padding-left: 25px; color: var(--color-text-muted); font-size: 0.95em;' : '';
+
+      html += `<tr class="${rowClass}"><td style="${labelStyle}"><strong>${ind.label}</strong></td>`;
+
+      // Colonnes années historiques
       years.forEach(y => {
-        const rawValue = comptable.sig[y]?.[ind.key];
-        // Handle new format { valeur, pct_ca } or old format (number)
-        const value = typeof rawValue === 'object' && rawValue !== null ? rawValue.valeur : (rawValue || 0);
-        html += `<td class="text-right">${value.toLocaleString('fr-FR')} €</td>`;
+        let value = 0;
+
+        if (ind.isSubRow) {
+          // Sous-lignes: extraire depuis userComments ou SIG
+          if (ind.key === 'loyer') {
+            // Loyer annuel depuis userComments ou charges_locatives (afficher '-' si absent)
+            const loyerMensuel = userComments?.loyer?.loyer_actuel || userComments?.loyer?.futur_loyer_commercial;
+            value = loyerMensuel ? loyerMensuel * 12 : extractValue(comptable.sig[y]?.charges_locatives);
+          } else if (ind.key === 'salaire_gerant') {
+            // Salaire gérant: userComments > SIG charges_exploitant > 0
+            value = userComments?.salaire_dirigeant
+              || extractValue(comptable.sig[y]?.charges_exploitant)
+              || 0;
+          }
+        } else if (ind.key === 'charges_personnel') {
+          // Frais de Personnel = salaires_personnel + charges_sociales_personnel
+          const salaires = extractValue(comptable.sig[y]?.salaires_personnel) || 0;
+          const chargesSociales = extractValue(comptable.sig[y]?.charges_sociales_personnel) || 0;
+          value = salaires + chargesSociales;
+          // Fallback sur le champ charges_personnel direct si disponible
+          if (value === 0) {
+            value = extractValue(comptable.sig[y]?.charges_personnel) || 0;
+          }
+        } else {
+          value = extractValue(comptable.sig[y]?.[ind.key]);
+        }
+
+        html += `<td class="text-right">${value > 0 ? value.toLocaleString('fr-FR') + ' €' : '-'}</td>`;
       });
+
+      // Colonne Budget Prévisionnel N+1
+      if (hasBusinessPlan) {
+        let budgetValue = 0;
+        let cellStyle = '';
+
+        if (ind.bpKey) {
+          // Mapping des clés Business Plan
+          if (ind.bpKey === 'ca') {
+            budgetValue = proj.ca || 0;
+          } else if (ind.bpKey === 'marge_brute') {
+            budgetValue = proj.marge_brute || (proj.ca ? proj.ca * 0.68 : 0); // Fallback 68%
+          } else if (ind.bpKey === 'charges_fixes') {
+            budgetValue = proj.charges_fixes || 0;
+          } else if (ind.bpKey === 'loyer') {
+            budgetValue = proj.charges_detail?.loyer ||
+              (userComments?.loyer?.futur_loyer_commercial ? userComments.loyer.futur_loyer_commercial * 12 : 0);
+          } else if (ind.bpKey === 'salaires') {
+            budgetValue = proj.charges_detail?.salaires || 0;
+          } else if (ind.bpKey === 'salaire_dirigeant') {
+            budgetValue = businessPlan?.hypotheses?.salaire_dirigeant || userComments?.salaire_dirigeant || 0;
+          } else if (ind.bpKey === 'ebe_normatif') {
+            budgetValue = proj.ebe_normatif || 0;
+          }
+        }
+
+        // Style spécial pour EBE (surbrillance verte)
+        if (ind.highlight && budgetValue > 0) {
+          cellStyle = 'background: #d1fae5; color: #065f46; font-weight: 700;';
+        }
+
+        html += `<td class="text-right" style="${cellStyle}">`;
+        html += budgetValue > 0 ? `<strong>${budgetValue.toLocaleString('fr-FR')} €</strong>` : '-';
+        html += '</td>';
+      }
+
       html += '</tr>';
     });
 
     html += '</tbody></table>';
+
+    // Note explicative (si Business Plan disponible)
+    if (hasBusinessPlan) {
+      html += `
+      <div class="nota-bene" style="margin-top: 15px; padding: 12px; background: #f0f9ff; border-left: 4px solid #0284c7; font-style: italic; color: #0369a1;">
+        <strong>Nota Bene :</strong> L'EBE prévisionnel intègre la révision des charges locatives et salariales prévue dans le scénario de reprise.
+      </div>
+      `;
+    }
   }
 
   // Tableau de Retraitement EBE

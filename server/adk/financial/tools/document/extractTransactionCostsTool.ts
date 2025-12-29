@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { zToGen } from '../../../utils/schemaHelper';
 import { z } from 'zod';
+import { logTransactionCosts } from '../../../utils/extractionLogger';
 
 /**
  * Extract Transaction Costs Tool
@@ -197,6 +198,17 @@ export const extractTransactionCostsTool = new FunctionTool({
         taux_credit: extracted.taux_credit || extracted.taux || 0,
         mensualites: extracted.mensualites || extracted.mensualites_hors_assurances || 0
       };
+
+      // Log extraction to dedicated log file
+      const siret = (toolContext?.state.get('businessInfo') as any)?.siret || 'unknown';
+      console.log(`✅ [extractTransactionCosts] Extraction réussie pour ${filename}:`, {
+        prix_fonds: transactionCosts.prix_fonds,
+        total_investissement: transactionCosts.total_investissement,
+        apport_requis: transactionCosts.apport_requis,
+        credit_sollicite: transactionCosts.credit_sollicite
+      });
+
+      logTransactionCosts(siret, transactionCosts);
 
       return {
         success: true,

@@ -15,6 +15,7 @@ import {
   extractYearFromComptaFilename,
   type ExtractionComptaComplete
 } from '../../schemas/extractionComptaSchema';
+import { logDocumentExtraction } from '../../../utils/extractionLogger';
 
 /**
  * Gemini Vision Extract Tool
@@ -231,6 +232,10 @@ MÉTADONNÉES À EXTRAIRE:
 SECTION 1: BILAN ACTIF
 ═══════════════════════════════════════════════════════════════════════════════
 
+⚠️ IMPORTANT: Pour le BILAN ACTIF, les colonnes typiques sont: Brut | Amortissements/Dépréciations | Net
+→ TOUJOURS utiliser la colonne NET (valeur après amortissements) pour les totaux!
+→ Pour total_general_actif: prendre la valeur de la colonne NET, pas BRUT!
+
 Extraire avec colonnes Brut/Amortissements/Net pour les IMMOBILISATIONS:
 
 IMMOBILISATIONS INCORPORELLES:
@@ -261,7 +266,7 @@ ACTIF CIRCULANT (valeur nette uniquement):
 - total_actif_circulant: Total III
 
 TOTAL:
-- total_general_actif: TOTAL GÉNÉRAL (I+II+III+IV+V+VI)
+- total_general_actif: TOTAL GÉNÉRAL (I+II+III+IV+V+VI) ⚠️ UTILISER LA COLONNE NET (pas Brut!)
 
 ═══════════════════════════════════════════════════════════════════════════════
 SECTION 2: BILAN PASSIF
@@ -352,25 +357,33 @@ RÉSULTATS:
 SECTION 4: SIG - SOLDES INTERMÉDIAIRES DE GESTION
 ═══════════════════════════════════════════════════════════════════════════════
 
-EXTRAIRE POUR CHAQUE LIGNE: { valeur: nombre, pct_ca: nombre }
-Le % CA se trouve dans la colonne "% CA" du tableau SIG.
+⚠️ SECTION CRITIQUE - EXTRAIRE TOUS LES INDICATEURS CI-DESSOUS
 
-INDICATEURS À EXTRAIRE:
+EXTRAIRE POUR CHAQUE LIGNE: { valeur: nombre, pct_ca: nombre }
+Le % CA se trouve dans la colonne "% CA" ou "%" du tableau SIG.
+
+FORMAT ATTENDU POUR CHAQUE CHAMP:
+{
+  "chiffre_affaires": { "valeur": 240597, "pct_ca": 100 },
+  "marge_brute_globale": { "valeur": 159324, "pct_ca": 66.22 }
+}
+
+INDICATEURS À EXTRAIRE (OBLIGATOIRES):
 - chiffre_affaires: Ventes marchandises + Production (ligne de référence 100%)
 - ventes_marchandises: Ventes de marchandises
 - cout_achat_marchandises_vendues: Coût d'achat des marchandises vendues
-- marge_commerciale: MARGE COMMERCIALE
+- marge_commerciale: MARGE COMMERCIALE (différent de marge_brute_globale!)
 - production_vendue: Production vendue
 - production_exercice: PRODUCTION DE L'EXERCICE
 - marge_brute_production: Marge brute de production (si présent)
-- marge_brute_globale: MARGE BRUTE GLOBALE
-- autres_achats_charges_externes: Autres achats + charges externes
+- marge_brute_globale: MARGE BRUTE GLOBALE ⚠️ DIFFÉRENT de marge_commerciale - c'est la marge incluant production
+- autres_achats_charges_externes: Autres achats et charges externes ⚠️ CRITIQUE - ligne "Autres achats + charges externes"
 - valeur_ajoutee: VALEUR AJOUTÉE
 - subventions_exploitation: Subventions d'exploitation (si présent)
 - impots_taxes: Impôts, taxes et versements assimilés
-- salaires_personnel: Salaires du personnel
-- charges_sociales_personnel: Charges sociales du personnel
-- charges_exploitant: CHARGES DE L'EXPLOITANT ⚠️ IMPORTANT: C'est le salaire du dirigeant!
+- salaires_personnel: Salaires du personnel ⚠️ CRITIQUE - NE PAS confondre avec charges_exploitant
+- charges_sociales_personnel: Charges sociales du personnel ⚠️ CRITIQUE
+- charges_exploitant: CHARGES DE L'EXPLOITANT ⚠️ IMPORTANT: C'est le salaire du dirigeant (TNS)!
 - ebe: EXCÉDENT BRUT D'EXPLOITATION (EBE)
 - autres_produits_gestion: Autres produits de gestion courante
 - autres_charges_gestion: Autres charges de gestion courante
@@ -384,6 +397,21 @@ INDICATEURS À EXTRAIRE:
 - charges_exceptionnelles: Charges exceptionnelles
 - resultat_exceptionnel: RÉSULTAT EXCEPTIONNEL
 - resultat_net: RÉSULTAT NET
+
+EXEMPLE D'EXTRACTION SIG ATTENDUE:
+{
+  "chiffre_affaires": { "valeur": 240597, "pct_ca": 100 },
+  "marge_commerciale": { "valeur": 39181, "pct_ca": 16.28 },
+  "marge_brute_globale": { "valeur": 159324, "pct_ca": 66.22 },
+  "autres_achats_charges_externes": { "valeur": 62505, "pct_ca": 25.98 },
+  "valeur_ajoutee": { "valeur": 100102, "pct_ca": 41.61 },
+  "salaires_personnel": { "valeur": 34946, "pct_ca": 14.52 },
+  "charges_sociales_personnel": { "valeur": 19958, "pct_ca": 8.30 },
+  "charges_exploitant": { "valeur": 12411, "pct_ca": 5.16 },
+  "ebe": { "valeur": 49952, "pct_ca": 20.76 },
+  "resultat_exploitation": { "valeur": 44638, "pct_ca": 18.55 },
+  "resultat_net": { "valeur": 45403, "pct_ca": 18.87 }
+}
 
 ═══════════════════════════════════════════════════════════════════════════════
 VALIDATION
@@ -421,6 +449,28 @@ function detectComptaDocument(filename: string, filePath?: string): boolean {
   const containsCompta = filename.toUpperCase().includes('COMPTA');
 
   return isComptaFilename || (isInAnalyserFolder && containsCompta);
+}
+
+/**
+ * Détecte si un document est un document de coûts de transaction
+ * basé sur le nom du fichier (ex: "Cout_transaction_*.pdf", "offre_achat_*.pdf")
+ *
+ * Ces documents contiennent les détails financiers d'une transaction:
+ * - Prix du fonds de commerce
+ * - Honoraires, frais d'acte, droits d'enregistrement
+ * - Stock et fonds de roulement
+ * - Plan de financement (apport, crédit, mensualités)
+ */
+export function detectTransactionCostDocument(filename: string): boolean {
+  const patterns = [
+    /cout.*transaction/i,
+    /transaction.*cout/i,
+    /offre.*achat/i,
+    /cout.*acquisition/i,
+    /financement.*acquisition/i,
+    /projet.*financement/i
+  ];
+  return patterns.some(p => p.test(filename));
 }
 
 export const geminiVisionExtractTool = new FunctionTool({
@@ -682,9 +732,14 @@ export const geminiVisionExtractTool = new FunctionTool({
               ebe: parsed.sig?.ebe?.valeur || 0,
               resultat_net: parsed.compte_resultat?.resultat_net || parsed.sig?.resultat_net?.valeur || 0,
               resultat_exploitation: parsed.compte_resultat?.resultat_exploitation || parsed.sig?.resultat_exploitation?.valeur || 0,
-              charges_personnel: (parsed.compte_resultat?.salaires_traitements || 0) + (parsed.compte_resultat?.charges_sociales || 0),
+              // Charges personnel: préférer SIG (salaires + charges sociales) puis Compte de Résultat
+              charges_personnel: parsed.sig?.salaires_personnel?.valeur
+                ? (parsed.sig.salaires_personnel.valeur + (parsed.sig.charges_sociales_personnel?.valeur || 0))
+                : ((parsed.compte_resultat?.salaires_traitements || 0) + (parsed.compte_resultat?.charges_sociales || 0)),
               dotations_amortissements: parsed.compte_resultat?.dotations_amortissements_immob || 0,
-              achats_marchandises: parsed.compte_resultat?.achats_marchandises || 0,
+              // ✅ Ventes et achats de marchandises - CRITIQUES pour calcul marge commerciale
+              ventes_marchandises: parsed.compte_resultat?.ventes_marchandises || parsed.sig?.ventes_marchandises?.valeur || 0,
+              achats_marchandises: parsed.compte_resultat?.achats_marchandises || parsed.sig?.cout_achat_marchandises_vendues?.valeur || 0,
               consommations_externes: parsed.compte_resultat?.autres_achats_charges_externes || 0,
               capitaux_propres: parsed.bilan_passif?.total_capitaux_propres || 0,
               dettes_totales: parsed.bilan_passif?.total_dettes || 0,
@@ -693,7 +748,12 @@ export const geminiVisionExtractTool = new FunctionTool({
               // Données SIG spécifiques
               marge_commerciale: parsed.sig?.marge_commerciale?.valeur || 0,
               valeur_ajoutee: parsed.sig?.valeur_ajoutee?.valeur || 0,
-              charges_exploitant: parsed.sig?.charges_exploitant?.valeur || 0 // Salaire dirigeant!
+              charges_exploitant: parsed.sig?.charges_exploitant?.valeur || 0, // Salaire dirigeant!
+              // Nouveaux champs critiques
+              marge_brute_globale: parsed.sig?.marge_brute_globale?.valeur || 0,
+              charges_externes: parsed.sig?.autres_achats_charges_externes?.valeur || parsed.compte_resultat?.autres_achats_charges_externes || 0,
+              salaires_personnel: parsed.sig?.salaires_personnel?.valeur || parsed.compte_resultat?.salaires_traitements || 0,
+              charges_sociales_personnel: parsed.sig?.charges_sociales_personnel?.valeur || parsed.compte_resultat?.charges_sociales || 0
             },
             // Nouvelles sections structurées COMPTA
             bilan_actif: parsed.bilan_actif,
@@ -715,10 +775,31 @@ export const geminiVisionExtractTool = new FunctionTool({
           annee: comptaOutput.year,
           confidence: comptaOutput.confidence,
           ca: comptaOutput.extractedData.key_values.chiffre_affaires,
-          ebe: comptaOutput.extractedData.key_values.ebe,
+          marge_brute_globale: comptaOutput.extractedData.key_values.marge_brute_globale,
+          charges_externes: comptaOutput.extractedData.key_values.charges_externes,
+          charges_personnel: comptaOutput.extractedData.key_values.charges_personnel,
           charges_exploitant: comptaOutput.extractedData.key_values.charges_exploitant,
+          ebe: comptaOutput.extractedData.key_values.ebe,
+          resultat_exploitation: comptaOutput.extractedData.key_values.resultat_exploitation,
           resultat_net: comptaOutput.extractedData.key_values.resultat_net
         });
+
+        // Log extraction to dedicated file
+        const siret = (toolContext?.state.get('businessInfo') as any)?.siret || 'unknown';
+        logDocumentExtraction(
+          filename,
+          siret,
+          comptaOutput.year,
+          comptaOutput.documentType,
+          {
+            bilan_actif: comptaOutput.extractedData.bilan_actif,
+            bilan_passif: comptaOutput.extractedData.bilan_passif,
+            compte_resultat: comptaOutput.extractedData.compte_resultat,
+            sig: comptaOutput.extractedData.sig,
+            key_values: comptaOutput.extractedData.key_values
+          },
+          comptaOutput.confidence
+        );
 
         return comptaOutput;
       }
@@ -745,6 +826,17 @@ export const geminiVisionExtractTool = new FunctionTool({
         tables: output.extractedData.tables.length,
         keyValues: Object.keys(output.extractedData.key_values).length
       });
+
+      // Log extraction to dedicated file
+      const siretStd = (toolContext?.state.get('businessInfo') as any)?.siret || 'unknown';
+      logDocumentExtraction(
+        filename,
+        siretStd,
+        output.year,
+        output.documentType,
+        { key_values: output.extractedData.key_values },
+        output.confidence
+      );
 
       return output;
 

@@ -126,15 +126,23 @@ b) EXTRACTION HEURISTIQUE (FALLBACK si Vision échoue)
 
    ⚠️ Toujours utiliser le filename exact de l'étape 1
 
-c) EXTRACTION COÛTS DE TRANSACTION (si document de type "cout_transaction")
-   SI geminiVisionExtract a détecté documentType = "cout_transaction" :
+c) EXTRACTION COÛTS DE TRANSACTION (IMPORTANT - vérifier le nom du fichier!)
+   SI geminiVisionExtract a détecté documentType = "cout_transaction"
+   OU SI le nom du fichier contient un de ces patterns (même si classé "projet_vente"):
+      - "cout" + "transaction"
+      - "offre" + "achat"
+      - "cout" + "acquisition"
+      - "financement" + "acquisition"
 
+   ALORS appeler:
    extractTransactionCosts({ filename: "EXACT_FILENAME_FROM_STEP_1" })
 
    Retourne: { success: true, transactionCosts: { prix_fonds, honoraires_ht, frais_acte_ht, ..., mensualites } }
 
    ⚠️ Ce tool extrait automatiquement tous les coûts et le financement
    ⚠️ Les données seront injectées dans state.transactionCosts (géré automatiquement)
+   ⚠️ IMPORTANT: Les documents "projet_vente" peuvent contenir des coûts de transaction !
+   ⚠️ Exemple: "Cout transaction Mme Ardouin (offre).pdf" → appeler extractTransactionCosts
 
 ═══════════════════════════════════════════════════════════════════════════════
 ÉTAPE 3 : CONSTRUIRE LE JSON FINAL
