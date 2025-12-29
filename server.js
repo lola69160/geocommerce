@@ -14,6 +14,7 @@ import { reconcileIdentity } from './server/services/identityService.js';
 import { analyzeLocality } from './server/services/intelligenceService.js';
 import { createMainOrchestrator } from './server/adk/agents/MainOrchestrator.js';
 import { createFinancialOrchestrator } from './server/adk/financial/index.js';
+import { startExtractionSession, endExtractionSession, logUserComments } from './server/extractionLogger.js';
 
 dotenv.config();
 
@@ -945,6 +946,10 @@ app.post('/api/analyze-financial', async (req, res) => {
             documentsCount: documents.length
         });
 
+        // Start extraction logging session (creates unique log file per analysis)
+        const siretForLog = businessInfo.siret || 'N_A';
+        startExtractionSession(siretForLog);
+
         // Configuration session ADK
         const appName = 'searchcommerce-financial';
         const userId = 'system';
@@ -966,6 +971,111 @@ app.post('/api/analyze-financial', async (req, res) => {
             return doc;
         });
 
+        // ========================================
+        // PARSING LANGAGE NATUREL DES USER COMMENTS
+        // ========================================
+        function parseNaturalLanguageUserComments(comments) {
+            if (!comments?.autres) return comments;
+
+            const text = comments.autres;
+            const result = { ...comments };
+
+            console.log('[parseNLP] Analyse du texte libre utilisateur...');
+
+            // 1a. LOYER ACTUEL: "loyer mensuel actuel de 2600 €"
+            const loyerActuelPatterns = [
+                /loyer\s*(?:mensuel\s*)?actuel\s*(?:de\s*)?([\d\s]+)\s*€/i,
+                /loyer\s*(?:mensuel\s*)?(?:de\s*)?([\d\s]+)\s*€.*?(?:descendu|négocié)/i
+            ];
+            for (const pattern of loyerActuelPatterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    const currentRent = parseInt(match[1].replace(/\s/g, ''));
+                    if (currentRent > 0 && currentRent < 50000) {
+                        result.loyer = result.loyer || {};
+                        result.loyer.loyer_actuel_mensuel = currentRent;
+                        console.log(`[parseNLP] ✅ Loyer actuel: ${currentRent}€/mois`);
+                        break;
+                    }
+                }
+            }
+
+            // 1b. LOYER NEGOCIE: "loyer descendu à 1800 €" or "loyer négocié à 1800€"
+            const loyerNegociePatterns = [
+                /loyer.*(?:descendu|négocié|renégocié)\s*(?:à|a)\s*([\d\s]+)\s*€/i,
+                /nouveau\s*loyer.*?([\d\s]+)\s*€/i,
+                /(?:descendu|négocié|renégocié)\s*(?:à|a)\s*([\d\s]+)\s*€\s*(?:par\s*mois)?/i
+            ];
+            for (const pattern of loyerNegociePatterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    const newRent = parseInt(match[match.length - 1].replace(/\s/g, ''));
+                    if (newRent > 0 && newRent < 50000) {
+                        result.loyer = result.loyer || {};
+                        result.loyer.futur_loyer_commercial = newRent;
+                        console.log(`[parseNLP] ✅ Loyer négocié: ${newRent}€/mois`);
+                        break;
+                    }
+                }
+            }
+
+            // 2. BUDGET TRAVAUX: "budget de 30000 € de travaux"
+            const travauxMatch = text.match(/budget\s*(?:de\s*)?([\d\s]+)\s*€\s*(?:de\s*)?travaux/i) ||
+                                 text.match(/travaux.*?([\d\s]+)\s*€/i);
+            if (travauxMatch) {
+                const budget = parseInt(travauxMatch[1].replace(/\s/g, ''));
+                if (budget > 0) {
+                    result.travaux = result.travaux || {};
+                    result.travaux.budget_prevu = budget;
+                    console.log(`[parseNLP] ✅ Budget travaux: ${budget}€`);
+                }
+            }
+
+            // 3. APPORT PERSONNEL: "apport personnel sera de 100000 euros"
+            const apportMatch = text.match(/apport\s*personnel.*?([\d\s]+)\s*(?:€|euros?)/i);
+            if (apportMatch) {
+                const apport = parseInt(apportMatch[1].replace(/\s/g, ''));
+                if (apport > 0) {
+                    result.apport_personnel = apport;
+                    console.log(`[parseNLP] ✅ Apport personnel: ${apport}€`);
+                }
+            }
+
+            // 4. TNS SALARY: "TNS payé 2100 euros brut par mois"
+            const tnsMatch = text.match(/TNS.*?([\d\s]+)\s*(?:€|euros?)/i);
+            if (tnsMatch) {
+                const salaireTns = parseInt(tnsMatch[1].replace(/\s/g, ''));
+                if (salaireTns > 0 && salaireTns < 20000) {
+                    result.salaires = result.salaires || {};
+                    result.salaires.tns_mensuel = salaireTns;
+                    console.log(`[parseNLP] ✅ Salaire TNS: ${salaireTns}€/mois`);
+                }
+            }
+
+            // 5. SALARIES: "salarié temps plein au smic 1 801,80 €"
+            const salarieMatches = [...text.matchAll(/salari[ée].*?([\d\s,]+)\s*€/gi)];
+            const salaries = [];
+            for (const match of salarieMatches) {
+                const salaire = parseFloat(match[1].replace(/\s/g, '').replace(',', '.'));
+                if (salaire > 0 && salaire < 20000) {
+                    const isSaisonnier = match[0].toLowerCase().includes('juin') ||
+                                         match[0].toLowerCase().includes('septembre') ||
+                                         match[0].toLowerCase().includes('saison');
+                    salaries.push({ montant: salaire, saisonnier: isSaisonnier });
+                }
+            }
+            if (salaries.length > 0) {
+                result.salaires = result.salaires || {};
+                result.salaires.liste = salaries;
+                console.log(`[parseNLP] ✅ Salariés: ${salaries.length} trouvés`);
+            }
+
+            return result;
+        }
+
+        // Appliquer le parsing NLP aux commentaires utilisateur
+        const enrichedUserComments = parseNaturalLanguageUserComments(userComments || {});
+
         // 3. État initial
         const initialState = {
             documents: processedDocuments,
@@ -975,7 +1085,7 @@ app.post('/api/analyze-financial', async (req, res) => {
                 nafCode: businessInfo.nafCode || '',
                 activity: businessInfo.activity || ''
             },
-            userComments: userComments || {},
+            userComments: enrichedUserComments,
             options: {
                 prixAffiche: options.prixAffiche || null,
                 includeImmobilier: options.includeImmobilier !== false // true par défaut
@@ -1067,6 +1177,9 @@ app.post('/api/analyze-financial', async (req, res) => {
             }
 
             console.log('═══════════════════════════════════════════════════════════════\n');
+
+            // Log userComments to dedicated extraction log file
+            logUserComments(businessInfo.siret || 'N/A', enrichedUserComments);
         } else {
             console.log('⚠️  Aucun commentaire utilisateur fourni.\n');
             console.log('═══════════════════════════════════════════════════════════════\n');
@@ -1278,6 +1391,9 @@ The documents and business info are available in state for all agents.`
             confidence: confidenceScore
         };
 
+        // End extraction logging session
+        endExtractionSession(siretForLog);
+
         // 10. Réponse
         res.json({
             success: true,
@@ -1305,6 +1421,10 @@ The documents and business info are available in state for all agents.`
 
     } catch (error) {
         const duration = Date.now() - startTime;
+
+        // End extraction logging session even on error
+        const siretForLogCatch = req.body.businessInfo?.siret || 'N_A';
+        endExtractionSession(siretForLogCatch);
 
         logger.error('Financial ADK pipeline failed', {
             siret: req.body.businessInfo?.siret || 'N/A',

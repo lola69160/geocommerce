@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '../../data');
 const NOTES_FILE = path.join(DATA_DIR, 'notes.json');
 const CART_FILE = path.join(DATA_DIR, 'cart.json');
+const DOCUMENTS_FILE = path.join(DATA_DIR, 'documents.json');
 
 // Ensure data directory exists
 const ensureDataDir = async () => {
@@ -72,4 +73,66 @@ export const removeFromCart = async (businessId) => {
         await writeJsonFile(CART_FILE, cart);
     }
     return cart;
+};
+
+export const getDocuments = async () => {
+    return await readJsonFile(DOCUMENTS_FILE);
+};
+
+export const saveDocument = async (siret, documentMetadata) => {
+    const documents = await getDocuments();
+
+    if (!documents[siret]) {
+        documents[siret] = { documents: [] };
+    }
+
+    documents[siret].documents.push(documentMetadata);
+    await writeJsonFile(DOCUMENTS_FILE, documents);
+
+    return documents[siret].documents;
+};
+
+export const deleteDocument = async (siret, documentId) => {
+    const documents = await getDocuments();
+
+    if (!documents[siret]) {
+        throw new Error('Aucun document trouvé pour ce commerce');
+    }
+
+    const docIndex = documents[siret].documents.findIndex(d => d.id === documentId);
+
+    if (docIndex === -1) {
+        throw new Error('Document non trouvé');
+    }
+
+    const [deletedDoc] = documents[siret].documents.splice(docIndex, 1);
+
+    await writeJsonFile(DOCUMENTS_FILE, documents);
+
+    return {
+        deletedDoc,
+        remainingDocuments: documents[siret].documents
+    };
+};
+
+export const getBusinessDocuments = async (siret) => {
+    const documents = await getDocuments();
+    // Extract SIREN (9 digits) from SIRET (14 digits) if needed
+    // Documents are indexed by SIREN
+    const siren = siret?.substring(0, 9);
+    const allDocs = documents[siren]?.documents || [];
+
+    // Filter out documents whose files don't exist on disk
+    const validDocs = [];
+    for (const doc of allDocs) {
+        try {
+            await fs.access(doc.path);
+            validDocs.push(doc);
+        } catch {
+            // File doesn't exist, skip this document
+            console.warn(`Document file not found, skipping: ${doc.path}`);
+        }
+    }
+
+    return validDocs;
 };
