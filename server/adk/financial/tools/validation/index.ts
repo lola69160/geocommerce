@@ -7,3 +7,4 @@
 export { crossValidateTool } from './crossValidateTool';
 export { detectAnomaliesTool } from './detectAnomaliesTool';
 export { assessDataQualityTool } from './assessDataQualityTool';
+export { generateDeterministicAlertsTool } from './generateDeterministicAlertsTool';

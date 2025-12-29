@@ -62,15 +62,50 @@ export function generateBusinessPlanSection(businessPlan: any): string {
 
 /**
  * Generate changes table (Actuel vs Projeté)
+ * Adapté pour Tabac: affiche le split CA si disponible
  */
 function generateChangesTable(projections: any[], tabacInfo: any): string {
   const annee0 = projections[0];
   const annee1 = projections[1];
 
+  // Détecter si c'est un Tabac (présence de ventes_marchandises)
+  const isTabac = annee0?.ventes_marchandises !== undefined;
+
   let html = '<h3>📊 Changements Appliqués (Actuel → Projeté)</h3>';
   html += '<table>';
   html += '<thead><tr><th>Élément</th><th>Situation Actuelle</th><th>Après Reprise (Année 1)</th><th>Variation</th></tr></thead>';
   html += '<tbody>';
+
+  // Si Tabac: afficher le split CA en premier
+  if (isTabac) {
+    const ventesMarchandises0 = annee0.ventes_marchandises || 0;
+    const ventesMarchandises1 = annee1.ventes_marchandises || 0;
+    const variationVentes = ventesMarchandises1 - ventesMarchandises0;
+    const pctVentes = ventesMarchandises0 > 0 ? ((variationVentes / ventesMarchandises0) * 100).toFixed(1) : 'N/A';
+
+    const commissions0 = annee0.commissions_services || 0;
+    const commissions1 = annee1.commissions_services || 0;
+    const variationComm = commissions1 - commissions0;
+    const pctComm = commissions0 > 0 ? ((variationComm / commissions0) * 100).toFixed(1) : 'N/A';
+
+    html += `<tr>
+      <td>🛒 Ventes Marchandises (Boutique)</td>
+      <td class="text-right">${ventesMarchandises0.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${ventesMarchandises1.toLocaleString('fr-FR')} €</td>
+      <td class="text-right" style="color:var(--color-success, #059669)">
+        +${variationVentes.toLocaleString('fr-FR')} € (+${pctVentes}%)
+      </td>
+    </tr>`;
+
+    html += `<tr>
+      <td>🚬 Commissions (Tabac/Jeux/Presse)</td>
+      <td class="text-right">${commissions0.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${commissions1.toLocaleString('fr-FR')} €</td>
+      <td class="text-right" style="color:var(--color-success, #059669)">
+        +${variationComm.toLocaleString('fr-FR')} € (+${pctComm}%)
+      </td>
+    </tr>`;
+  }
 
   // Loyer
   const loyerActuel = annee0.charges_detail?.loyer || 0;
@@ -167,6 +202,7 @@ function generateChangesTable(projections: any[], tabacInfo: any): string {
 
 /**
  * Generate 5-year projections table
+ * Adapté pour Tabac: CA décomposé + Marge Brute section
  */
 function generateProjectionsTable(projections: any[]): string {
   let html = '<h3>Projections sur 5 ans</h3>';
@@ -180,34 +216,71 @@ function generateProjectionsTable(projections: any[]): string {
 
   html += '</tr></thead><tbody>';
 
-  // CA
+  // Détecter si c'est un Tabac (présence de ventes_marchandises)
+  const isTabac = projections[0]?.ventes_marchandises !== undefined;
+
+  // ========================================
+  // Section CHIFFRE D'AFFAIRES
+  // ========================================
   html += '<tr style="background:#f0f9ff">';
-  html += '<td><strong>Chiffre d\'Affaires</strong></td>';
+  html += `<td><strong>${isTabac ? 'CHIFFRE D\'AFFAIRES' : 'Chiffre d\'Affaires'}</strong></td>`;
   projections.forEach((proj: any) => {
     html += `<td class="text-right"><strong>${proj.ca.toLocaleString('fr-FR')} €</strong></td>`;
   });
   html += '</tr>';
 
-  // CA details
+  // Si Tabac: détail CA décomposé
+  if (isTabac) {
+    html += generateDetailRow('└─ Ventes Marchandises (Souvenirs)', projections, 'ventes_marchandises', '#059669');
+    html += generateDetailRow('└─ Commissions (Tabac/Jeux/Presse)', projections, 'commissions_services', '#0284c7');
+  }
+
+  // CA details (impacts)
   html += generateDetailRow('└─ Impact horaires', projections, 'ca_detail.impact_horaires', '#059669');
   html += generateDetailRow('└─ Impact travaux', projections, 'ca_detail.impact_travaux', '#059669');
   html += generateDetailRow('└─ Croissance naturelle', projections, 'ca_detail.croissance_naturelle', '#059669');
 
-  // Charges fixes
-  html += '<tr style="background:#fff7ed">';
-  html += '<td><strong>Charges Fixes</strong></td>';
+  // ========================================
+  // Section MARGE BRUTE (Tabac uniquement)
+  // ========================================
+  if (isTabac) {
+    // Calculer taux marge pour affichage
+    const proj0 = projections[0];
+    const tauxMargeBoutique = proj0.ventes_marchandises > 0
+      ? Math.round((proj0.marge_marchandises / proj0.ventes_marchandises) * 100)
+      : 68;
+
+    html += '<tr style="background:#fef3c7; border-top:2px solid #d97706">';
+    html += '<td><strong>MARGE BRUTE</strong></td>';
+    projections.forEach((proj: any) => {
+      html += `<td class="text-right"><strong>${(proj.marge_brute_globale || 0).toLocaleString('fr-FR')} €</strong></td>`;
+    });
+    html += '</tr>';
+
+    html += generateDetailRow(`└─ Marge sur Marchandises (~${tauxMargeBoutique}%)`, projections, 'marge_marchandises', '#059669');
+    html += generateDetailRow('└─ Commissions (100% marge)', projections, 'marge_commissions', '#0284c7');
+  }
+
+  // ========================================
+  // Section CHARGES
+  // ========================================
+  html += '<tr style="background:#fff7ed; border-top:2px solid #ea580c">';
+  html += '<td><strong>CHARGES</strong></td>';
   projections.forEach((proj: any) => {
     html += `<td class="text-right"><strong>${proj.charges_fixes.toLocaleString('fr-FR')} €</strong></td>`;
   });
   html += '</tr>';
 
-  // Charges details
-  html += generateDetailRow('└─ Salaires', projections, 'charges_detail.salaires');
-  html += generateDetailRow('└─ Loyer', projections, 'charges_detail.loyer');
+  // Charges details avec sous-ligne Loyer
+  html += generateDetailRow('└─ Salaires + TNS', projections, 'charges_detail.salaires');
+  html += generateDetailRow('└─ Loyer', projections, 'charges_detail.loyer', '#f59e0b');
+  html += generateDetailRow('└─ Autres charges', projections, 'charges_detail.autres_charges');
 
-  // EBE
-  html += '<tr style="background:#d1fae5">';
-  html += '<td><strong>EBE Normatif</strong></td>';
+  // ========================================
+  // Section EBE (surbrillance verte)
+  // ========================================
+  html += '<tr style="background:#d1fae5; border-top:2px solid #059669">';
+  html += `<td><strong>💰 ${isTabac ? 'EBE ESTIMÉ' : 'EBE Normatif'}</strong></td>`;
   projections.forEach((proj: any) => {
     const color = proj.ebe_normatif > 0 ? '#065f46' : '#991b1b';
     html += `<td class="text-right" style="color:${color}"><strong>${proj.ebe_normatif.toLocaleString('fr-FR')} €</strong></td>`;
@@ -224,7 +297,7 @@ function generateProjectionsTable(projections: any[]): string {
 
   // Reste après dette
   html += '<tr style="background:#e6f7ff; border-top:2px solid #0066cc">';
-  html += '<td><strong>💰 Reste après dette</strong></td>';
+  html += '<td><strong>💵 Reste après dette</strong></td>';
   projections.forEach((proj: any) => {
     const color = proj.reste_apres_dette > 0 ? '#065f46' : '#991b1b';
     html += `<td class="text-right" style="color:${color}"><strong>${proj.reste_apres_dette.toLocaleString('fr-FR')} €</strong></td>`;
@@ -232,11 +305,23 @@ function generateProjectionsTable(projections: any[]): string {
   html += '</tr>';
 
   html += '</tbody></table>';
+
+  // Note explicative pour Tabac
+  if (isTabac) {
+    html += `
+      <div class="nota-bene" style="margin-top: 15px; padding: 12px; background: #fef3c7; border-left: 4px solid #d97706; font-style: italic; color: #92400e;">
+        <strong>🚬 Spécificité Tabac :</strong> L'EBE est calculé à partir de la Marge Brute Globale (Marge Marchandises + Commissions nettes) moins les Charges Fixes.
+        Les commissions sont des revenus nets (100% marge), la marge sur marchandises dépend du taux de marge boutique (~68%).
+      </div>
+    `;
+  }
+
   return html;
 }
 
 /**
  * Generate detail row for projections table
+ * Gère les propriétés imbriquées (ca_detail.impact_horaires) et simples (ventes_marchandises)
  */
 function generateDetailRow(label: string, projections: any[], path: string, color?: string): string {
   let html = '<tr>';
@@ -249,7 +334,14 @@ function generateDetailRow(label: string, projections: any[], path: string, colo
     }
     val = val || 0;
     const style = color ? `font-size:0.9em; color:${color}` : 'font-size:0.9em';
-    html += `<td class="text-right" style="${style}">${val > 0 ? '+' : ''}${Math.round(val).toLocaleString('fr-FR')} €</td>`;
+
+    // Pour les valeurs absolues (CA, Marge), pas de signe +
+    // Pour les impacts et variations, afficher le signe +
+    const isAbsoluteValue = !path.includes('impact') && !path.includes('croissance');
+    const displayValue = Math.round(val).toLocaleString('fr-FR');
+    const prefix = isAbsoluteValue ? '' : (val > 0 ? '+' : '');
+
+    html += `<td class="text-right" style="${style}">${prefix}${displayValue} €</td>`;
   });
   html += '</tr>';
   return html;

@@ -26,7 +26,8 @@ import {
   generateAccountingSection,
   generateValuationSection,
   generateRealEstateSection,
-  generateBusinessPlanSection
+  generateBusinessPlanSection,
+  generateOpportunitySection
 } from './sections';
 
 // Acquisition Advice
@@ -85,6 +86,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       let immobilier = parseState(toolContext?.state.get('immobilier'));
       let businessPlan = parseState(toolContext?.state.get('businessPlan'));
       let financialValidation = parseState(toolContext?.state.get('financialValidation'));
+      let options = parseState(toolContext?.state.get('options'));
 
       const sections_included: string[] = [];
 
@@ -99,6 +101,20 @@ export const generateFinancialHtmlTool = new FunctionTool({
 
       // 2. Synthèse exécutive (avec userComments pour afficher budget travaux et documentExtraction pour prix demandé)
       let userComments = parseState(toolContext?.state.get('userComments'));
+
+      // 2a. Section Opportunité de Reprise (nouvelle section stratégique avec Gemini)
+      const transactionCosts = documentExtraction?.transactionCosts;
+      const opportunityHtml = await generateOpportunitySection(
+        comptable,
+        valorisation,
+        businessPlan,
+        userComments,
+        transactionCosts
+      );
+      html += opportunityHtml;
+      sections_included.push('opportunity_section');
+
+      // 2b. Suite de la synthèse exécutive (verdict, scores, points forts/vigilance)
       html += generateExecutiveSummary(comptable, valorisation, financialValidation, userComments, businessPlan, documentExtraction);
       sections_included.push('executive_summary');
 
@@ -119,11 +135,11 @@ export const generateFinancialHtmlTool = new FunctionTool({
       }
 
       // 3. Analyse comptable
-      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge);
+      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, businessPlan, userComments);
       sections_included.push('accounting_analysis');
 
-      // 4. Valorisation (avec documentExtraction pour prix demandé)
-      html += generateValuationSection(valorisation, params.charts.valorisationChart, documentExtraction);
+      // 4. Valorisation (avec userComments et options pour section Tabac complète)
+      html += generateValuationSection(valorisation, params.charts.valorisationChart, documentExtraction, userComments, options);
       sections_included.push('valuation');
 
       // 5. Analyse immobilière

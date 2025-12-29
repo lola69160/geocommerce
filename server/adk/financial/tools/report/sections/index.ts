@@ -14,5 +14,8 @@ export { generateValuationSection } from './valuationSection';
 export { generateRealEstateSection } from './realEstateSection';
 export { generateBusinessPlanSection } from './businessPlanSection';
 
+// Opportunity section (new - strategic reprise section)
+export { generateOpportunitySection } from './opportunitySection';
+
 // Re-export types and utilities if needed
 export type { } from './coverPage';

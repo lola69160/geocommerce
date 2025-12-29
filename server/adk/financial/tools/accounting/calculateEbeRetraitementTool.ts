@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FunctionTool } from '@google/adk';
 import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../../utils/schemaHelper';
+import { logEbeRetraitement } from '../../../utils/extractionLogger';
 
 /**
  * Calculate EBE Retraitement Tool
@@ -396,6 +397,21 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           synthese += `Les retraitements positifs et négatifs s'équilibrent.`;
         }
       }
+
+      // Log EBE Retraitement to extraction log
+      const siret = (toolContext?.state.get('businessInfo') as any)?.siret || 'unknown';
+      logEbeRetraitement(
+        siret,
+        anneeReference,
+        ebeComptable,
+        ebeNormatif,
+        retraitements.map(r => ({
+          type: r.type,
+          description: r.description,
+          montant: r.montant,
+          source: r.source
+        }))
+      );
 
       return {
         ebe_comptable: ebeComptable,

@@ -2,7 +2,8 @@ import { LlmAgent } from '@google/adk';
 import {
   crossValidateTool,
   detectAnomaliesTool,
-  assessDataQualityTool
+  assessDataQualityTool,
+  generateDeterministicAlertsTool
 } from '../tools/validation';
 import type { FinancialState } from '../index';
 
@@ -54,7 +55,8 @@ export class FinancialValidationAgent extends LlmAgent {
       tools: [
         crossValidateTool,
         detectAnomaliesTool,
-        assessDataQualityTool
+        assessDataQualityTool,
+        generateDeterministicAlertsTool
       ],
 
       // Instruction système
@@ -109,14 +111,24 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
    - Recommandations de vérification par priorité
    - Documents à demander au vendeur
 
-ÉTAPE 4 : SYNTHÈSE ET INTERPRÉTATION
+ÉTAPE 4 : GÉNÉRATION DES ALERTES DÉTERMINISTES
+   generateDeterministicAlerts({})
+   → Retourne { alerts: [...], summary: {...}, pointsVigilance: [...] }
 
-Après avoir appelé les 3 tools, analyser les résultats et générer :
+   Le tool génère automatiquement des alertes REPRODUCTIBLES basées sur des règles avec seuils fixes.
+   Ces alertes remplacent la synthèse LLM pour garantir que le même commerce produise toujours les mêmes alertes.
 
-1. Vue d'ensemble du niveau de confiance
-2. Points bloquants (anomalies/erreurs critiques)
-3. Points de vigilance (warnings importants)
-4. Recommandations prioritaires
+   Catégories d'alertes : rentabilite, endettement, croissance, tresorerie, valorisation, immobilier, donnees
+   Niveaux de sévérité : critical, warning, info
+
+ÉTAPE 5 : SYNTHÈSE ET INTERPRÉTATION
+
+Après avoir appelé les 4 tools, construire le JSON de sortie :
+
+1. Reprendre les résultats des tools directement
+2. Calculer le niveau de confiance basé sur le score
+3. Les pointsVigilance viennent du tool generateDeterministicAlerts (NE PAS reformuler)
+4. Les pointsBloquants sont les alertes critical du tool generateDeterministicAlerts
 
 FORMAT DE SORTIE JSON (STRICT) :
 {
@@ -184,37 +196,51 @@ FORMAT DE SORTIE JSON (STRICT) :
     }
   ],
 
-  // Synthèse générale (interprétation de l'agent)
+  // Alertes déterministes (du tool generateDeterministicAlerts)
+  // IMPORTANT: Ces alertes sont REPRODUCTIBLES - ne pas reformuler
+  "deterministicAlerts": [
+    {
+      "id": "RENT_001",
+      "category": "rentabilite",
+      "severity": "critical",
+      "title": "Chute massive de l'EBE",
+      "message": "Chute de l'EBE de 65% sur 3 ans",
+      "impact": "Risque de non-couverture des annuités de prêt",
+      "recommendation": "Auditer les causes de la baisse de rentabilité"
+    }
+  ],
+
+  // Synthèse générale
   "synthese": {
     "niveauConfiance": "elevé",
     "pointsBloquants": [
-      "Aucun bilan comptable fourni - analyse de structure impossible"
+      // Reprendre les alertes severity=critical du tool generateDeterministicAlerts
+      "Chute massive de l'EBE: Chute de l'EBE de 65% sur 3 ans"
     ],
     "pointsVigilance": [
-      "Délai clients élevé (190 jours) - risque créances",
-      "Données de 2023 - demander données 2024"
+      // Reprendre pointsVigilance du tool generateDeterministicAlerts SANS REFORMULER
+      // Exemple: "Baisse du CA: Baisse du CA de 12% sur 3 ans"
     ],
     "recommandationsPrioritaires": [
-      "Demander les bilans des 3 dernières années",
-      "Obtenir une situation de trésorerie récente",
-      "Vérifier la cohérence CA extraction/SIG"
+      // Reprendre les recommendations des alertes critical et warning
     ],
-    "conclusionValidation": "Validation globalement positive avec 2 points bloquants à résoudre avant finalisation. Score de confiance : 82/100."
+    "conclusionValidation": "Validation globalement positive avec X points bloquants. Score de confiance : 82/100."
   }
 }
 
 RÈGLES :
-1. Appeler les 3 tools dans l'ordre (crossValidate → detectAnomalies → assessDataQuality)
+1. Appeler les 4 tools dans l'ordre (crossValidate → detectAnomalies → assessDataQuality → generateDeterministicAlerts)
 2. Ne PAS recalculer manuellement - utiliser les résultats des tools
-3. Synthèse : résumer en langage clair les conclusions de la validation
-4. Niveau de confiance :
+3. IMPORTANT: Les alertes de generateDeterministicAlerts sont REPRODUCTIBLES - NE PAS REFORMULER
+4. Reprendre pointsVigilance et deterministicAlerts EXACTEMENT comme retournés par le tool
+5. Niveau de confiance :
    - "très elevé" : 85-100, pas de point bloquant
    - "elevé" : 70-84, quelques warnings
    - "moyen" : 50-69, plusieurs anomalies
    - "faible" : 30-49, anomalies critiques
    - "très faible" : 0-29, données insuffisantes
-5. Points bloquants = severity "critical" dans anomalies ou status "error" dans coherenceChecks
-6. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
+6. Points bloquants = alertes severity "critical" du tool generateDeterministicAlerts
+7. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
 
 GESTION D'ERREURS :
 - Si aucune donnée dans le state :

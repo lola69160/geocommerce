@@ -158,29 +158,16 @@ export const estimateTravauxTool = new FunctionTool({
         });
       }
 
-      // Conformité ERP (si local recevant du public)
+      // Conformité ERP et PMR - uniquement si données concrètes disponibles
+      // NE PAS présumer de travaux sans diagnostic réel ou information du vendeur
       let conformiteERP: 'conforme' | 'a_verifier' | 'non_conforme' | 'inconnu' = 'inconnu';
       let accessibilitePMR: boolean | null = null;
 
-      // Heuristique: si commerce avec surface > 50m², ERP probable
-      if (surfaceM2 >= 50) {
-        conformiteERP = 'a_verifier';
-        accessibilitePMR = false; // Supposer non conforme par défaut
-
-        travauxObligatoires.push({
-          description: 'Mise en conformité accessibilité PMR (rampe, sanitaires adaptés)',
-          estimation_basse: 8000,
-          estimation_haute: 15000,
-          urgence: '12_mois'
-        });
-
-        travauxObligatoires.push({
-          description: 'Diagnostic de sécurité incendie ERP (extincteurs, éclairage de sécurité)',
-          estimation_basse: 2000,
-          estimation_haute: 5000,
-          urgence: '6_mois'
-        });
-      }
+      // Les travaux PMR/ERP ne sont ajoutés que si:
+      // 1. L'analyse photos a détecté des problèmes d'accessibilité
+      // 2. Le vendeur a fourni des informations sur la conformité
+      // 3. L'utilisateur a spécifié des travaux personnalisés
+      // Sinon, on indique simplement que c'est à vérifier lors de la due diligence
 
       // Utiliser analyse photos si disponible pour travaux
       if (photo?.renovation_needed && photo.cost_estimate) {

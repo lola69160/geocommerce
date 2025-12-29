@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FunctionTool } from '@google/adk';
 import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../../utils/schemaHelper';
+import { logValorisation } from '../../../utils/extractionLogger';
 
 /**
  * Synthesize Valuation Tool
@@ -352,6 +353,27 @@ export const synthesizeValuationTool = new FunctionTool({
       if (limitations.length === 0) {
         limitations.push('Aucune limitation majeure identifiée');
       }
+
+      // Log valorisation to extraction log
+      const siret = (toolContext?.state.get('businessInfo') as any)?.siret || 'unknown';
+      logValorisation(siret, {
+        methode_ebe: {
+          valeur: methodeEBE.valeur_mediane,
+          multiple: methodeEBE.ebe_retraite > 0 ? Math.round(methodeEBE.valeur_mediane / methodeEBE.ebe_retraite * 10) / 10 : 0
+        },
+        methode_ca: {
+          valeur: methodeCA.valeur_mediane,
+          pourcentage: 0 // Will be calculated separately if needed
+        },
+        methode_patrimoniale: {
+          valeur: methodePatrimoniale.valeur_estimee
+        },
+        recommendation: {
+          valeur_min: fourchetteBasse,
+          valeur_max: fourchetteHaute,
+          valeur_mediane: fourchetteMediane
+        }
+      });
 
       return {
         synthese: {

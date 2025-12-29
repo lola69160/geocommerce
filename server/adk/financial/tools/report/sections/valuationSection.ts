@@ -8,7 +8,13 @@
 /**
  * Generate the valuation section HTML
  */
-export function generateValuationSection(valorisation: any, valorisationChart: any, documentExtraction?: any): string {
+export function generateValuationSection(
+  valorisation: any,
+  valorisationChart: any,
+  documentExtraction?: any,
+  userComments?: any,
+  options?: any
+): string {
   if (!valorisation) {
     return '<h2>💰 Valorisation du Fonds</h2><p class="no-data">Données de valorisation non disponibles</p>';
   }
@@ -21,22 +27,22 @@ export function generateValuationSection(valorisation: any, valorisationChart: a
 
   // Valorisation Hybride Tabac/Presse/FDJ
   if (valorisation.methodeHybride) {
-    html += generateHybridValuationTable(valorisation.methodeHybride);
-  }
-
-  // Graphique fourchettes
-  html += '<div class="chart-container"><canvas id="valorisationChart"></canvas></div>';
-  html += `<script>
-  new Chart(document.getElementById('valorisationChart'), ${JSON.stringify(valorisationChart)});
-  </script>`;
-
-  // Tableau comparatif (seulement pour méthodes standard - pas pour hybride)
-  if (!valorisation.methodeHybride) {
-    html += generateStandardValuationTable(valorisation);
+    // Section Tabac complète (sans graphique Chart.js)
+    html += generateTabacValuationSection(
+      valorisation.methodeHybride,
+      documentExtraction,
+      userComments,
+      options
+    );
   } else {
-    html += '<div class="summary-box" style="background:var(--color-bg-light); border-left:4px solid var(--color-info-text)">';
-    html += '<p style="margin:0"><strong>Note :</strong> La méthode HYBRIDE Tabac/Presse/FDJ ci-dessus est la méthode de valorisation privilégiée pour ce type de commerce réglementé. Les méthodes classiques (EBE, CA, Patrimoniale) ne sont pas adaptées à ce secteur.</p>';
-    html += '</div>';
+    // Graphique fourchettes (commerces standards uniquement)
+    html += '<div class="chart-container"><canvas id="valorisationChart"></canvas></div>';
+    html += `<script>
+    new Chart(document.getElementById('valorisationChart'), ${JSON.stringify(valorisationChart)});
+    </script>`;
+
+    // Tableau comparatif standard
+    html += generateStandardValuationTable(valorisation);
   }
 
   // Synthèse valorisation
@@ -52,59 +58,243 @@ export function generateValuationSection(valorisation: any, valorisationChart: a
 }
 
 /**
- * Generate hybrid valuation table for Tabac/Presse
+ * Generate complete Tabac valuation section
+ * Includes: Valorisation Théorique, Plan de Financement, Apport Personnel, Facteurs Valorisants
  */
-function generateHybridValuationTable(tabac: any): string {
-  let html = '<div class="summary-box" style="background:var(--color-bg-light); border-left:4px solid var(--color-info-text)">';
-  html += '<h3>🔵 Méthode HYBRIDE Tabac/Presse/FDJ</h3>';
-  html += `<p style="color:var(--color-text-secondary)"><strong>Type de commerce:</strong> ${tabac.descriptionType}</p>`;
+function generateTabacValuationSection(
+  tabac: any,
+  documentExtraction?: any,
+  userComments?: any,
+  options?: any
+): string {
+  // === Data extraction ===
 
-  // Tableau de décomposition
-  html += '<table>';
-  html += '<thead><tr><th>Bloc Valorisation</th><th class="text-right">Base</th><th class="text-right">Coefficient / %</th><th class="text-right">Valeur</th></tr></thead>';
-  html += '<tbody>';
+  // Bloc Réglementé (Commissions)
+  const commissionsNettes = tabac.blocReglemente?.commissionsNettes || 0;
+  const coefMin = tabac.blocReglemente?.coefficientMin || 0;
+  const coefMedian = tabac.blocReglemente?.coefficientMedian || 0;
+  const coefMax = tabac.blocReglemente?.coefficientMax || 0;
+  const valReglMin = tabac.blocReglemente?.valeurMin || 0;
+  const valReglMedian = tabac.blocReglemente?.valeurMediane || 0;
+  const valReglMax = tabac.blocReglemente?.valeurMax || 0;
 
-  // Bloc 1: Activité Réglementée
-  html += '<tr>';
-  html += '<td><strong>📋 Bloc 1 : Activité Réglementée</strong><br><span style="font-size:0.9em; color:var(--color-text-secondary)">(Tabac + Loto + Presse + FDJ)</span></td>';
-  html += `<td class="text-right">${tabac.blocReglemente.commissionsNettes.toLocaleString('fr-FR')} €<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Commissions nettes annuelles</span></td>`;
-  html += `<td class="text-right">${tabac.blocReglemente.coefficientMin} - ${tabac.blocReglemente.coefficientMax}<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Coefficient multiplicateur</span></td>`;
-  html += `<td class="text-right"><strong>${tabac.blocReglemente.valeurMin.toLocaleString('fr-FR')} - ${tabac.blocReglemente.valeurMax.toLocaleString('fr-FR')} €</strong></td>`;
-  html += '</tr>';
+  // Bloc Commercial (Marchandises)
+  const caBoutique = tabac.blocCommercial?.caActiviteBoutique || 0;
+  const pctMin = tabac.blocCommercial?.pourcentageMin || 0;
+  const pctMedian = tabac.blocCommercial?.pourcentageMedian || 0;
+  const pctMax = tabac.blocCommercial?.pourcentageMax || 0;
+  const valCommMin = tabac.blocCommercial?.valeurMin || 0;
+  const valCommMedian = tabac.blocCommercial?.valeurMediane || 0;
+  const valCommMax = tabac.blocCommercial?.valeurMax || 0;
 
-  // Bloc 2: Activité Commerciale
-  html += '<tr>';
-  html += '<td><strong>🛒 Bloc 2 : Activité Commerciale</strong><br><span style="font-size:0.9em; color:var(--color-text-secondary)">(Souvenirs + Confiserie + Vape + Téléphonie)</span></td>';
-  html += `<td class="text-right">${tabac.blocCommercial.caActiviteBoutique.toLocaleString('fr-FR')} €<br><span style="font-size:0.9em; color:var(--color-text-secondary)">CA boutique annuel</span></td>`;
-  html += `<td class="text-right">${tabac.blocCommercial.pourcentageMin} - ${tabac.blocCommercial.pourcentageMax}%<br><span style="font-size:0.9em; color:var(--color-text-secondary)">Pourcentage CA</span></td>`;
-  html += `<td class="text-right"><strong>${tabac.blocCommercial.valeurMin.toLocaleString('fr-FR')} - ${tabac.blocCommercial.valeurMax.toLocaleString('fr-FR')} €</strong></td>`;
-  html += '</tr>';
+  // Total Valeur Intrinsèque
+  const totalMin = tabac.valorisationTotale?.fourchetteBasse || 0;
+  const totalMedian = tabac.valorisationTotale?.valeurMediane || 0;
+  const totalMax = tabac.valorisationTotale?.fourchetteHaute || 0;
 
-  // Total
-  html += '<tr style="border-top:2px solid var(--color-text-primary); background:var(--color-bg-light)">';
-  html += '<td colspan="3"><strong>🎯 VALORISATION TOTALE (Bloc 1 + Bloc 2)</strong></td>';
-  html += `<td class="text-right"><strong style="font-size:1.2em; color:var(--color-info-text)">${tabac.valorisationTotale.fourchetteBasse.toLocaleString('fr-FR')} - ${tabac.valorisationTotale.fourchetteHaute.toLocaleString('fr-FR')} €</strong><br><span style="color:var(--color-info-text)">Médiane: ${tabac.valorisationTotale.valeurMediane.toLocaleString('fr-FR')} €</span></td>`;
-  html += '</tr>';
+  // Financement
+  const transactionCosts = documentExtraction?.transactionCosts;
+  const prixNegocie = options?.prixAffiche || transactionCosts?.prix_fonds || 0;
+  const budgetTravaux = userComments?.travaux?.budget_prevu || 0;
+  const SUBVENTION_DOUANES = 30000;  // Valeur fixe
+  const FRAIS_MIN = 10000;
+  const FRAIS_MED = 15000;
+  const FRAIS_MAX = 20000;
+
+  // Calcul total investissement
+  const investMin = prixNegocie + budgetTravaux - SUBVENTION_DOUANES + FRAIS_MIN;
+  const investMedian = prixNegocie + budgetTravaux - SUBVENTION_DOUANES + FRAIS_MED;
+  const investMax = prixNegocie + budgetTravaux - SUBVENTION_DOUANES + FRAIS_MAX;
+
+  // Apport personnel
+  const apportPersonnel = userComments?.apport_personnel || 0;
+  const apportPct = investMedian > 0 ? ((apportPersonnel / investMedian) * 100).toFixed(0) : 0;
+
+  // Metadata
+  const descriptionType = tabac.descriptionType || 'Tabac/Presse';
+  const facteursValorisants = tabac.facteursValorisants || [];
+  const justification = tabac.justification || '';
+
+  // Format helper
+  const fmt = (n: number) => n.toLocaleString('fr-FR');
+
+  // === HTML Generation ===
+  let html = '<div class="tabac-valuation-container">';
+
+  // En-tête
+  html += `<div class="tabac-header">
+    <h3>🔵 Méthode HYBRIDE Tabac/Presse/FDJ</h3>
+    <p><strong>Type de commerce :</strong> ${descriptionType}</p>
+  </div>`;
+
+  // === Tableau 1: Valorisation Théorique du Fonds ===
+  html += `<table class="tabac-valuation-table">
+    <thead>
+      <tr>
+        <th>Composante</th>
+        <th>Base</th>
+        <th>Min</th>
+        <th>Médian</th>
+        <th>Max</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  // Ligne 1: Commissions (Bloc Réglementé)
+  html += `<tr>
+    <td>
+      <span class="component-name">📋 Commissions 2023</span>
+      <span class="component-detail">(Tabac + Loto + Presse + FDJ)</span>
+    </td>
+    <td>
+      <span class="base-value">${fmt(commissionsNettes)} €</span>
+      <span class="base-label">Commissions nettes annuelles</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valReglMin)} €</span>
+      <span class="coef">× ${coefMin}</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valReglMedian)} €</span>
+      <span class="coef">× ${coefMedian}</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valReglMax)} €</span>
+      <span class="coef">× ${coefMax}</span>
+    </td>
+  </tr>`;
+
+  // Ligne 2: Marchandises (Bloc Commercial)
+  html += `<tr>
+    <td>
+      <span class="component-name">🛒 Marchandises 2023</span>
+      <span class="component-detail">(Souvenirs + Confiserie + Vape + Téléphonie)</span>
+    </td>
+    <td>
+      <span class="base-value">${fmt(caBoutique)} €</span>
+      <span class="base-label">CA boutique annuel</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valCommMin)} €</span>
+      <span class="coef">${pctMin}%</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valCommMedian)} €</span>
+      <span class="coef">${pctMedian}%</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(valCommMax)} €</span>
+      <span class="coef">${pctMax}%</span>
+    </td>
+  </tr>`;
+
+  // Ligne Total
+  html += `<tr class="total-row">
+    <td colspan="2">
+      <span class="total-label">🎯 TOTAL VALEUR INTRINSÈQUE</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(totalMin)} €</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(totalMedian)} €</span>
+    </td>
+    <td>
+      <span class="amount">${fmt(totalMax)} €</span>
+    </td>
+  </tr>`;
 
   html += '</tbody></table>';
 
-  // Facteurs valorisants
-  if (tabac.facteursValorisants && tabac.facteursValorisants.length > 0) {
-    html += '<div style="margin-top:15px"><strong>✅ Facteurs Valorisants:</strong><ul style="margin-top:5px">';
-    tabac.facteursValorisants.forEach((facteur: string) => {
+  // === Tableau 2: Plan de Financement Total (Besoin) ===
+  if (prixNegocie > 0) {
+    html += `<div class="financing-section">
+      <h3>💼 Plan de Financement Total (Besoin)</h3>
+      <table class="financing-table">
+        <thead>
+          <tr>
+            <th>Élément</th>
+            <th>Min</th>
+            <th>Médian</th>
+            <th>Max</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Prix de cession négocié</td>
+            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
+            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
+            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
+          </tr>`;
+
+    if (budgetTravaux > 0) {
+      html += `<tr>
+            <td>Travaux de Modernisation</td>
+            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
+            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
+            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
+          </tr>`;
+    }
+
+    html += `<tr>
+            <td>(-) Subvention Douanes</td>
+            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
+            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
+            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
+          </tr>
+          <tr>
+            <td>Frais & Stock</td>
+            <td><span class="amount">${fmt(FRAIS_MIN)} €</span></td>
+            <td><span class="amount">${fmt(FRAIS_MED)} €</span></td>
+            <td><span class="amount">${fmt(FRAIS_MAX)} €</span></td>
+          </tr>
+          <tr class="total-row">
+            <td><strong>TOTAL INVESTISSEMENT</strong></td>
+            <td><span class="amount">${fmt(investMin)} €</span></td>
+            <td><span class="amount">${fmt(investMedian)} €</span></td>
+            <td><span class="amount">${fmt(investMax)} €</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // === Indicateur Apport Personnel ===
+  if (apportPersonnel > 0) {
+    html += `<div class="apport-indicator">
+      <div class="apport-card">
+        <span class="label">Apport Personnel</span>
+        <span class="value">${fmt(apportPersonnel)} €</span>
+        <span class="pct">(${apportPct}%)</span>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="apport-missing">
+      ⚠️ Apport personnel non renseigné. Précisez-le dans les commentaires utilisateur pour évaluer la solvabilité.
+    </div>`;
+  }
+
+  // === Facteurs Valorisants ===
+  if (facteursValorisants.length > 0) {
+    html += `<div class="facteurs-valorisants">
+      <h4>✅ Facteurs Valorisants</h4>
+      <ul>`;
+    facteursValorisants.forEach((facteur: string) => {
       html += `<li>${facteur}</li>`;
     });
     html += '</ul></div>';
   }
 
-  // Justification
-  if (tabac.justification) {
-    html += `<p style="margin-top:15px; padding:10px; background:var(--color-bg-light); border-left:3px solid var(--color-warning-text); font-size:0.95em">
-      <strong>💡 Méthode:</strong> ${tabac.justification}
-    </p>`;
+  // === Encadré Méthode ===
+  if (justification) {
+    html += `<div class="method-box">
+      <strong>💡 Méthode utilisée</strong>
+      <p>${justification}</p>
+    </div>`;
   }
 
-  html += '</div>';
+  html += '</div>'; // Ferme tabac-valuation-container
+
   return html;
 }
 

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { FunctionTool } from '@google/adk';
 import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../../utils/schemaHelper';
+import type { DataField, DataCompleteness, DataCompletenessReport, PriorityDocument } from '../../schemas/dataCompletenessSchema';
+import { EXTRACTION_EXPECTED_FIELDS, IMMOBILIER_EXPECTED_FIELDS, SECTION_MAX_SCORES } from '../../schemas/dataCompletenessSchema';
 
 /**
  * Assess Data Quality Tool
@@ -110,6 +112,15 @@ export const assessDataQualityTool = new FunctionTool({
       // 7. LISTE DES DOCUMENTS À COLLECTER
       const donneesACollector = generateDocumentsToCollect(documentExtraction, comptable, immobilier);
 
+      // 8. TRACKING DÉTAILLÉ DES DONNÉES MANQUANTES
+      const dataCompleteness = buildDataCompletenessReport(
+        documentExtraction,
+        comptable,
+        valorisation,
+        immobilier,
+        confidenceScore
+      );
+
       return {
         dataQuality: {
           completeness,
@@ -119,7 +130,8 @@ export const assessDataQualityTool = new FunctionTool({
         },
         confidenceScore,
         verificationsRequises,
-        donneesACollector
+        donneesACollector,
+        dataCompleteness
       };
 
     } catch (error: any) {
@@ -583,4 +595,467 @@ function extractYearsFromDocuments(documents: any[]): number[] {
     }
   }
   return Array.from(years).sort((a, b) => b - a);
+}
+
+// ============================================================================
+// DATA COMPLETENESS TRACKING FUNCTIONS
+// ============================================================================
+
+/**
+ * Build completeness report for "Extraction Données" section
+ */
+function buildExtractionCompletenessSection(
+  docExtract: any,
+  comptable: any
+): DataCompleteness {
+  const presentFields: DataField[] = [];
+  const missingFields: DataField[] = [];
+  const partialFields: DataField[] = [];
+  let score = 0;
+
+  // Get years from documents
+  const years = docExtract?.documents ? extractYearsFromDocuments(docExtract.documents) : [];
+  const sortedYears = [...years].sort((a, b) => b - a);
+  const latestYear = sortedYears[0];
+  const previousYear = sortedYears[1];
+  const oldestYear = sortedYears[2];
+
+  // Helper to find document source
+  const findDocSource = (docType: string, year?: number): string | undefined => {
+    if (!docExtract?.documents) return undefined;
+    const doc = docExtract.documents.find((d: any) => {
+      const typeMatch = d.documentType === docType || d.documentType === 'liasse_fiscale';
+      const yearMatch = year ? d.year === year : true;
+      return typeMatch && yearMatch;
+    });
+    return doc?.filename;
+  };
+
+  // Check for liasse_fiscale (combined document)
+  const hasLiasseFiscale = docExtract?.documents?.some((d: any) => d.documentType === 'liasse_fiscale');
+
+  // Process each expected field
+  for (const fieldDef of EXTRACTION_EXPECTED_FIELDS) {
+    const field: DataField = {
+      name: fieldDef.name,
+      label: fieldDef.label,
+      status: 'missing',
+      impact: fieldDef.impact
+    };
+
+    // Check presence based on field type
+    switch (fieldDef.name) {
+      case 'bilan_n':
+        if (hasLiasseFiscale || findDocSource('bilan', latestYear)) {
+          field.status = 'present';
+          field.source = findDocSource('bilan', latestYear) || findDocSource('liasse_fiscale', latestYear);
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bilan_n1':
+        if (previousYear && (hasLiasseFiscale || findDocSource('bilan', previousYear))) {
+          field.status = 'present';
+          field.source = findDocSource('bilan', previousYear) || findDocSource('liasse_fiscale', previousYear);
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bilan_n2':
+        if (oldestYear && (hasLiasseFiscale || findDocSource('bilan', oldestYear))) {
+          field.status = 'present';
+          field.source = findDocSource('bilan', oldestYear) || findDocSource('liasse_fiscale', oldestYear);
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'compte_resultat_n':
+        if (hasLiasseFiscale || findDocSource('compte_resultat', latestYear)) {
+          field.status = 'present';
+          field.source = findDocSource('compte_resultat', latestYear) || findDocSource('liasse_fiscale', latestYear);
+          score += fieldDef.impact;
+        } else if (comptable?.sig && comptable.sig[latestYear]?.chiffre_affaires > 0) {
+          field.status = 'partial';
+          field.details = 'Données extraites des SIG (document non identifié)';
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'compte_resultat_n1':
+        if (previousYear && (hasLiasseFiscale || findDocSource('compte_resultat', previousYear))) {
+          field.status = 'present';
+          field.source = findDocSource('compte_resultat', previousYear) || findDocSource('liasse_fiscale', previousYear);
+          score += fieldDef.impact;
+        } else if (previousYear && comptable?.sig?.[previousYear]?.chiffre_affaires > 0) {
+          field.status = 'partial';
+          field.details = 'Données extraites des SIG';
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'liasse_fiscale':
+        if (hasLiasseFiscale) {
+          field.status = 'present';
+          field.source = docExtract.documents.find((d: any) => d.documentType === 'liasse_fiscale')?.filename;
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'detail_immobilisations':
+        // Check if immobilisations data exists in extracted key_values
+        const hasImmoData = docExtract?.documents?.some((d: any) =>
+          d.extractedData?.key_values?.immobilisations_corporelles !== undefined ||
+          d.extractedData?.key_values?.immobilisations_incorporelles !== undefined
+        );
+        if (hasImmoData) {
+          field.status = 'partial';
+          field.details = 'Données partielles extraites du bilan';
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'etat_stocks':
+        // Check if stock data exists
+        const hasStockData = comptable?.sig && Object.values(comptable.sig).some((sig: any) =>
+          sig.variation_stocks !== undefined && sig.variation_stocks !== 0
+        );
+        if (hasStockData) {
+          field.status = 'partial';
+          field.details = 'Variation de stock uniquement (pas de détail)';
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'masse_salariale':
+        // Check if personnel charges exist
+        const hasSalaryData = comptable?.sig && Object.values(comptable.sig).some((sig: any) =>
+          sig.charges_personnel > 0
+        );
+        if (hasSalaryData) {
+          field.status = 'partial';
+          field.details = 'Total charges personnel (pas de détail individuel)';
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      // These are typically not extracted automatically
+      case 'contrats_fournisseurs':
+      case 'releves_bancaires':
+        // Stay as missing
+        break;
+    }
+
+    // Categorize field
+    if (field.status === 'present') {
+      presentFields.push(field);
+    } else if (field.status === 'partial') {
+      partialFields.push(field);
+    } else {
+      missingFields.push(field);
+    }
+  }
+
+  // Generate recommendations
+  const recommendations: string[] = [];
+
+  if (missingFields.some(f => f.name.includes('bilan') && f.name !== 'bilan_n2')) {
+    recommendations.push('Demander au cédant les bilans comptables des 3 dernières années');
+  }
+
+  if (missingFields.find(f => f.name === 'liasse_fiscale') && !hasLiasseFiscale) {
+    recommendations.push('Obtenir la liasse fiscale certifiée par expert-comptable');
+  }
+
+  if (missingFields.find(f => f.name === 'detail_immobilisations')) {
+    recommendations.push('Demander le tableau des immobilisations et amortissements');
+  }
+
+  if (missingFields.find(f => f.name === 'etat_stocks')) {
+    recommendations.push('Demander l\'inventaire des stocks valorisé');
+  }
+
+  if (missingFields.find(f => f.name === 'releves_bancaires')) {
+    recommendations.push('Obtenir les relevés bancaires ou situation de trésorerie récente');
+  }
+
+  return {
+    section: 'Extraction Données',
+    sectionKey: 'documentExtraction',
+    expectedFields: EXTRACTION_EXPECTED_FIELDS.map(f => ({ ...f, status: 'missing' as const })),
+    presentFields,
+    missingFields,
+    partialFields,
+    score: Math.round((score / SECTION_MAX_SCORES.extraction) * 100),
+    maxScore: 100,
+    recommendations
+  };
+}
+
+/**
+ * Build completeness report for "Analyse Immobilière" section
+ */
+function buildImmobilierCompletenessSection(
+  immobilier: any,
+  userComments: any
+): DataCompleteness {
+  const presentFields: DataField[] = [];
+  const missingFields: DataField[] = [];
+  const partialFields: DataField[] = [];
+  let score = 0;
+
+  // Check bail availability
+  const hasBail = immobilier?.dataStatus?.bail_disponible || immobilier?.bail;
+
+  for (const fieldDef of IMMOBILIER_EXPECTED_FIELDS) {
+    const field: DataField = {
+      name: fieldDef.name,
+      label: fieldDef.label,
+      status: 'missing',
+      impact: fieldDef.impact
+    };
+
+    switch (fieldDef.name) {
+      case 'bail_commercial':
+        if (hasBail) {
+          field.status = 'present';
+          field.source = immobilier.dataStatus?.source || 'document bail';
+          score += fieldDef.impact;
+        } else if (userComments?.loyer) {
+          field.status = 'partial';
+          field.details = 'Loyer mentionné dans les commentaires utilisateur';
+          score += Math.floor(fieldDef.impact / 3);
+        }
+        break;
+
+      case 'bail_type':
+        if (immobilier?.bail?.type) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bail_loyer':
+        if (immobilier?.bail?.loyer_annuel_hc > 0) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        } else if (userComments?.loyer?.loyer_negocie) {
+          field.status = 'partial';
+          field.details = `Loyer négocié mentionné: ${userComments.loyer.loyer_negocie}€/mois`;
+          score += Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'bail_charges':
+        if (immobilier?.bail?.charges_annuelles !== undefined) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bail_indexation':
+        if (immobilier?.bail?.indexation) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bail_date_renouvellement':
+        if (immobilier?.bail?.date_fin || immobilier?.bail?.duree_restante_mois) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'bail_surface':
+        if (immobilier?.bail?.surface_m2 > 0) {
+          field.status = immobilier?.bail?.surface_verifiee ? 'present' : 'partial';
+          if (field.status === 'partial') {
+            field.details = 'Surface estimée, non vérifiée';
+          }
+          score += field.status === 'present' ? fieldDef.impact : Math.floor(fieldDef.impact / 2);
+        }
+        break;
+
+      case 'diagnostic_amiante':
+      case 'diagnostic_electricite':
+      case 'diagnostic_dpe':
+        // These are typically not extracted - check if travaux mentions diagnostics
+        if (immobilier?.travaux?.diagnostics_disponibles) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'conformite_erp':
+        if (immobilier?.travaux?.conformite_erp === 'conforme') {
+          field.status = 'present';
+          score += fieldDef.impact;
+        } else if (immobilier?.travaux?.conformite_erp === 'a_verifier') {
+          field.status = 'partial';
+          field.details = 'À vérifier - diagnostic nécessaire';
+          score += Math.floor(fieldDef.impact / 3);
+        }
+        break;
+
+      case 'conformite_pmr':
+        if (immobilier?.travaux?.accessibilite_pmr === true) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        } else if (immobilier?.travaux?.accessibilite_pmr === false) {
+          field.status = 'partial';
+          field.details = 'Non conforme - travaux à prévoir';
+          score += Math.floor(fieldDef.impact / 3);
+        }
+        break;
+
+      case 'travaux_realises':
+        if (immobilier?.travaux?.travaux_recents) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'loyer_vs_marche':
+        if (immobilier?.bail?.appreciation) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+
+      case 'proprietaire_type':
+        if (immobilier?.bail?.proprietaire_type) {
+          field.status = 'present';
+          score += fieldDef.impact;
+        }
+        break;
+    }
+
+    // Categorize field
+    if (field.status === 'present') {
+      presentFields.push(field);
+    } else if (field.status === 'partial') {
+      partialFields.push(field);
+    } else {
+      missingFields.push(field);
+    }
+  }
+
+  // Generate recommendations
+  const recommendations: string[] = [];
+
+  if (!hasBail) {
+    recommendations.push('Demander au cédant le bail commercial original avec ses annexes');
+  }
+
+  if (missingFields.some(f => f.name.includes('diagnostic'))) {
+    recommendations.push('Obtenir les diagnostics obligatoires (amiante, électricité, DPE)');
+  }
+
+  if (missingFields.find(f => f.name === 'conformite_erp')) {
+    recommendations.push('Vérifier la conformité ERP auprès de la mairie/préfecture');
+  }
+
+  if (partialFields.find(f => f.name === 'bail_surface')) {
+    recommendations.push('Vérifier la surface exacte via mesurage ou plan cadastral');
+  }
+
+  const maxPoints = IMMOBILIER_EXPECTED_FIELDS.reduce((sum, f) => sum + f.impact, 0);
+
+  return {
+    section: 'Analyse Immobilière',
+    sectionKey: 'immobilier',
+    expectedFields: IMMOBILIER_EXPECTED_FIELDS.map(f => ({ name: f.name, label: f.label, impact: f.impact, status: 'missing' as const })),
+    presentFields,
+    missingFields,
+    partialFields,
+    score: Math.round((score / maxPoints) * 100),
+    maxScore: 100,
+    recommendations
+  };
+}
+
+/**
+ * Build complete data completeness report
+ */
+function buildDataCompletenessReport(
+  docExtract: any,
+  comptable: any,
+  valorisation: any,
+  immobilier: any,
+  confidenceScore: any
+): DataCompletenessReport {
+  // Build section reports
+  const extractionSection = buildExtractionCompletenessSection(docExtract, comptable);
+  const immobilierSection = buildImmobilierCompletenessSection(immobilier, null);
+
+  const sections = [extractionSection, immobilierSection];
+
+  // Calculate overall score from confidence breakdown
+  const overallScore = confidenceScore?.overall || 0;
+  const overallMaxScore = 100;
+
+  // Build priority documents list based on missing fields
+  const priorityDocuments: PriorityDocument[] = [];
+
+  // High impact missing documents from extraction
+  if (extractionSection.missingFields.some(f => f.name.includes('bilan'))) {
+    const missingBilans = extractionSection.missingFields.filter(f => f.name.includes('bilan'));
+    const totalImpact = missingBilans.reduce((sum, f) => sum + f.impact, 0);
+    priorityDocuments.push({
+      document: 'Bilans comptables N, N-1, N-2',
+      criticite: 'bloquant',
+      impact: totalImpact,
+      section: 'Extraction Données'
+    });
+  }
+
+  if (extractionSection.missingFields.find(f => f.name === 'liasse_fiscale')) {
+    priorityDocuments.push({
+      document: 'Liasse fiscale certifiée',
+      criticite: 'important',
+      impact: 4,
+      section: 'Extraction Données'
+    });
+  }
+
+  // High impact missing documents from immobilier
+  if (immobilierSection.missingFields.find(f => f.name === 'bail_commercial')) {
+    priorityDocuments.push({
+      document: 'Bail commercial + annexes',
+      criticite: 'bloquant',
+      impact: 10,
+      section: 'Analyse Immobilière'
+    });
+  }
+
+  if (immobilierSection.missingFields.some(f => f.name.includes('diagnostic'))) {
+    const missingDiags = immobilierSection.missingFields.filter(f => f.name.includes('diagnostic'));
+    const totalImpact = missingDiags.reduce((sum, f) => sum + f.impact, 0);
+    priorityDocuments.push({
+      document: 'Diagnostics immobiliers (amiante, électricité, DPE)',
+      criticite: 'important',
+      impact: totalImpact,
+      section: 'Analyse Immobilière'
+    });
+  }
+
+  if (immobilierSection.missingFields.find(f => f.name === 'conformite_erp')) {
+    priorityDocuments.push({
+      document: 'Certificat conformité ERP',
+      criticite: 'important',
+      impact: 3,
+      section: 'Analyse Immobilière'
+    });
+  }
+
+  // Sort by impact descending
+  priorityDocuments.sort((a, b) => b.impact - a.impact);
+
+  return {
+    sections,
+    overallScore,
+    overallMaxScore,
+    priorityDocuments,
+    generatedAt: new Date().toISOString()
+  };
 }

@@ -149,11 +149,11 @@ WORKFLOW SIMPLIFIÉ (3 ÉTAPES) :
 2. generateCharts → génère les graphiques
 3. generateFinancialHtml → génère ET sauvegarde le rapport
 
-Après l'étape 3, le rapport est automatiquement sauvegardé.
-Tu peux retourner un JSON de confirmation simple.
+Après l'étape 3, le rapport est automatiquement sauvegardé et injecté dans le state.
 
-FORMAT DE SORTIE JSON (après les 3 tool calls) :
-{"status":"completed","message":"Rapport généré avec succès"}
+IMPORTANT: Ne PAS retourner de JSON après les tool calls.
+Le rapport est automatiquement injecté dans state.financialReport par generateFinancialHtml.
+Terminer simplement avec un message texte de confirmation comme "Rapport financier généré avec succès."
 
 RÈGLES :
 1. Appeler les 3 tools dans l'ordre (businessPlanDynamique → generateCharts → generateFinancialHtml)
@@ -163,11 +163,12 @@ RÈGLES :
 5. Pour businessPlanDynamique, extraire les hypothèses depuis state.userComments et les autres states
 
 GESTION D'ERREURS :
-- Si aucune donnée dans le state : retourner {"status":"error","message":"Aucune analyse financière disponible"}
-- Si un tool échoue : retourner {"status":"error","message":"<détail de l'erreur>"}`,
+- Si aucune donnée dans le state : retourner un message d'erreur texte
+- Si un tool échoue : retourner un message d'erreur texte décrivant le problème`
 
-      // Clé de sortie dans le state
-      outputKey: 'financialReport' as keyof FinancialState
+      // Note: outputKey supprimé intentionnellement
+      // Le rapport est injecté dans state.financialReport directement par generateFinancialHtmlTool
+      // Cela évite que l'agent écrase l'injection avec son output JSON
     });
   }
 }
