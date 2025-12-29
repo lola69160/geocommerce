@@ -1,6 +1,6 @@
 import { LlmAgent } from '@google/adk';
 import {
-  calculateSigTool,
+  validateSigTool,
   calculateRatiosTool,
   analyzeTrendsTool,
   compareToSectorTool,
@@ -15,7 +15,7 @@ import type { FinancialState } from '../index';
  * Deuxième agent du Pipeline Financier - analyse les données extraites avec l'expertise d'un expert-comptable.
  *
  * Responsabilités:
- * - Calculer les Soldes Intermédiaires de Gestion (SIG) pour chaque année
+ * - Valider les Soldes Intermédiaires de Gestion (SIG) injectés par DocumentExtractionAgent
  * - Calculer les ratios financiers clés (rentabilité, liquidité, solvabilité)
  * - Analyser l'évolution sur la période (tendances)
  * - Comparer aux benchmarks sectoriels
@@ -24,8 +24,11 @@ import type { FinancialState } from '../index';
  *
  * Pattern ADK:
  * - Extends LlmAgent
- * - Utilise 5 tools via Gemini function calling (calculs dans tools, interprétation par LLM)
+ * - Utilise 6 tools via Gemini function calling (calculs dans tools, interprétation par LLM)
  * - Output automatiquement injecté dans state via outputKey
+ *
+ * IMPORTANT : Les SIG ne sont PLUS calculés ici - ils sont injectés directement par
+ * geminiVisionExtractTool dans state.comptable.sig[year] lors de l'extraction des documents.
  */
 export class ComptableAgent extends LlmAgent {
   constructor() {
@@ -55,7 +58,7 @@ export class ComptableAgent extends LlmAgent {
 
       // Tools disponibles pour l'agent
       tools: [
-        calculateSigTool,
+        validateSigTool,
         calculateRatiosTool,
         analyzeTrendsTool,
         compareToSectorTool,
@@ -70,28 +73,40 @@ Ton rôle est d'analyser les données comptables extraites et de produire une an
 
 DONNÉES DISPONIBLES :
 Les données sont passées via state (accessible dans les tools) :
+- state.comptable.sig : SIG déjà injectés par DocumentExtractionAgent (geminiVisionExtractTool)
+  - comptable.sig[year] : SIG pour chaque année avec format {valeur, pct_ca}
+  - comptable.yearsAnalyzed : Liste des années disponibles
 - state.documentExtraction : Documents comptables parsés (bilans, comptes de résultat)
-  - documentExtraction.documents[] : Liste des documents avec tableaux extraits
+  - documentExtraction.documents[] : Liste des documents avec tableaux extraits (audit trail)
   - documentExtraction.summary : Années couvertes, documents manquants
 - state.businessInfo : Informations sur l'entreprise
   - businessInfo.name : Nom de l'entreprise
   - businessInfo.siret : SIRET
   - businessInfo.nafCode : Code NAF (pour benchmark sectoriel)
   - businessInfo.activity : Activité
-- state.userComments : Commentaires de l'utilisateur (NOUVEAU)
+- state.userComments : Commentaires de l'utilisateur
   - userComments.loyer.loyer_logement_perso : Part logement personnel mensuel (€)
     → Si présent, représente un avantage en nature qui doit être retraité dans l'EBE
 
-IMPORTANT: Les tools font tous les calculs automatiquement - ne calcule PAS manuellement.
-Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
+IMPORTANT:
+- Les SIG sont DÉJÀ injectés dans state.comptable.sig par geminiVisionExtractTool (DocumentExtractionAgent)
+- Ne PAS recalculer les SIG - ils sont la source de vérité (injection directe depuis Gemini Vision)
+- Les tools font tous les calculs automatiquement - ne calcule PAS manuellement
+- Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats
 
 WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
-ÉTAPE 1 : CALCULER LES SIG (Soldes Intermédiaires de Gestion)
-   calculateSig({})
-   → Retourne { sig: { "2024": { chiffre_affaires, ebe, resultat_net, ... }, "2023": {...} }, yearsAnalyzed: [2024, 2023] }
+ÉTAPE 1 : VALIDER LES SIG (Soldes Intermédiaires de Gestion)
+   validateSig({})
+   → Retourne {
+       isValid: true,
+       yearsAnalyzed: [2024, 2023, 2022],
+       summary: "✅ Validation OK : 3 année(s) avec SIG complets",
+       warnings: [] (optionnel - si incohérences détectées)
+     }
 
-   Le tool lit automatiquement depuis state.documentExtraction et calcule les SIG pour chaque année.
+   Le tool VALIDE (ne calcule pas) que les SIG injectés par geminiVisionExtractTool sont complets.
+   Les SIG validés sont disponibles dans state.comptable.sig[year].
 
 ÉTAPE 2 : CALCULER L'EBE RETRAITÉ/NORMATIF ⚠️ NOUVEAU - OBLIGATOIRE
    calculateEbeRetraitement({})

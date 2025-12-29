@@ -90,7 +90,7 @@ Current test coverage:
 
 ```bash
 # Run a specific test file
-npm run test:financial -- calculateSig.test.ts
+npm run test:financial -- documentExtraction.test.ts
 
 # Run tests matching a pattern
 npm run test:financial -- -t "should calculate correct EBE"

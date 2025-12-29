@@ -4,7 +4,222 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
-## Recent Improvements (2025-12-29)
+## Fix V6: Simplification Architecture - Suppression calculateSigTool (2025-12-29)
+
+### Problème Identifié
+
+**Symptôme:** Les SIG affichaient des valeurs à 0 ou N/A (marge_commerciale: 0 €, resultat_exploitation: 0 €) alors que geminiVisionExtractTool extrayait correctement toutes les données 30 secondes plus tôt (marge_commerciale: 42 746 €, resultat_exploitation: 10 348 €).
+
+**Cause Racine:** Architecture avec deux flux de données qui se chevauchaient :
+
+1. **Flux 1 (MODERNE)** : geminiVisionExtractTool injectait directement les SIG dans `state.comptable.sig[year]` ✅
+2. **Flux 2 (LEGACY)** : calculateSigTool recalculait TOUJOURS les SIG depuis `state.documentExtraction.documents[]` → écrasait l'injection directe avec des données incomplètes ❌
+
+```
+Ligne de temps du problème:
+T+0s  : geminiVisionExtractTool → Injecte SIG complets dans state.comptable.sig[2023]
+T+30s : calculateSigTool → Recalcule depuis documents → ÉCRASE avec des 0
+```
+
+### Solution Implémentée: Option C - Supprimer calculateSigTool
+
+**Justification:** Tous les documents sont au format COMPTA{YYYY}.pdf et utilisent l'injection directe. Le recalcul n'est plus nécessaire.
+
+#### Modifications Effectuées
+
+**1. geminiVisionExtractTool.ts (lignes 841-930) - Renforcement de l'injection directe**
+
+```typescript
+// VALIDATION STRICTE avant injection
+const requiredSigFields = [
+  'chiffre_affaires', 'marge_commerciale', 'marge_brute_globale',
+  'valeur_ajoutee', 'ebe', 'resultat_exploitation', 'resultat_net'
+];
+
+const missingFields = requiredSigFields.filter(field =>
+  (kv as any)[field] === undefined || (kv as any)[field] === null
+);
+
+if (missingFields.length > 0) {
+  console.warn(`⚠️ [geminiVisionExtract] Champs SIG manquants pour ${year}: ${missingFields.join(', ')}`);
+}
+
+// Ne pas injecter si confidence < 0.7
+if (confidence < 0.7) {
+  console.error(`❌ [geminiVisionExtract] Confidence trop basse - SKIP injection`);
+  return comptaOutput;
+}
+
+// Injection avec TOUS les champs SIG + logging détaillé
+const sigYear = {
+  year, source: 'gemini_vision_direct', confidence,
+  chiffre_affaires: { valeur: kv.chiffre_affaires || 0, pct_ca: 100 },
+  // ... 13 autres champs SIG avec format {valeur, pct_ca}
+};
+
+toolContext.state.set('comptable', { ...currentComptable, sig: { ...currentSig, [year]: sigYear } });
+```
+
+**2. validateSigTool.ts (NOUVEAU) - Validation sans recalcul**
+
+```typescript
+// Remplace calculateSigTool - VALIDE uniquement (ne calcule pas)
+export const validateSigTool = new FunctionTool({
+  name: 'validateSig',
+  description: 'Valide que les SIG injectés par geminiVisionExtractTool sont complets',
+
+  execute: async (params, toolContext) => {
+    // Vérifie que state.comptable.sig[year] existe et est complet
+    // Retourne warnings si champs manquants ou incohérences (EBE > CA, etc.)
+    // NE MODIFIE PAS les données
+    return { isValid, yearsAnalyzed, warnings, summary };
+  }
+});
+```
+
+**3. ComptableAgent.ts - Utilisation de validateSigTool**
+
+```typescript
+// AVANT
+import { calculateSigTool, ... } from '../tools/accounting';
+tools: [calculateSigTool, ...]
+
+// APRÈS
+import { validateSigTool, ... } from '../tools/accounting';
+tools: [validateSigTool, ...]
+
+// Instructions mises à jour
+ÉTAPE 1 : VALIDER LES SIG (ne plus calculer)
+  validateSig({})
+  → Les SIG sont DÉJÀ dans state.comptable.sig (injection directe)
+```
+
+**4. calculateSigTool.ts - SUPPRIMÉ**
+
+Le fichier entier a été supprimé car redondant avec l'injection directe.
+
+#### Architecture Simplifiée
+
+```
+AVANT (2 flux qui s'écrasaient):
+DocumentExtractionAgent → geminiVisionExtractTool → state.comptable.sig[year] ✅
+ComptableAgent → calculateSigTool → state.comptable.sig (recalcule) ❌ ÉCRASE
+
+APRÈS (1 seul flux):
+DocumentExtractionAgent → geminiVisionExtractTool → state.comptable.sig[year] ✅
+ComptableAgent → validateSigTool → Valide (sans modifier) ✅
+```
+
+#### Avantages
+
+| Avantage | Impact |
+|----------|--------|
+| ✅ **Intégrité des données** | Les valeurs extraites ne sont plus écrasées |
+| ✅ **Simplicité** | Une seule source de vérité (geminiVisionExtractTool) |
+| ✅ **Performance** | Économise ~30 secondes (plus de recalcul) |
+| ✅ **Maintenabilité** | -800 lignes de code (calculateSigTool supprimé) |
+| ✅ **Robustesse** | Validation stricte (confidence, champs requis) |
+
+#### Fichiers Modifiés
+
+- `server/adk/financial/tools/document/geminiVisionExtractTool.ts` (+90 lignes - validation stricte)
+- `server/adk/financial/tools/accounting/validateSigTool.ts` (+184 lignes - NOUVEAU)
+- `server/adk/financial/tools/accounting/index.ts` (export validateSigTool)
+- `server/adk/financial/agents/ComptableAgent.ts` (utilise validateSigTool)
+- `server/adk/financial/tools/accounting/calculateSigTool.ts` (**SUPPRIMÉ** -847 lignes)
+- `CLAUDE.md` (architecture simplifiée documentée)
+- `docs/FINANCIAL_PIPELINE.md` (flux mis à jour)
+
+---
+
+## Recent Improvements (2025-12-29 - Earlier)
+
+### Fix V5: Architecture Injection Directe - Affichage Données "Actuel" (CRITICAL)
+
+**Problème:** Les colonnes "Actuel" des tableaux ("Changements Appliqués", "Projections sur 5 ans") affichaient des valeurs vides ou incorrectes malgré des données correctement extraites (visibles dans les logs).
+
+**Cause Racine Identifiée:**
+1. `ComptableAgent` utilise `outputKey: 'comptable'` → Le LLM interprète et peut omettre des champs
+2. Les conditions `if (isTabac)` dans `businessPlanDynamiqueTool` excluaient les champs pour les commerces non-tabac
+3. Les données passaient par le LLM au lieu d'être injectées directement
+
+**Solution Implémentée: Architecture Injection Directe**
+
+**1. geminiVisionExtractTool.ts - Injection directe dans state (lignes 809-856)**
+
+```typescript
+// ✅ INJECTION DIRECTE dans state.comptable.sig[year]
+// Garantit que les données extraites arrivent dans le state sans dépendre du LLM
+if (toolContext?.state && comptaOutput.year) {
+  const year = comptaOutput.year.toString();
+  const kv = comptaOutput.extractedData.key_values;
+
+  const sigYear = {
+    year: comptaOutput.year,
+    source: 'gemini_vision_direct',
+    chiffre_affaires: { valeur: kv.chiffre_affaires || 0, pct_ca: 100 },
+    ventes_marchandises: { valeur: kv.ventes_marchandises || 0, pct_ca: calcPctCa(...) },
+    production_vendue_services: { valeur: kv.production_vendue_services || 0, pct_ca: calcPctCa(...) },
+    // ... tous les champs SIG avec format {valeur, pct_ca}
+  };
+
+  toolContext.state.set('comptable', {
+    ...currentComptable,
+    sig: { ...currentSig, [year]: sigYear },
+    yearsAnalyzed: [...new Set([...currentYears, comptaOutput.year])].sort((a, b) => b - a)
+  });
+}
+```
+
+**2. businessPlanDynamiqueTool.ts - Suppression TOUTES les conditions isTabac**
+
+```typescript
+// ❌ AVANT (conditions isTabac)
+...(isTabac && { ventes_marchandises: ventesMarchandises }),
+const margeMarchandisesAnnee = isTabac ? Math.round(...) : 0;
+
+// ✅ APRÈS (toujours inclure)
+ventes_marchandises: ventesMarchandises,
+const margeMarchandisesAnnee = Math.round(ventesMarchandisesAnnee * tauxMargeBoutique);
+```
+
+**Sections modifiées:**
+- Extraction données SIG (lignes 202-253) - Sans condition
+- Année 0 projections (lignes 307-341) - Tous champs inclus
+- Années 1-5 projections (lignes 386-531) - Tous champs inclus
+- Calcul marges (lignes 470-480) - Sans condition
+
+**Nouveau Flow de Données:**
+
+```
+AVANT (problématique):
+geminiVisionExtractTool → documentExtraction
+ComptableAgent (LLM) → state.comptable.sig (perte de champs possible)
+businessPlanDynamiqueTool → if(isTabac) → projections partielles
+
+APRÈS (fiable):
+geminiVisionExtractTool
+  → documentExtraction
+  → state.comptable.sig[year] ← INJECTION DIRECTE (bypass LLM)
+businessPlanDynamiqueTool
+  → SANS condition isTabac
+  → projections COMPLÈTES pour tous les commerces
+```
+
+**Fichiers modifiés:**
+
+| Fichier | Modifications |
+|---------|---------------|
+| `geminiVisionExtractTool.ts` | +50 lignes: injection directe state.comptable.sig[year] après extraction COMPTA |
+| `businessPlanDynamiqueTool.ts` | ~150 lignes: suppression toutes conditions isTabac, extraction/projections inconditionnelles |
+
+**Impact:**
+- ✅ Tableaux "Actuel" affichent toutes les données extraites
+- ✅ Projections incluent ventes_marchandises, commissions_services, marges pour TOUS les commerces
+- ✅ Données garanties sans dépendance au LLM
+- ✅ Tests passent: 46/46 financiers, 6/6 régression
+
+---
 
 ### Fix V4: ComptableAgent Instruction Update - SIG Data Flow (CRITICAL)
 

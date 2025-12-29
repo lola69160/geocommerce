@@ -104,19 +104,22 @@ Ce document détaille les 7 agents du Financial Pipeline.
 ## 2. ComptableAgent
 
 ### Responsabilités
-- Calculer les Soldes Intermédiaires de Gestion (SIG) pour chaque année
+- **Valider** les Soldes Intermédiaires de Gestion (SIG) injectés directement par DocumentExtractionAgent
 - Calculer 11 ratios financiers clés (rentabilité, liquidité, solvabilité)
 - Analyser l'évolution sur la période (tendances CA/EBE/RN)
 - Comparer aux benchmarks sectoriels (8 secteurs NAF couverts)
 - Générer un score de santé financière global (0-100)
 - Identifier les alertes et points de vigilance
 
-### Tools (5)
-- `calculateSigTool` - Calcule 14 indicateurs SIG par année
+### Tools (6)
+- `validateSigTool` - **Valide** les SIG injectés par geminiVisionExtractTool (ne calcule pas)
 - `calculateRatiosTool` - Calcule 11 ratios financiers
 - `analyzeTrendsTool` - Analyse évolution CA/EBE/RN
 - `compareToSectorTool` - Compare 9 ratios aux benchmarks sectoriels
 - `calculateHealthScoreTool` - Score 0-100 (4 dimensions)
+- `calculateEbeRetraitementTool` - Calcule l'EBE normatif avec retraitements
+
+**Note (2025-12-29) :** `calculateSigTool` a été supprimé. Les SIG sont maintenant injectés directement dans `state.comptable.sig[year]` par `geminiVisionExtractTool` lors de l'extraction, garantissant l'intégrité des données.
 
 ### Output (`state.comptable`)
 

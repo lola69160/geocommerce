@@ -366,22 +366,45 @@ if (value === 0) {
 ```
 
 **Fichiers concernés :**
-- `calculateSigTool.ts` : Pas de recalcul des SIG
+- `geminiVisionExtractTool.ts` : Injection directe des SIG (validation stricte, confidence > 0.7)
+- `validateSigTool.ts` : Validation des SIG injectés (pas de recalcul)
 - `calculateTabacValuationTool.ts` : Pas d'estimation 8%/25%
 - `accountingSection.ts` : Afficher "-" ou "N/A" si manquant
 
-### Flow de Données Correct
+**Note :** `calculateSigTool.ts` a été supprimé (2025-12-29) car redondant avec l'injection directe.
+
+### Flow de Données Correct (Architecture Injection Directe - 2025-12-29)
 
 ```
-Gemini Vision → extractedData.key_values
+geminiVisionExtractTool (extraction COMPTA)
+       ↓
+       ├─→ state.documentExtraction.documents[] (données brutes)
+       │
+       └─→ state.comptable.sig[year] ← INJECTION DIRECTE
                        ↓
-              calculateSigTool (EXTRACTION uniquement)
+              businessPlanDynamiqueTool (SANS condition isTabac)
                        ↓
-              ComptableAgent (copie TOUS les champs)
+              state.businessPlan.projections (TOUS les champs inclus)
                        ↓
-              state.comptable.sig
-                       ↓
-              accountingSection.ts → Affichage
+              businessPlanSection.ts → Affichage tableaux complets
+```
+
+**IMPORTANT**: L'injection directe bypass le LLM ComptableAgent pour garantir que TOUS les champs extraits arrivent dans le state sans perte.
+
+### Règle: Pas de Condition isTabac
+
+Les projections incluent **TOUJOURS** tous les champs, quel que soit le type de commerce :
+
+```typescript
+// ✅ CORRECT - Toujours inclure tous les champs
+projections.push({
+  ventes_marchandises: ventesMarchandises,
+  commissions_services: commissionsServices,
+  marge_marchandises: margeMarchandises,
+  marge_commissions: margeCommissions,
+  marge_brute_globale: margeBruteGlobale,
+  // ... autres champs toujours inclus
+});
 ```
 
 ---
@@ -520,7 +543,7 @@ logs/extraction_20251229_143052_53840462500013.log
 | **Documents COMPTA** | `DOCUMENT` | Bilan actif/passif, compte résultat, SIG, key_values | `geminiVisionExtractTool.ts` |
 | **Documents standards** | `DOCUMENT` | Type, année, confidence, key_values | `geminiVisionExtractTool.ts` |
 | **User Comments** | `USER_COMMENT` | Loyer, travaux, salaires, conditions vente, autres | `server.js` |
-| **SIG calculés** | `SIG` | CA, marge, VA, EBE, résultats + % CA | `calculateSigTool.ts` |
+| **SIG injectés** | `SIG` | CA, marge, VA, EBE, résultats + % CA | `geminiVisionExtractTool.ts` (injection directe) |
 | **EBE Retraitements** | `EBE_RETRAITEMENT` | EBE comptable, EBE normatif, liste retraitements | `calculateEbeRetraitementTool.ts` |
 | **Valorisation** | `VALORISATION` | Méthodes EBE/CA/Patrimoniale, recommandation | `synthesizeValuationTool.ts` |
 | **Immobilier** | `IMMOBILIER` | Bail, simulation loyer, travaux | `calculateLoyerSimulationTool.ts` |

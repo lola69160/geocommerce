@@ -113,12 +113,31 @@ See [docs/FINANCIAL_CHANGELOG.md](docs/FINANCIAL_CHANGELOG.md) for implementatio
 
 **Principe fondamental**: Les données historiques (N, N-1, N-2) proviennent UNIQUEMENT des extractions. Pas de recalcul, pas de fallback.
 
+#### Architecture d'Injection Directe (2025-12-29 - SIMPLIFIÉ)
+
+**IMPORTANT**: `geminiVisionExtractTool` injecte directement les données SIG dans `state.comptable.sig[year]` lors de l'extraction des documents COMPTA. Cette injection **bypass le LLM** pour garantir l'intégrité des données.
+
+**Flux de données simplifié** :
+```
+geminiVisionExtractTool (extraction COMPTA)
+  → state.documentExtraction.documents[] (audit trail)
+  → state.comptable.sig[year] ← INJECTION DIRECTE (source unique de vérité)
+
+validateSigTool (ComptableAgent)
+  → Valide que state.comptable.sig[year] est complet (PAS de recalcul)
+
+businessPlanDynamiqueTool
+  → Lit state.comptable.sig[year] directement (SANS recalcul)
+  → Génère projections avec TOUS les champs
+```
+
+**calculateSigTool SUPPRIMÉ (2025-12-29)** : Plus nécessaire car tous les documents sont au format COMPTA et utilisent l'injection directe.
+
 #### Priorité des Sources
 | Priorité | Source | Usage |
 |----------|--------|-------|
-| 0 | SIG extrait des documents COMPTA | Données historiques ✅ |
-| 1 | `key_values` de Gemini Vision | Données historiques ✅ |
-| ❌ | Calcul/estimation | Données futures uniquement |
+| 0 | Injection directe `geminiVisionExtractTool` | **Données historiques** (unique source) ✅ |
+| ❌ | Calcul/estimation | **Données futures** uniquement |
 
 #### Format SIG Standard
 ```typescript
@@ -130,15 +149,23 @@ interface ValeurSig {
 // Exemple: "ebe": { "valeur": 85000, "pct_ca": 17 }
 ```
 
-#### Champs SIG Obligatoires
+#### Champs SIG Obligatoires (TOUS les commerces)
+- `ventes_marchandises`, `production_vendue_services` (commissions)
 - `marge_brute_globale`, `autres_achats_charges_externes`, `charges_exploitant`
 - `salaires_personnel`, `charges_sociales_personnel`
 
-#### Mapping des Champs
-| Extraction Gemini | SIG Output |
-|-------------------|------------|
-| `charges_externes` | `autres_achats_charges_externes` |
-| `charges_exploitant` | `charges_exploitant` (salaire gérant) |
+#### Règles SANS Condition isTabac
+```typescript
+// ❌ INTERDIT - Ne plus conditionner sur isTabac
+if (isTabac) { projections.push({ ventes_marchandises: ... }); }
+
+// ✅ CORRECT - Toujours inclure tous les champs
+projections.push({
+  ventes_marchandises: ventesMarchandises,  // Toujours inclus
+  commissions_services: commissionsServices, // Toujours inclus
+  marge_brute_globale: margeBruteGlobale,   // Toujours inclus
+});
+```
 
 #### Règles Anti-Fallback
 ```typescript
@@ -150,9 +177,9 @@ if (value === 0) { console.warn('Valeur non extraite'); }
 ```
 
 **Fichiers clés:**
-- `ComptableAgent.ts` - Instruction système avec format SIG
-- `calculateSigTool.ts` - Extraction sans recalcul
-- `calculateTabacValuationTool.ts` - Pas d'estimation 8%/25%
+- `geminiVisionExtractTool.ts` - **Injection directe** dans state.comptable.sig[year] (validation stricte)
+- `validateSigTool.ts` - **Validation** (PAS de recalcul) des SIG injectés
+- `businessPlanDynamiqueTool.ts` - Projections **SANS condition isTabac**
 - `accountingSection.ts` - Afficher "-" si manquant
 
 See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for complete priority rules.

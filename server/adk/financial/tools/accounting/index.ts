@@ -4,7 +4,7 @@
  * Outils pour l'analyse comptable approfondie (ComptableAgent)
  */
 
-export { calculateSigTool } from './calculateSigTool';
+export { validateSigTool } from './validateSigTool';
 export { calculateRatiosTool } from './calculateRatiosTool';
 export { analyzeTrendsTool } from './analyzeTrendsTool';
 export { compareToSectorTool } from './compareToSectorTool';

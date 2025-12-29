@@ -18,6 +18,23 @@ import {
 import { logDocumentExtraction } from '../../../utils/extractionLogger';
 
 /**
+ * Helper: Extrait la valeur numérique d'un champ SIG
+ * Gère les deux formats possibles:
+ * - Nombre simple: 35169
+ * - Objet structuré: { valeur: 35169, pct_ca: 14.37 }
+ */
+function extractSigNumericValue(field: any): number {
+  if (field === null || field === undefined) return 0;
+  if (typeof field === 'number') return field;
+  if (typeof field === 'object' && 'valeur' in field) {
+    return typeof field.valeur === 'number' ? field.valeur : 0;
+  }
+  // Essayer de parser comme nombre
+  const parsed = parseFloat(field);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
  * Gemini Vision Extract Tool
  *
  * Extrait les données comptables d'un PDF en utilisant Gemini Vision API.
@@ -308,9 +325,12 @@ SECTION 3: COMPTE DE RÉSULTAT
 ═══════════════════════════════════════════════════════════════════════════════
 
 PRODUITS D'EXPLOITATION:
-- ventes_marchandises: Ventes de marchandises
+- ventes_marchandises: Ventes de marchandises (boutique, articles non réglementés)
 - production_vendue_biens: Production vendue de biens
 - production_vendue_services: Production vendue de services
+  ⚠️ CRITIQUE TABAC/PRESSE: Cette ligne contient les COMMISSIONS RÉGLEMENTÉES
+  (tabac, loto, FDJ, presse, PMU, téléphonie). NE PAS confondre avec CA boutique!
+  Chercher aussi: "Prestations de services", "Vente de services", "Commissions"
 - chiffre_affaires_net: Chiffre d'affaires NET (somme des ventes + production)
 - production_stockee: Production stockée
 - production_immobilisee: Production immobilisée
@@ -374,6 +394,7 @@ INDICATEURS À EXTRAIRE (OBLIGATOIRES):
 - cout_achat_marchandises_vendues: Coût d'achat des marchandises vendues
 - marge_commerciale: MARGE COMMERCIALE (différent de marge_brute_globale!)
 - production_vendue: Production vendue
+- production_vendue_services: Production vendue de services ⚠️ CRITIQUE TABAC/PRESSE = COMMISSIONS (tabac, loto, FDJ, presse, PMU)
 - production_exercice: PRODUCTION DE L'EXERCICE
 - marge_brute_production: Marge brute de production (si présent)
 - marge_brute_globale: MARGE BRUTE GLOBALE ⚠️ DIFFÉRENT de marge_commerciale - c'est la marge incluant production
@@ -401,6 +422,8 @@ INDICATEURS À EXTRAIRE (OBLIGATOIRES):
 EXEMPLE D'EXTRACTION SIG ATTENDUE:
 {
   "chiffre_affaires": { "valeur": 240597, "pct_ca": 100 },
+  "ventes_marchandises": { "valeur": 120455, "pct_ca": 50.07 },
+  "production_vendue_services": { "valeur": 120142, "pct_ca": 49.93 },
   "marge_commerciale": { "valeur": 39181, "pct_ca": 16.28 },
   "marge_brute_globale": { "valeur": 159324, "pct_ca": 66.22 },
   "autres_achats_charges_externes": { "valeur": 62505, "pct_ca": 25.98 },
@@ -654,6 +677,12 @@ export const geminiVisionExtractTool = new FunctionTool({
           if (parsed.sig.charges_exploitant) {
             console.log(`[geminiVisionExtract] 💼 Charges exploitant (salaire dirigeant): ${parsed.sig.charges_exploitant.valeur}€ (${parsed.sig.charges_exploitant.pct_ca}% CA)`);
           }
+          // Debug production vendue pour diagnostiquer le problème
+          console.log(`[geminiVisionExtract] 🔍 DEBUG Production:`);
+          console.log(`  - production_vendue: ${JSON.stringify(parsed.sig.production_vendue)}`);
+          console.log(`  - production_vendue_services: ${JSON.stringify(parsed.sig.production_vendue_services)}`);
+          console.log(`  - production_exercice: ${JSON.stringify(parsed.sig.production_exercice)}`);
+          console.log(`  - compte_resultat.production_vendue_services: ${parsed.compte_resultat?.production_vendue_services}`);
         }
       } else {
         // Format standard
@@ -728,32 +757,40 @@ export const geminiVisionExtractTool = new FunctionTool({
             tables: [], // Les données sont dans les sections structurées
             key_values: {
               // Données principales pour compatibilité avec le format existant
-              chiffre_affaires: parsed.compte_resultat?.chiffre_affaires_net || parsed.sig?.chiffre_affaires?.valeur || 0,
-              ebe: parsed.sig?.ebe?.valeur || 0,
-              resultat_net: parsed.compte_resultat?.resultat_net || parsed.sig?.resultat_net?.valeur || 0,
-              resultat_exploitation: parsed.compte_resultat?.resultat_exploitation || parsed.sig?.resultat_exploitation?.valeur || 0,
+              // ⚠️ Utilise extractSigNumericValue pour gérer les deux formats (nombre ou {valeur, pct_ca})
+              chiffre_affaires: parsed.compte_resultat?.chiffre_affaires_net || extractSigNumericValue(parsed.sig?.chiffre_affaires) || 0,
+              ebe: extractSigNumericValue(parsed.sig?.ebe) || 0,
+              resultat_net: parsed.compte_resultat?.resultat_net || extractSigNumericValue(parsed.sig?.resultat_net) || 0,
+              resultat_exploitation: parsed.compte_resultat?.resultat_exploitation || extractSigNumericValue(parsed.sig?.resultat_exploitation) || 0,
               // Charges personnel: préférer SIG (salaires + charges sociales) puis Compte de Résultat
-              charges_personnel: parsed.sig?.salaires_personnel?.valeur
-                ? (parsed.sig.salaires_personnel.valeur + (parsed.sig.charges_sociales_personnel?.valeur || 0))
+              charges_personnel: extractSigNumericValue(parsed.sig?.salaires_personnel) > 0
+                ? (extractSigNumericValue(parsed.sig?.salaires_personnel) + extractSigNumericValue(parsed.sig?.charges_sociales_personnel))
                 : ((parsed.compte_resultat?.salaires_traitements || 0) + (parsed.compte_resultat?.charges_sociales || 0)),
               dotations_amortissements: parsed.compte_resultat?.dotations_amortissements_immob || 0,
               // ✅ Ventes et achats de marchandises - CRITIQUES pour calcul marge commerciale
-              ventes_marchandises: parsed.compte_resultat?.ventes_marchandises || parsed.sig?.ventes_marchandises?.valeur || 0,
-              achats_marchandises: parsed.compte_resultat?.achats_marchandises || parsed.sig?.cout_achat_marchandises_vendues?.valeur || 0,
+              ventes_marchandises: parsed.compte_resultat?.ventes_marchandises || extractSigNumericValue(parsed.sig?.ventes_marchandises) || 0,
+              achats_marchandises: parsed.compte_resultat?.achats_marchandises || extractSigNumericValue(parsed.sig?.cout_achat_marchandises_vendues) || 0,
+              // ✅ Production vendue de services = Commissions (tabac/loto/presse) pour Tabac/Presse
+              // Fallback: compte_resultat > sig.production_vendue_services > sig.production_vendue > sig.production_exercice
+              production_vendue_services: parsed.compte_resultat?.production_vendue_services
+                || extractSigNumericValue(parsed.sig?.production_vendue_services)
+                || extractSigNumericValue(parsed.sig?.production_vendue)
+                || extractSigNumericValue(parsed.sig?.production_exercice)
+                || 0,
               consommations_externes: parsed.compte_resultat?.autres_achats_charges_externes || 0,
               capitaux_propres: parsed.bilan_passif?.total_capitaux_propres || 0,
               dettes_totales: parsed.bilan_passif?.total_dettes || 0,
               total_actif: parsed.bilan_actif?.total_general_actif || 0,
               total_passif: parsed.bilan_passif?.total_general_passif || 0,
-              // Données SIG spécifiques
-              marge_commerciale: parsed.sig?.marge_commerciale?.valeur || 0,
-              valeur_ajoutee: parsed.sig?.valeur_ajoutee?.valeur || 0,
-              charges_exploitant: parsed.sig?.charges_exploitant?.valeur || 0, // Salaire dirigeant!
+              // Données SIG spécifiques - ⚠️ ROBUSTE: accepte nombre ou {valeur, pct_ca}
+              marge_commerciale: extractSigNumericValue(parsed.sig?.marge_commerciale) || 0,
+              valeur_ajoutee: extractSigNumericValue(parsed.sig?.valeur_ajoutee) || 0,
+              charges_exploitant: extractSigNumericValue(parsed.sig?.charges_exploitant) || 0, // Salaire dirigeant!
               // Nouveaux champs critiques
-              marge_brute_globale: parsed.sig?.marge_brute_globale?.valeur || 0,
-              charges_externes: parsed.sig?.autres_achats_charges_externes?.valeur || parsed.compte_resultat?.autres_achats_charges_externes || 0,
-              salaires_personnel: parsed.sig?.salaires_personnel?.valeur || parsed.compte_resultat?.salaires_traitements || 0,
-              charges_sociales_personnel: parsed.sig?.charges_sociales_personnel?.valeur || parsed.compte_resultat?.charges_sociales || 0
+              marge_brute_globale: extractSigNumericValue(parsed.sig?.marge_brute_globale) || 0,
+              charges_externes: extractSigNumericValue(parsed.sig?.autres_achats_charges_externes) || parsed.compte_resultat?.autres_achats_charges_externes || 0,
+              salaires_personnel: extractSigNumericValue(parsed.sig?.salaires_personnel) || parsed.compte_resultat?.salaires_traitements || 0,
+              charges_sociales_personnel: extractSigNumericValue(parsed.sig?.charges_sociales_personnel) || parsed.compte_resultat?.charges_sociales || 0
             },
             // Nouvelles sections structurées COMPTA
             bilan_actif: parsed.bilan_actif,
@@ -800,6 +837,98 @@ export const geminiVisionExtractTool = new FunctionTool({
           },
           comptaOutput.confidence
         );
+
+        // ✅ INJECTION DIRECTE dans state.comptable.sig[year]
+        // Garantit que les données extraites arrivent dans le state sans dépendre du LLM
+        if (toolContext?.state && comptaOutput.year) {
+          const year = comptaOutput.year.toString();
+          const kv = comptaOutput.extractedData.key_values;
+
+          // VALIDATION STRICTE : Vérifier que les champs SIG critiques sont présents
+          const requiredSigFields = [
+            'chiffre_affaires', 'marge_commerciale', 'marge_brute_globale',
+            'valeur_ajoutee', 'ebe', 'resultat_exploitation', 'resultat_net'
+          ];
+
+          const missingFields = requiredSigFields.filter(field =>
+            (kv as any)[field] === undefined || (kv as any)[field] === null
+          );
+
+          if (missingFields.length > 0) {
+            console.warn(`⚠️ [geminiVisionExtract] Champs SIG manquants pour ${year}: ${missingFields.join(', ')}`);
+            console.warn(`   L'injection sera effectuée mais les champs manquants seront à 0`);
+          }
+
+          // VALIDATION : Ne pas injecter si confidence trop basse
+          const confidence = typeof comptaOutput.confidence === 'string'
+            ? parseFloat(comptaOutput.confidence)
+            : comptaOutput.confidence || 0;
+
+          if (confidence < 0.7) {
+            console.error(`❌ [geminiVisionExtract] Confidence trop basse (${confidence}) pour ${year} - SKIP injection`);
+            // Ne pas injecter dans state.comptable.sig si la confiance est insuffisante
+            return comptaOutput;
+          }
+
+          const ca = kv.chiffre_affaires || 1; // Éviter division par 0
+          const calcPctCa = (v: number) => ca > 0 ? Math.round((v / ca) * 10000) / 100 : 0;
+
+          // Construire le SIG avec format {valeur, pct_ca} - TOUS les champs
+          const sigYear = {
+            year: comptaOutput.year,
+            source: 'gemini_vision_direct',
+            confidence: confidence,
+
+            // Chiffre d'affaires & composantes
+            chiffre_affaires: { valeur: kv.chiffre_affaires || 0, pct_ca: 100 },
+            ventes_marchandises: { valeur: kv.ventes_marchandises || 0, pct_ca: calcPctCa(kv.ventes_marchandises || 0) },
+            production_vendue_services: { valeur: kv.production_vendue_services || 0, pct_ca: calcPctCa(kv.production_vendue_services || 0) },
+
+            // Marges
+            achats_marchandises: { valeur: kv.achats_marchandises || 0, pct_ca: calcPctCa(kv.achats_marchandises || 0) },
+            marge_commerciale: { valeur: kv.marge_commerciale || 0, pct_ca: calcPctCa(kv.marge_commerciale || 0) },
+            marge_brute_globale: { valeur: kv.marge_brute_globale || 0, pct_ca: calcPctCa(kv.marge_brute_globale || 0) },
+
+            // Charges
+            autres_achats_charges_externes: { valeur: kv.charges_externes || 0, pct_ca: calcPctCa(kv.charges_externes || 0) },
+            charges_exploitant: { valeur: kv.charges_exploitant || 0, pct_ca: calcPctCa(kv.charges_exploitant || 0) },
+            salaires_personnel: { valeur: kv.salaires_personnel || 0, pct_ca: calcPctCa(kv.salaires_personnel || 0) },
+            charges_sociales_personnel: { valeur: kv.charges_sociales_personnel || 0, pct_ca: calcPctCa(kv.charges_sociales_personnel || 0) },
+
+            // Indicateurs clés
+            valeur_ajoutee: { valeur: kv.valeur_ajoutee || 0, pct_ca: calcPctCa(kv.valeur_ajoutee || 0) },
+            ebe: { valeur: kv.ebe || 0, pct_ca: calcPctCa(kv.ebe || 0) },
+            resultat_exploitation: { valeur: kv.resultat_exploitation || 0, pct_ca: calcPctCa(kv.resultat_exploitation || 0) },
+            resultat_net: { valeur: kv.resultat_net || 0, pct_ca: calcPctCa(kv.resultat_net || 0) }
+          };
+
+          // Lire état actuel et ajouter cette année
+          const currentComptable = (toolContext.state.get('comptable') as any) || {};
+          const currentSig = currentComptable.sig || {};
+          const currentYears: number[] = currentComptable.yearsAnalyzed || [];
+
+          // Mettre à jour le state
+          toolContext.state.set('comptable', {
+            ...currentComptable,
+            sig: {
+              ...currentSig,
+              [year]: sigYear
+            },
+            yearsAnalyzed: [...new Set([...currentYears, comptaOutput.year])].sort((a: number, b: number) => b - a)
+          });
+
+          // LOGGING DÉTAILLÉ
+          console.log(`\n✅ [geminiVisionExtract] Injection directe SIG pour ${year} (confidence: ${(confidence * 100).toFixed(0)}%)`);
+          console.log(`   CA: ${sigYear.chiffre_affaires.valeur.toLocaleString('fr-FR')} €`);
+          console.log(`   ├─ Ventes Marchandises: ${sigYear.ventes_marchandises.valeur.toLocaleString('fr-FR')} € (${sigYear.ventes_marchandises.pct_ca.toFixed(1)}%)`);
+          console.log(`   └─ Production/Services: ${sigYear.production_vendue_services.valeur.toLocaleString('fr-FR')} € (${sigYear.production_vendue_services.pct_ca.toFixed(1)}%)`);
+          console.log(`   Marge Commerciale: ${sigYear.marge_commerciale.valeur.toLocaleString('fr-FR')} € (${sigYear.marge_commerciale.pct_ca.toFixed(1)}%)`);
+          console.log(`   Marge Brute Globale: ${sigYear.marge_brute_globale.valeur.toLocaleString('fr-FR')} € (${sigYear.marge_brute_globale.pct_ca.toFixed(1)}%)`);
+          console.log(`   Valeur Ajoutée: ${sigYear.valeur_ajoutee.valeur.toLocaleString('fr-FR')} € (${sigYear.valeur_ajoutee.pct_ca.toFixed(1)}%)`);
+          console.log(`   EBE: ${sigYear.ebe.valeur.toLocaleString('fr-FR')} € (${sigYear.ebe.pct_ca.toFixed(1)}%)`);
+          console.log(`   Résultat Exploitation: ${sigYear.resultat_exploitation.valeur.toLocaleString('fr-FR')} € (${sigYear.resultat_exploitation.pct_ca.toFixed(1)}%)`);
+          console.log(`   Résultat Net: ${sigYear.resultat_net.valeur.toLocaleString('fr-FR')} € (${sigYear.resultat_net.pct_ca.toFixed(1)}%)\n`);
+        }
 
         return comptaOutput;
       }
