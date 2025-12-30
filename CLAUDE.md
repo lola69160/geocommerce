@@ -176,10 +176,38 @@ if (value === 0) { value = caTotal * 0.08; }
 if (value === 0) { console.warn('Valeur non extraite'); }
 ```
 
+#### ⚠️ CRITIQUE: Préservation des Champs SIG par ComptableAgent (FIX 2025-12-30)
+
+**Problème résolu** : ComptableAgent écrasait les champs SIG injectés par geminiVisionExtractTool car son prompt référençait l'ancien `calculateSigTool` (supprimé).
+
+**Solution** : Le prompt de `ComptableAgent.ts` (lignes 306-312) ordonne maintenant au LLM de :
+1. ✅ Appeler `validateSig` (pas calculateSig)
+2. ✅ **COPIER INTÉGRALEMENT** `state.comptable.sig` dans le JSON de sortie
+3. ✅ **NE PAS FILTRER** les champs - préserver l'objet complet
+4. ✅ Champs CRITIQUES : `ventes_marchandises`, `production_vendue_services`, `marge_brute_globale`, `autres_achats_charges_externes`, `charges_exploitant`, `salaires_personnel`, `charges_sociales_personnel`
+
+**Symptôme si bug réapparaît** : Lignes "Ventes Marchandises" et "Commissions/Services" affichent "-" dans le tableau SIG du rapport HTML (au lieu des vraies valeurs).
+
+**Diagnostic** : Vérifier les logs `✅ [geminiVisionExtract] Injection directe SIG` qui montrent les valeurs injectées. Si présentes dans les logs mais absentes du rapport → ComptableAgent écrase le state.
+
+#### Benchmark Sectoriel NAF 47.26Z (Tabac/Presse)
+
+**Ajouté 2025-12-30** : Benchmark spécifique pour NAF 47.26 dans `sectorBenchmarks.ts` (lignes 41-56).
+
+Avant ce fix, le code cherchait un match partiel et trouvait NAF 47.11 ("Commerce de détail") au lieu de 47.26Z.
+
+**Ratios spécifiques Tabac/Presse** :
+- Marge brute : 66% (commissions réglementées + boutique)
+- Marge EBE : 18%
+- Marge nette : 10%
+- BFR : -10 jours CA (beaucoup de cash)
+
 **Fichiers clés:**
 - `geminiVisionExtractTool.ts` - **Injection directe** dans state.comptable.sig[year] (validation stricte)
 - `validateSigTool.ts` - **Validation** (PAS de recalcul) des SIG injectés
+- `ComptableAgent.ts` - **Préservation complète** des champs SIG (lignes 306-312)
 - `businessPlanDynamiqueTool.ts` - Projections **SANS condition isTabac**
-- `accountingSection.ts` - Afficher "-" si manquant
+- `accountingSection.ts` - Affichage tableau SIG avec ventes_marchandises et production_vendue_services
+- `sectorBenchmarks.ts` - Benchmark NAF 47.26Z pour Tabac/Presse
 
 See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for complete priority rules.

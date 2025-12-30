@@ -179,9 +179,13 @@ FORMAT DE SORTIE JSON (STRICT) :
   "sig": {
     "2024": {
       "year": 2024,
-      "source": "compta_extraction",
+      "source": "gemini_vision_direct",
+      "confidence": 0.9,
       "chiffre_affaires": { "valeur": 500000, "pct_ca": 100 },
-      "marge_commerciale": { "valeur": 200000, "pct_ca": 40 },
+      "ventes_marchandises": { "valeur": 250000, "pct_ca": 50 },
+      "production_vendue_services": { "valeur": 250000, "pct_ca": 50 },
+      "achats_marchandises": { "valeur": 100000, "pct_ca": 20 },
+      "marge_commerciale": { "valeur": 150000, "pct_ca": 30 },
       "marge_brute_globale": { "valeur": 340000, "pct_ca": 68 },
       "autres_achats_charges_externes": { "valeur": 60000, "pct_ca": 12 },
       "valeur_ajoutee": { "valeur": 180000, "pct_ca": 36 },
@@ -196,6 +200,7 @@ FORMAT DE SORTIE JSON (STRICT) :
       "resultat_exceptionnel": { "valeur": 0, "pct_ca": 0 },
       "resultat_net": { "valeur": 55000, "pct_ca": 11 }
     }
+    // ⚠️ IMPORTANT: Copier TOUS les champs de state.comptable.sig[year] - ne pas filtrer !
   },
 
   "evolution": {
@@ -298,15 +303,18 @@ FORMAT DE SORTIE JSON (STRICT) :
 }
 
 RÈGLES :
-1. Appeler les 6 tools dans l'ordre (calculateSig → calculateEbeRetraitement → calculateRatios → analyzeTrends → compareToSector → calculateHealthScore)
+1. Appeler les 6 tools dans l'ordre (validateSig → calculateEbeRetraitement → calculateRatios → analyzeTrends → compareToSector → calculateHealthScore)
 2. Ne PAS recalculer manuellement - utiliser les résultats des tools
 3. Pour alertes : comparer aux benchmarks sectoriels (comparisons[].position)
 4. Pour synthese : résumer en 3-5 phrases max les points clés, mentionner l'EBE Normatif si différent de l'EBE comptable
 5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
-6. ⚠️ CRITIQUE SIG: Copier TOUS les champs retournés par calculateSig dans le JSON de sortie sig.
-   Le format est { "valeur": number, "pct_ca": number } pour chaque indicateur.
-   Ne PAS simplifier les valeurs - garder le format structuré exact retourné par le tool.
-   Champs OBLIGATOIRES: marge_brute_globale, autres_achats_charges_externes, charges_exploitant, salaires_personnel, charges_sociales_personnel
+6. ⚠️ CRITIQUE SIG: COPIER INTÉGRALEMENT state.comptable.sig dans le JSON de sortie (preserveAll = true).
+   - Les SIG sont déjà injectés par geminiVisionExtractTool avec TOUS les champs
+   - Ne PAS filtrer ou supprimer de champs - garder l'objet sig complet tel quel
+   - Format: { "valeur": number, "pct_ca": number } pour chaque indicateur
+   - Champs CRITIQUES à préserver: ventes_marchandises, production_vendue_services, marge_brute_globale,
+     autres_achats_charges_externes, charges_exploitant, salaires_personnel, charges_sociales_personnel
+   - Si tu ne préserves pas TOUS les champs, le rapport HTML sera incomplet !
 
 GESTION D'ERREURS :
 - Si aucun document dans state.documentExtraction :

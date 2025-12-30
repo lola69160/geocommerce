@@ -38,6 +38,22 @@ export const SECTOR_BENCHMARKS: SectorBenchmark[] = [
       taux_endettement_pct: 120
     }
   },
+  // Tabac Presse Loto (NAF 47.26Z)
+  {
+    nafCode: '47.26',
+    sector: 'Commerce de détail de produits à base de tabac, presse et loterie',
+    ratios: {
+      marge_brute_pct: 66,          // Marge globale (commissions réglementées + boutique)
+      marge_ebe_pct: 18,             // EBE moyen pour tabac-presse
+      marge_nette_pct: 10,           // Marge nette typique
+      taux_va_pct: 50,               // Forte VA car peu d'achats externes
+      rotation_stocks_jours: 25,     // Stock boutique + marchandises
+      delai_clients_jours: 3,        // Beaucoup de ventes cash
+      delai_fournisseurs_jours: 30,  // Paiement fournisseurs standard
+      bfr_jours_ca: -10,             // BFR négatif grâce au cash
+      taux_endettement_pct: 90       // Endettement modéré
+    }
+  },
   // Boulangerie-pâtisserie
   {
     nafCode: '10.71',
