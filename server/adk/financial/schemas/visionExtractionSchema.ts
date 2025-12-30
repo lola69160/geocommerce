@@ -348,6 +348,7 @@ export const ComptaGeminiResponseSchema = {
 
         // Production
         production_vendue: ValeurSigJsonSchema,
+        production_vendue_services: ValeurSigJsonSchema, // Commissions (tabac/loto/presse)
         production_exercice: ValeurSigJsonSchema,
 
         // Marges

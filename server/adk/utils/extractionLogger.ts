@@ -200,6 +200,8 @@ export function logDocumentExtraction(
     const kv = extractedData.key_values;
     data['──────────────── INDICATEURS CLÉS'] = '';
     data.chiffre_affaires = kv.chiffre_affaires;
+    data.ventes_marchandises = kv.ventes_marchandises;
+    data.production_vendue_services = kv.production_vendue_services;
     data.marge_commerciale = kv.marge_commerciale;
     data.marge_brute_globale = kv.marge_brute_globale;
     data.valeur_ajoutee = kv.valeur_ajoutee;

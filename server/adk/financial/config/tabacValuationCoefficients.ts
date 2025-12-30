@@ -296,13 +296,36 @@ export const TABAC_NAF_CODES = [
 ];
 
 /**
- * Vérifie si un code NAF correspond à un commerce Tabac/Presse/FDJ
+ * Mots-clés indiquant un commerce Tabac/Presse/FDJ dans l'activité
  */
-export function isTabacCommerce(nafCode: string): boolean {
-  if (!nafCode) return false;
+export const TABAC_ACTIVITY_KEYWORDS = ['tabac', 'presse', 'fdj', 'loto', 'pmu'];
 
-  const normalized = nafCode.replace(/[A-Z\s]/gi, '').trim();
-  return TABAC_NAF_CODES.some(code => normalized.startsWith(code));
+/**
+ * Vérifie si un commerce est de type Tabac/Presse/FDJ
+ *
+ * @param nafCode - Code NAF (ex: "47.26Z")
+ * @param activity - Description de l'activité ou secteur (ex: "Débits de boissons / Tabac")
+ * @returns true si commerce Tabac/Presse/FDJ détecté
+ */
+export function isTabacCommerce(nafCode: string, activity?: string): boolean {
+  // Méthode 1: Vérifier le code NAF
+  if (nafCode) {
+    const normalized = nafCode.replace(/[A-Z\s]/gi, '').trim();
+    if (TABAC_NAF_CODES.some(code => normalized.startsWith(code))) {
+      return true;
+    }
+  }
+
+  // Méthode 2: Vérifier l'activité/secteur pour mots-clés tabac
+  if (activity) {
+    const activityLower = activity.toLowerCase();
+    if (TABAC_ACTIVITY_KEYWORDS.some(kw => activityLower.includes(kw))) {
+      console.log(`[isTabacCommerce] ✅ Détecté via activité: "${activity}"`);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

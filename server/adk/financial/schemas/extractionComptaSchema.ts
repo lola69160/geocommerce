@@ -249,6 +249,7 @@ export interface SigExtraction {
 
   // Production
   production_vendue: ValeurSig;
+  production_vendue_services?: ValeurSig; // Commissions tabac/loto/presse (ligne "Production vendue de services")
   production_stockee?: ValeurSig;
   production_immobilisee?: ValeurSig;
   production_exercice: ValeurSig;
