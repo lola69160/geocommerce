@@ -94,8 +94,7 @@ const Modal = ({
       <div
         className={`
           absolute inset-0
-          bg-surface-900/40
-          backdrop-blur-md
+          bg-surface-900
         `}
       />
 

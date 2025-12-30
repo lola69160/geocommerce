@@ -149,7 +149,7 @@ const PurchaseHistory = ({ business }) => {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: 'rgba(26, 26, 36, 0.4)',
+                        backgroundColor: 'rgb(26, 26, 36)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -167,7 +167,7 @@ const PurchaseHistory = ({ business }) => {
                             maxHeight: '80vh',
                             overflowY: 'auto',
                             position: 'relative',
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
                         }}
                         onClick={e => e.stopPropagation()}
                     >

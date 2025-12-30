@@ -143,10 +143,8 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
 
     return (
         <div
-            className="fixed inset-0 flex items-center justify-center z-[2000]"
+            className="fixed inset-0 flex items-center justify-center z-[2000] bg-surface-900"
             style={{
-                backgroundColor: 'rgba(26, 26, 36, 0.4)',
-                backdropFilter: 'blur(4px)',
                 animation: 'fadeIn 0.2s ease-out'
             }}
             onClick={onClose}

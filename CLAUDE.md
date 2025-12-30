@@ -47,11 +47,42 @@ See [tests/README.md](tests/README.md) for complete testing guide.
 
 ## Key Technologies
 
-- **Frontend**: React, Vite, Tailwind CSS, Leaflet
+- **Frontend**: React, Vite, **Tailwind CSS v3.4.0**, Leaflet
 - **Backend**: Express.js, Winston (logging)
 - **AI/ML**: Google Gemini API, Google ADK
 - **APIs**: Google Places, OpenData (France), BODACC
 - **Storage**: JSON files, localStorage
+
+## ⚠️ Important: Tailwind CSS Version
+
+**CRITICAL**: This project uses **Tailwind CSS v3.4.0** (NOT v4).
+
+### Why Tailwind v3?
+
+- Tailwind v4 has a **completely different** configuration system
+- The project's `tailwind.config.js` uses v3 syntax (with `extend`, custom colors, etc.)
+- Using v4 causes **CSS classes not to compile** (bg-white, bg-red-500, etc. don't work)
+
+### If CSS classes don't work:
+
+1. **Check package.json**: Ensure `tailwindcss: ^3.4.0` (NOT v4)
+2. **Check postcss.config.js**: Should use `tailwindcss: {}` (NOT `@tailwindcss/postcss`)
+3. **Clear cache**: `rm -rf node_modules/.vite dist`
+4. **Restart**: `npm run dev`
+
+### Correct configuration:
+
+```javascript
+// postcss.config.js
+export default {
+    plugins: {
+        tailwindcss: {},      // ✅ Tailwind v3
+        autoprefixer: {},
+    },
+}
+```
+
+**DO NOT upgrade to Tailwind v4** without migrating the entire config!
 
 ## Code Organization Guidelines
 

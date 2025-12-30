@@ -125,7 +125,7 @@ const Autocomplete = ({ onSelect, placeholder, initialValue = '' }) => {
             focus:bg-surface-200
             ${isFocused
               ? 'border-primary-500 shadow-glow-sm'
-              : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]'
+              : 'border-surface-400 hover:border-surface-500'
             }
           `}
         />
@@ -137,7 +137,7 @@ const Autocomplete = ({ onSelect, placeholder, initialValue = '' }) => {
           absolute top-full left-0 right-0
           mt-2
           bg-surface-300
-          border border-[rgba(255,255,255,0.1)]
+          border border-surface-400
           rounded-xl
           overflow-hidden
           shadow-dark-xl
@@ -152,7 +152,7 @@ const Autocomplete = ({ onSelect, placeholder, initialValue = '' }) => {
               className={`
                 px-4 py-3
                 cursor-pointer
-                border-b border-[rgba(255,255,255,0.06)] last:border-b-0
+                border-b border-surface-500 last:border-b-0
                 transition-colors duration-fast
                 ${highlightedIndex === index
                   ? 'bg-surface-200'

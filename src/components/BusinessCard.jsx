@@ -196,7 +196,7 @@ const BusinessCard = forwardRef(({
 
       {/* Debug Mode Section */}
       {debugMode && (
-        <div className="px-4 pb-4 pt-2 border-t border-[rgba(255,255,255,0.06)]">
+        <div className="px-4 pb-4 pt-2 border-t border-surface-500">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -230,7 +230,7 @@ const BusinessCard = forwardRef(({
               <pre className={`
                 p-3 pt-8
                 bg-surface-900
-                border border-[rgba(255,255,255,0.06)]
+                border border-surface-500
                 rounded-lg
                 text-xs font-mono
                 text-text-secondary

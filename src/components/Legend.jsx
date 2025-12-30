@@ -17,9 +17,8 @@ const Legend = () => {
       z-fixed
       p-3
       min-w-[160px]
-      bg-[rgba(18,18,26,0.9)]
-      backdrop-blur-lg
-      border border-[rgba(255,255,255,0.08)]
+      bg-surface-900
+      border border-surface-700
       rounded-xl
       shadow-dark-xl
       animate-fade-in-up

@@ -27,8 +27,7 @@
 
 /* Map attribution */
 .leaflet-control-attribution {
-  background: var(--glass-bg-elevated) !important;
-  backdrop-filter: blur(12px) !important;
+  background: var(--surface-50) !important;
   border: 1px solid var(--border-default) !important;
   color: var(--text-tertiary) !important;
   font-size: var(--text-xs) !important;
@@ -48,12 +47,11 @@
   border-radius: var(--radius-xl) !important;
   overflow: hidden;
   box-shadow: var(--shadow-md) !important;
-  background: var(--glass-bg-elevated) !important;
-  backdrop-filter: blur(12px) !important;
+  background: var(--surface-50) !important;
 }
 
 .leaflet-control-zoom a {
-  background: rgba(255, 255, 255, 0.6) !important;
+  background: var(--surface-200) !important;
   color: var(--text-primary) !important;
   border: none !important;
   border-bottom: 1px solid var(--border-light) !important;

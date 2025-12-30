@@ -467,7 +467,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-surface-900/40 backdrop-blur-md flex items-center justify-center z-[1100] p-4">
+    <div className="fixed inset-0 bg-surface-900 flex items-center justify-center z-[1100] p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-[95vw] h-[92vh] flex flex-col">
         {/* Header - Gojiberry Style */}
         <div className="flex items-center justify-between px-8 py-6 border-b border-surface-300">
@@ -781,7 +781,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                             ? 'border-success-500 bg-success-50'
                             : isRunning
                               ? 'border-primary-500 bg-primary-50 animate-pulse'
-                              : 'border-surface-400 bg-white opacity-60'
+                              : 'border-surface-400 bg-surface-100'
                         }`}
                       >
                         <div className="flex items-center gap-4 p-5">
@@ -843,7 +843,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                       className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
                         activeReport === 'professional'
                           ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
-                          : 'bg-transparent text-text-secondary hover:bg-white/50'
+                          : 'bg-transparent text-text-secondary hover:bg-surface-100'
                       }`}
                     >
                       📊 Analyse Professionnelle
@@ -853,7 +853,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                       className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
                         activeReport === 'financial'
                           ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
-                          : 'bg-transparent text-text-secondary hover:bg-white/50'
+                          : 'bg-transparent text-text-secondary hover:bg-surface-100'
                       }`}
                     >
                       💰 Analyse Financière

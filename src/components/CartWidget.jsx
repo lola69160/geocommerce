@@ -81,7 +81,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
     <>
       {/* Floating Cart Button */}
       <div className={`
-        fixed top-4 right-4 z-[1000]
+        fixed top-4 left-[436px] z-[1000]
         transition-all duration-normal ease-out
         ${isOpen ? 'translate-x-[200%] opacity-0' : 'translate-x-0 opacity-100'}
       `}>
@@ -122,8 +122,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
           <span className={`
             absolute right-full mr-3 top-1/2 -translate-y-1/2
             px-4 py-2
-            bg-white/90
-            backdrop-blur-md
+            bg-white
             text-text-primary text-sm font-medium
             rounded-xl
             border border-surface-300
@@ -144,8 +143,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
         <div
           className={`
             fixed inset-0 z-[1001]
-            bg-black/60
-            backdrop-blur-sm
+            bg-surface-900
             animate-fade-in
           `}
           onClick={() => setIsOpen(false)}
@@ -156,16 +154,15 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
       <div className={`
         fixed inset-y-0 right-0 z-[1002]
         w-96 max-w-[90vw]
-        bg-white/70
-        backdrop-blur-xl
-        border-l border-white/50
+        bg-white
+        border-l border-surface-300
         shadow-xl
         flex flex-col
         transform transition-transform duration-normal ease-out
         ${isOpen ? 'translate-x-0' : 'translate-x-full'}
       `}>
         {/* Header */}
-        <div className="p-5 border-b border-surface-300 bg-surface-100/80 backdrop-blur-sm">
+        <div className="p-5 border-b border-surface-300 bg-surface-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-primary-100">
@@ -231,7 +228,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
                       rounded-lg
                       text-text-muted
                       hover:text-red-400
-                      hover:bg-red-500/15
+                      hover:bg-red-100
                       transition-colors duration-fast
                     `}
                     title="Retirer du panier"
@@ -248,12 +245,12 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
                     flex items-center justify-center gap-2
                     px-3 py-2
                     rounded-lg
-                    bg-gradient-to-r from-accent-violet-200/20 to-accent-violet-300/20
+                    bg-accent-violet-100
                     text-accent-violet-700
-                    border border-accent-violet-300/30
+                    border border-accent-violet-300
                     font-medium text-xs
-                    hover:from-accent-violet-200/30 hover:to-accent-violet-300/30
-                    hover:border-accent-violet-300/50
+                    hover:bg-accent-violet-200
+                    hover:border-accent-violet-400
                     transition-all duration-fast
                     active:scale-98
                     group
@@ -269,7 +266,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-surface-300 bg-surface-100/80 backdrop-blur-sm space-y-4">
+        <div className="p-5 border-t border-surface-300 bg-surface-100 space-y-4">
           {/* Summary */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-text-secondary font-medium">Total entreprises</span>

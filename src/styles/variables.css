@@ -12,11 +12,11 @@
   --success-color: #10b981;
   --warning-color: #f59e0b;
 
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.5);
+  /* Glassmorphism (Disabled - Opaque design) */
+  --glass-bg: rgb(255, 255, 255);
+  --glass-border: rgb(203, 213, 225);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-  --backdrop-blur: 12px;
+  --backdrop-blur: 0px;
 
   /* Spacing & Radius */
   --radius-sm: 8px;
@@ -56,8 +56,6 @@ body {
 /* Utilities */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--backdrop-blur));
-  -webkit-backdrop-filter: blur(var(--backdrop-blur));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   border-radius: var(--radius-md);
@@ -90,7 +88,7 @@ body {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-sm);
   border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgb(255, 255, 255);
   transition: border-color var(--transition-fast);
   font-size: 1rem;
 }

@@ -74,7 +74,7 @@ const SearchPanel = ({
   };
 
   return (
-    <div className="h-full flex flex-col p-5">
+    <div className="h-full flex flex-col p-5 bg-white">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

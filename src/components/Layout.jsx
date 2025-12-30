@@ -13,16 +13,6 @@ import React from 'react';
 const Layout = ({ sidebar, main }) => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-100">
-      {/* Subtle Light Background Pattern */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: `
-            radial-gradient(at 40% 20%, rgba(255, 107, 74, 0.02) 0px, transparent 50%),
-            radial-gradient(at 80% 0%, rgba(255, 107, 74, 0.015) 0px, transparent 50%)
-          `,
-        }}
-      />
 
       {/* Sidebar */}
       <aside
@@ -31,8 +21,7 @@ const Layout = ({ sidebar, main }) => {
           w-[420px]
           h-full
           flex-shrink-0
-          bg-white/70
-          backdrop-blur-xl
+          bg-white
           border-r border-surface-300
           shadow-lg
           overflow-y-auto
@@ -40,19 +29,6 @@ const Layout = ({ sidebar, main }) => {
           animate-slide-in-left
         `.replace(/\s+/g, ' ').trim()}
       >
-        {/* Subtle gradient overlay on sidebar */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: `
-              linear-gradient(180deg,
-                rgba(255, 107, 74, 0.01) 0%,
-                transparent 50%
-              )
-            `,
-          }}
-        />
-
         {/* Sidebar content */}
         <div className="relative z-10">
           {sidebar}

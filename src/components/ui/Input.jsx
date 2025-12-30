@@ -56,7 +56,7 @@ const Input = React.forwardRef(({
     if (error) return 'border-red-500 focus:border-red-500';
     if (success) return 'border-emerald-500 focus:border-emerald-500';
     if (isFocused) return 'border-primary-500';
-    return 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]';
+    return 'border-surface-400 hover:border-surface-500';
   };
 
   // State-based glow
@@ -188,7 +188,7 @@ export const Textarea = React.forwardRef(({
     if (error) return 'border-red-500 focus:border-red-500';
     if (success) return 'border-emerald-500 focus:border-emerald-500';
     if (isFocused) return 'border-primary-500';
-    return 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]';
+    return 'border-surface-400 hover:border-surface-500';
   };
 
   const getGlow = () => {

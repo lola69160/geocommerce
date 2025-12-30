@@ -49,7 +49,7 @@ export const Button = ({
           {icon && <span className="flex-shrink-0">{icon}</span>}
           <span>{children}</span>
           {badge && (
-            <span className="px-2 py-1 rounded-full bg-white/20 text-xs font-bold">
+            <span className="px-2 py-1 rounded-full bg-white text-primary-600 text-xs font-bold">
               {badge}
             </span>
           )}

@@ -236,17 +236,17 @@
   --modal-full: 95vw;
 
   /* ----------------------------------------
-     BACKDROP BLUR (Modal only)
+     BACKDROP BLUR (Disabled - Opaque design)
      ---------------------------------------- */
-  --backdrop-blur: 12px;
-  --backdrop-blur-lg: 16px;
+  --backdrop-blur: 0px;
+  --backdrop-blur-lg: 0px;
 
   /* ----------------------------------------
-     GLASSMORPHISM
+     GLASSMORPHISM (Disabled - Opaque design)
      ---------------------------------------- */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-bg: rgb(255, 255, 255);
+  --glass-bg-elevated: rgb(255, 255, 255);
+  --glass-border: rgb(232, 228, 223);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 
   /* ----------------------------------------
