@@ -272,9 +272,18 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       // ÉTAPE 5: Calculer les nouvelles charges
       // ========================================
 
+      // ✅ FIX (2025-12-30): Priorité à userComments.frais_personnel_N1
       const salairesSupprimes = params.salairesSupprimes || 0;
       const salairesAjoutes = params.salairesAjoutes || 0;
-      const nouveauSalaires = chargesPersonnelActuel - salairesSupprimes + salairesAjoutes;
+      const nouveauSalaires = userComments?.frais_personnel_N1
+        || (chargesPersonnelActuel - salairesSupprimes + salairesAjoutes);
+
+      console.log(`[businessPlanDynamique] 💼 Frais personnel N+1: ${nouveauSalaires.toLocaleString('fr-FR')} €`);
+      if (userComments?.frais_personnel_N1) {
+        console.log(`   ✅ Source: userComments.frais_personnel_N1`);
+      } else {
+        console.log(`   ℹ️ Source: calcul actuel (${chargesPersonnelActuel.toLocaleString('fr-FR')} € - ${salairesSupprimes.toLocaleString('fr-FR')} € + ${salairesAjoutes.toLocaleString('fr-FR')} €)`);
+      }
 
       // Loyer négocié avec priorités claires
       let loyerNegocie = loyer_actuel; // Par défaut = actuel
@@ -426,12 +435,7 @@ export const businessPlanDynamiqueTool = new FunctionTool({
 
             impact_horaires_value = (ventesMarchandises + commissionsServices) * impactHoraires;
           }
-          // Année 2: Consolidation (pas de nouveau boost)
-          else if (i === 2) {
-            ventesMarchandisesAnnee = prevVentesMarchandises;
-            commissionsServicesAnnee = prevCommissionsServices;
-          }
-          // Années 3-5: Croissance naturelle différenciée
+          // Années 2-5: Croissance naturelle différenciée
           else {
             // Boutique: +3%/an
             ventesMarchandisesAnnee = prevVentesMarchandises * (1 + croissanceRecurrente);
@@ -463,8 +467,8 @@ export const businessPlanDynamiqueTool = new FunctionTool({
             ca_base += impact_travaux_value;
           }
 
-          // Croissance récurrente (années 3-5)
-          if (i >= 3) {
+          // Croissance récurrente (années 2-5)
+          if (i >= 2) {
             croissance_naturelle_value = projections[i - 1].ca * croissanceRecurrente;
             ca_base = projections[i - 1].ca + croissance_naturelle_value;
           }
@@ -504,7 +508,7 @@ export const businessPlanDynamiqueTool = new FunctionTool({
             ca_base: i === 1 ? caActuel : projections[i - 1].ca,
             impact_horaires: i === 1 ? impact_horaires_value : 0,
             impact_travaux: i === 1 ? impact_travaux_value : 0,
-            croissance_naturelle: i >= 3 ? croissance_naturelle_value : 0,
+            croissance_naturelle: i >= 2 ? croissance_naturelle_value : 0,
             // Détail spécifique Tabac (si disponible)
             ...(tabacImpactDetail && i >= 1 && {
               tabac_detail: {
