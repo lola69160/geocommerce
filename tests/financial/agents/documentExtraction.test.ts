@@ -46,8 +46,9 @@ describe('DocumentExtractionAgent', () => {
 
     const toolNames = agent.tools.map((t: any) => t.name);
     expect(toolNames).toContain('extractPdf');
-    expect(toolNames).toContain('classifyDocument');
-    expect(toolNames).toContain('parseTables');
+    expect(toolNames).toContain('listDocuments');
+    expect(toolNames).toContain('geminiVisionExtract');
+    expect(toolNames).toContain('parseTablesHeuristic');
   });
 
   it('should process mock documents and update state', async () => {

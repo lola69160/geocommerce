@@ -56,10 +56,11 @@ describe('Financial Pipeline - Integration Test', () => {
     expect(orchestrator).toBeDefined();
     expect(orchestrator.name).toBe('financial_analysis_pipeline');
     expect(orchestrator.subAgents).toBeDefined();
-    expect(orchestrator.subAgents.length).toBe(6);
+    expect(orchestrator.subAgents.length).toBe(7);
 
     const agentNames = orchestrator.subAgents.map((a: any) => a.name);
     expect(agentNames).toEqual([
+      'comptaPreprocessing',
       'documentExtraction',
       'comptable',
       'valorisation',
