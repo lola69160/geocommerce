@@ -30,6 +30,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   const [documents, setDocuments] = useState([]);
   const [selectedDocuments, setSelectedDocuments] = useState([]); // Array of document IDs
   const [additionalInfo, setAdditionalInfo] = useState('');
+  const [fraisPersonnelN1, setFraisPersonnelN1] = useState(''); // Frais personnel N+1 (€/an)
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
@@ -333,6 +334,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
             activity: business.libelle_activite_principale || ''
           },
           userComments: {
+            frais_personnel_N1: fraisPersonnelN1 ? parseFloat(fraisPersonnelN1) : undefined,
             autres: additionalInfo
           },
           options: {
@@ -417,6 +419,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
     setDocuments([]);
     setSelectedDocuments([]);
     setAdditionalInfo('');
+    setFraisPersonnelN1('');
     setLoadingDocuments(false);
     setDocumentsError('');
 
@@ -521,6 +524,25 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                 placeholder="Notes, instructions, contexte..."
                 className="w-full h-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               />
+            </div>
+
+            {/* Frais Personnel N+1 Section */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Frais personnel N+1 (€/an)
+              </label>
+              <input
+                type="number"
+                value={fraisPersonnelN1}
+                onChange={(e) => setFraisPersonnelN1(e.target.value)}
+                placeholder="Ex: 45000"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="0"
+                step="1000"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Estimation des frais de personnel pour l'année N+1 (optionnel)
+              </p>
             </div>
 
             {/* Extraction Only Checkbox */}

@@ -4,6 +4,60 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Frontend: Champ Frais Personnel N+1 (2025-12-30)
+
+### Contexte
+
+Le backend supporte déjà `userComments.frais_personnel_N1` depuis le 2025-12-30 (voir `businessPlanDynamiqueTool.ts` lignes 275-285). Ce champ permet à l'utilisateur de fournir une estimation manuelle des frais de personnel pour l'année N+1, qui est utilisée en priorité pour les projections du business plan.
+
+### Implémentation Frontend
+
+**Fichier modifié:** `src/components/ProfessionalAnalysisModal.jsx`
+
+#### 1. État du composant (ligne 33)
+```javascript
+const [fraisPersonnelN1, setFraisPersonnelN1] = useState('');
+```
+
+#### 2. Champ de saisie dans le formulaire (lignes 527-544)
+- **Type:** Input numérique
+- **Emplacement:** Sidebar gauche, entre "Informations complémentaires" et "Extraction seulement"
+- **Validation:** min="0", step="1000"
+- **Label:** "Frais personnel N+1 (€/an)"
+- **Placeholder:** "Ex: 45000"
+- **Description:** "Estimation des frais de personnel pour l'année N+1 (optionnel)"
+
+#### 3. Envoi à l'API (ligne 337)
+```javascript
+userComments: {
+  frais_personnel_N1: fraisPersonnelN1 ? parseFloat(fraisPersonnelN1) : undefined,
+  autres: additionalInfo
+}
+```
+
+Le champ est converti en nombre avec `parseFloat()` et n'est envoyé que s'il contient une valeur.
+
+#### 4. Reset à la fermeture (ligne 422)
+Le champ est réinitialisé quand la modal se ferme.
+
+### Impact Backend
+
+Lorsque `userComments.frais_personnel_N1` est fourni, le `businessPlanDynamiqueTool` l'utilise **en priorité** pour les projections N+1 des frais de personnel, au lieu de calculer `(chargesPersonnelActuel - salairesSupprimes + salairesAjoutes)`.
+
+```typescript
+// businessPlanDynamiqueTool.ts (lignes 278-285)
+const nouveauSalaires = userComments?.frais_personnel_N1
+  || (chargesPersonnelActuel - salairesSupprimes + salairesAjoutes);
+
+if (userComments?.frais_personnel_N1) {
+  console.log(`   ✅ Source: userComments.frais_personnel_N1`);
+} else {
+  console.log(`   ℹ️ Source: calcul actuel`);
+}
+```
+
+---
+
 ## Fix V6: Simplification Architecture - Suppression calculateSigTool (2025-12-29)
 
 ### Problème Identifié
