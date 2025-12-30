@@ -44,7 +44,8 @@ For detailed documentation, see [tests/README.md](tests/README.md)
 ## 📚 Documentation
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture
-- **[ADK_PIPELINE.md](docs/ADK_PIPELINE.md)** - Strategic pipeline (10 agents)  
+- **[DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)** - Gojiberry light mode design system
+- **[ADK_PIPELINE.md](docs/ADK_PIPELINE.md)** - Strategic pipeline (10 agents)
 - **[FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md)** - Financial pipeline (6 agents)
 - **[API_INTEGRATION.md](docs/API_INTEGRATION.md)** - API integrations
 - **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development guide
