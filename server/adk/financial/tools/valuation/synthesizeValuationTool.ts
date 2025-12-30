@@ -214,8 +214,10 @@ export const synthesizeValuationTool = new FunctionTool({
         fourchetteHaute = methodeCA.valeur_haute;
       }
 
-      // Valeur recommandée = médiane
-      const valeurRecommandee = fourchetteMediane;
+      // ✅ APPROCHE CONSERVATIVE (2025-12-30):
+      // Utilisation systématique de la fourchette basse pour sécuriser l'investissement
+      // et garantir une marge de négociation au repreneur.
+      const valeurRecommandee = fourchetteBasse;
 
       // Comparaison avec prix affiché (si fourni en params ou depuis transactionCosts)
       let comparaisonPrix: any = undefined;
@@ -231,8 +233,8 @@ export const synthesizeValuationTool = new FunctionTool({
           appreciation = 'sur-evalue';
         }
 
-        // Marge de négociation = différence entre prix affiché et fourchette médiane
-        const margeNegociation = prixAffiche - fourchetteMediane;
+        // Marge de négociation = différence entre prix affiché et fourchette basse (approche conservative)
+        const margeNegociation = prixAffiche - fourchetteBasse;
 
         comparaisonPrix = {
           prix_affiche: prixAffiche,
@@ -305,7 +307,7 @@ export const synthesizeValuationTool = new FunctionTool({
       }
 
       // +15 si secteur connu (coefficients spécifiques)
-      if (valorisation.businessInfo?.nafCode) {
+      if (documentExtraction?.businessInfo?.nafCode || comptable?.businessInfo?.nafCode) {
         confidence += 15;
       }
 
@@ -338,7 +340,7 @@ export const synthesizeValuationTool = new FunctionTool({
         limitations.push('Données sur moins de 3 ans : difficulté à identifier les tendances');
       }
 
-      if (!valorisation.businessInfo?.nafCode) {
+      if (!documentExtraction?.businessInfo?.nafCode && !comptable?.businessInfo?.nafCode) {
         limitations.push('Code NAF non fourni : coefficients génériques utilisés');
       }
 

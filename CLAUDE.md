@@ -92,6 +92,100 @@ import { generateSection } from './sections';
 import type { MyType } from './types';
 ```
 
+### Data Preservation Best Practices (CRITICAL)
+
+**Principe fondamental** : Lors de modifications du pipeline financier, **TOUJOURS** vérifier que les données extraites sont préservées de bout en bout.
+
+#### Checklist avant toute modification d'agent :
+
+1. **Identifier les données critiques** :
+   - Quelles données cet agent lit-il du state ?
+   - Quelles données écrit-il dans le state ?
+   - Utilise-t-il `outputKey` qui **écrase** complètement une clé du state ?
+
+2. **Vérifier le flux de données** :
+   ```
+   Agent A injecte → state.key.subkey
+   Agent B lit     → state.key.subkey
+   Agent B écrit   → outputKey: 'key'  ⚠️ DANGER : écrase state.key complètement !
+   ```
+
+3. **Tester avec un cas réel** :
+   - Lancer une analyse avec SIRET 53840462500013
+   - Vérifier les logs d'extraction : `✅ [geminiVisionExtract] Injection directe SIG`
+   - Vérifier le rapport HTML : tableau SIG affiche les valeurs pour TOUTES les années
+   - Comparer AVANT/APRÈS la modification
+
+4. **Points de vigilance Agent + outputKey** :
+   - Si l'agent utilise `outputKey: 'X'`, il **remplace** `state.X` complètement
+   - Le LLM DOIT inclure dans son JSON TOUTES les données déjà présentes dans `state.X`
+   - Sinon → **perte de données irréversible**
+
+5. **Logs de diagnostic obligatoires** :
+   - Ajouter `console.log('[AgentName] 🔍 Input state:')` AVANT traitement
+   - Ajouter `console.log('[AgentName] 📋 Output JSON:')` APRÈS traitement
+   - Permet de comparer input vs output et détecter les pertes
+
+#### Pattern sécurisé pour préserver les données :
+
+```typescript
+// ❌ DANGEREUX - Le LLM peut oublier des champs
+export class MyAgent extends LlmAgent {
+  constructor() {
+    super({
+      outputKey: 'myData',  // Écrase state.myData complètement !
+      instruction: `Analyse les données et retourne un JSON`
+      // Si le LLM oublie un champ → PERDU !
+    });
+  }
+}
+
+// ✅ SÉCURISÉ - Instructions ultra-explicites + validation
+export class MyAgent extends LlmAgent {
+  constructor() {
+    super({
+      outputKey: 'myData',
+      instruction: `
+⚠️⚠️⚠️ RÈGLE CRITIQUE - PRÉSERVATION DES DONNÉES ⚠️⚠️⚠️
+
+ÉTAPE 1: Appelle validateMyDataTool qui retournera l'objet complet state.myData
+
+ÉTAPE 2: Dans ton JSON de sortie, COPIE INTÉGRALEMENT l'objet retourné par validateMyDataTool
+
+ÉTAPE 3: Ajoute ton analyse (nouveaux champs)
+
+Exemple de structure OBLIGATOIRE :
+{
+  "existingData": { /* COPIE COMPLÈTE de validateMyDataTool */ },
+  "myAnalysis": { /* TON analyse */ }
+}
+
+⚠️ Si tu omets "existingData", le rapport sera incomplet !
+      `
+    });
+  }
+}
+
+// ✅ ENCORE MIEUX - Séparer les responsabilités
+export class MyAgent extends LlmAgent {
+  constructor() {
+    super({
+      outputKey: 'myAnalysis',  // N'écrase PAS state.myData !
+      instruction: `Analyse les données dans state.myData et retourne ton analyse`
+    });
+  }
+}
+// Puis dans generateHtmlTool : merger state.myData + state.myAnalysis
+```
+
+#### Règles d'or :
+
+1. **Un agent = Une responsabilité** : Ne pas faire lire + écrire la même clé du state
+2. **outputKey différent** : Si possible, utiliser une clé distincte pour ne pas écraser
+3. **Instructions triplement explicites** : Warnings ⚠️, étapes numérotées, exemples concrets
+4. **Validation systématique** : Tool qui retourne les données à préserver
+5. **Tests de non-régression** : Vérifier le rapport HTML après chaque modification
+
 ## Contributing
 
 1. Follow ESLint configuration
@@ -176,19 +270,52 @@ if (value === 0) { value = caTotal * 0.08; }
 if (value === 0) { console.warn('Valeur non extraite'); }
 ```
 
-#### ⚠️ CRITIQUE: Préservation des Champs SIG par ComptableAgent (FIX 2025-12-30)
+#### ⚠️ CRITIQUE: Préservation des Champs SIG par ComptableAgent (FIX 2025-12-30 - RENFORCÉ)
 
-**Problème résolu** : ComptableAgent écrasait les champs SIG injectés par geminiVisionExtractTool car son prompt référençait l'ancien `calculateSigTool` (supprimé).
+**Problème** : ComptableAgent utilise `outputKey: 'comptable'`, ce qui **écrase complètement** `state.comptable` (incluant les SIG injectés par geminiVisionExtractTool). Si le LLM ne copie pas TOUS les champs SIG de TOUTES les années dans son JSON de sortie, les données sont **perdues définitivement**.
 
-**Solution** : Le prompt de `ComptableAgent.ts` (lignes 306-312) ordonne maintenant au LLM de :
-1. ✅ Appeler `validateSig` (pas calculateSig)
-2. ✅ **COPIER INTÉGRALEMENT** `state.comptable.sig` dans le JSON de sortie
-3. ✅ **NE PAS FILTRER** les champs - préserver l'objet complet
-4. ✅ Champs CRITIQUES : `ventes_marchandises`, `production_vendue_services`, `marge_brute_globale`, `autres_achats_charges_externes`, `charges_exploitant`, `salaires_personnel`, `charges_sociales_personnel`
+**Solution Multi-Couches (2025-12-30)** :
 
-**Symptôme si bug réapparaît** : Lignes "Ventes Marchandises" et "Commissions/Services" affichent "-" dans le tableau SIG du rapport HTML (au lieu des vraies valeurs).
+1. **validateSigTool.ts** (lignes 177-187) :
+   - Retourne `comptable.sig` complet dans sa sortie
+   - Ajoute un champ `INSTRUCTION_CRITIQUE` visible par le LLM
+   - Logs console avertissant le LLM : `⚠️⚠️⚠️ INSTRUCTION POUR LE LLM`
 
-**Diagnostic** : Vérifier les logs `✅ [geminiVisionExtract] Injection directe SIG` qui montrent les valeurs injectées. Si présentes dans les logs mais absentes du rapport → ComptableAgent écrase le state.
+2. **ComptableAgent.ts** (lignes 312-350) :
+   - **RÈGLE #6** avec triple warning ⚠️⚠️⚠️
+   - Instructions en **4 ÉTAPES** numérotées et ultra-explicites
+   - **Exemple concret** montrant les 3 années (2021, 2022, 2023) avec vraies valeurs
+   - Avertissement que les valeurs d'exemple sont fictives
+   - Instruction : "COPIE l'objet 'sig' de validateSigTool INTÉGRALEMENT"
+
+3. **Sécurité par Design** :
+   ```typescript
+   // ❌ DANGEREUX: outputKey écrase state.comptable complètement
+   outputKey: 'comptable'  // Tout ce qui n'est pas dans le JSON du LLM = PERDU
+
+   // ✅ Le LLM DOIT inclure dans son JSON:
+   {
+     "sig": { /* COPIE COMPLÈTE de validateSigTool.sig */ },
+     "yearsAnalyzed": [2021, 2022, 2023],
+     /* + son analyse (ratios, alertes, etc.) */
+   }
+   ```
+
+**Symptômes de régression** :
+- Tableau SIG HTML affiche "-" pour 2021/2022 sur : `ventes_marchandises`, `production_vendue_services`, `marge_commerciale`, `marge_brute_globale`, `charges_externes`, `frais_personnel`, `resultat_exploitation`
+- Seule l'année 2023 (ou la plus récente) affiche les valeurs complètes
+- Les logs montrent `✅ [geminiVisionExtract] Injection directe SIG pour 2021` mais le rapport HTML est vide
+
+**Diagnostic si bug réapparaît** :
+1. Vérifier logs : `✅ [geminiVisionExtract] Injection directe SIG` (données bien extraites ?)
+2. Vérifier logs : `⚠️⚠️⚠️ INSTRUCTION POUR LE LLM` (validateSigTool a retourné le SIG ?)
+3. Vérifier logs : `📋 RAW OUTPUT from comptable` (le LLM a-t-il copié TOUS les champs de TOUTES les années ?)
+4. Si étape 3 montre des données partielles → **Le LLM ne suit pas les instructions**
+
+**Solution architecturale alternative si le problème persiste** :
+- Changer `ComptableAgent.outputKey` de `'comptable'` vers `'comptableAnalysis'`
+- Modifier `generateFinancialHtmlTool` pour merger `state.comptable.sig` + `state.comptableAnalysis`
+- Avantage : Garantit que les SIG injectés ne sont JAMAIS écrasés
 
 #### Benchmark Sectoriel NAF 47.26Z (Tabac/Presse)
 

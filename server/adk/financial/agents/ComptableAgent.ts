@@ -308,13 +308,54 @@ RÈGLES :
 3. Pour alertes : comparer aux benchmarks sectoriels (comparisons[].position)
 4. Pour synthese : résumer en 3-5 phrases max les points clés, mentionner l'EBE Normatif si différent de l'EBE comptable
 5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
-6. ⚠️ CRITIQUE SIG: COPIER INTÉGRALEMENT state.comptable.sig dans le JSON de sortie (preserveAll = true).
-   - Les SIG sont déjà injectés par geminiVisionExtractTool avec TOUS les champs
-   - Ne PAS filtrer ou supprimer de champs - garder l'objet sig complet tel quel
-   - Format: { "valeur": number, "pct_ca": number } pour chaque indicateur
-   - Champs CRITIQUES à préserver: ventes_marchandises, production_vendue_services, marge_brute_globale,
-     autres_achats_charges_externes, charges_exploitant, salaires_personnel, charges_sociales_personnel
-   - Si tu ne préserves pas TOUS les champs, le rapport HTML sera incomplet !
+
+⚠️⚠️⚠️ RÈGLE #6 - ABSOLUMENT CRITIQUE - NE PAS IGNORER ⚠️⚠️⚠️
+
+6. PRÉSERVATION OBLIGATOIRE DES DONNÉES SIG (NE PAS NÉGLIGER CETTE ÉTAPE !) :
+
+   ÉTAPE 1: Appelle validateSigTool qui te retournera un objet avec la clé "sig" contenant TOUTES les années et TOUS les champs
+
+   ÉTAPE 2: Dans ton JSON de sortie, la clé "sig" DOIT être une COPIE TEXTUELLE du champ "sig" de validateSigTool
+
+   ⚠️ EXEMPLE CONCRET - Si validateSigTool retourne :
+   {
+     "sig": {
+       "2021": { "year": 2021, "chiffre_affaires": {"valeur": 240597, "pct_ca": 100}, "ventes_marchandises": {"valeur": 120455, "pct_ca": 50}, ... },
+       "2022": { "year": 2022, "chiffre_affaires": {"valeur": 244985, "pct_ca": 100}, "ventes_marchandises": {"valeur": 128725, "pct_ca": 52}, ... },
+       "2023": { "year": 2023, "chiffre_affaires": {"valeur": 235501, "pct_ca": 100}, "ventes_marchandises": {"valeur": 114495, "pct_ca": 49}, ... }
+     }
+   }
+
+   Alors ton JSON DOIT contenir EXACTEMENT la même structure (mais avec les VRAIES valeurs de validateSigTool, pas celles de l'exemple ci-dessus) :
+   {
+     "sig": <-- COPIE ICI L'OBJET sig COMPLET de validateSigTool (PAS les valeurs d'exemple ci-dessus !),
+     "yearsAnalyzed": [2021, 2022, 2023],
+     ... reste de ton analyse ...
+   }
+
+   ⚠️ RAPPEL IMPORTANT : Les valeurs 240597, 128725, etc. dans l'exemple ci-dessus sont FICTIVES.
+   Tu dois utiliser les VRAIES valeurs retournées par validateSigTool, qui contient le SIG complet des années disponibles.
+
+   ÉTAPE 3: NE MODIFIE RIEN dans l'objet sig - copie-le INTÉGRALEMENT tel quel :
+   - Tous les champs de chaque année (ventes_marchandises, production_vendue_services, marge_brute_globale,
+     autres_achats_charges_externes, charges_exploitant, salaires_personnel, charges_sociales_personnel, etc.)
+   - Le format exact: { "valeur": number, "pct_ca": number }
+   - Tous les metadata (year, source, confidence)
+
+   ÉTAPE 4: Si state.comptable.sig contient les années [2021, 2022, 2023], ton JSON DOIT contenir :
+   {
+     "sig": {
+       "2021": { ... toutes les données de 2021 ... },
+       "2022": { ... toutes les données de 2022 ... },
+       "2023": { ... toutes les données de 2023 ... }
+     },
+     "yearsAnalyzed": [2021, 2022, 2023],
+     ... reste du JSON ...
+   }
+
+   ⚠️ AVERTISSEMENT: Si tu omets la clé "sig" ou si tu filtres des champs, le rapport HTML sera VIDE et l'analyse échouera !
+   ⚠️ Les données SIG ont déjà été extraites par geminiVisionExtractTool - tu dois SEULEMENT les copier, PAS les recréer !
+   ⚠️ outputKey:'comptable' écrasera state.comptable - donc ton JSON DOIT contenir sig + ton analyse !
 
 GESTION D'ERREURS :
 - Si aucun document dans state.documentExtraction :

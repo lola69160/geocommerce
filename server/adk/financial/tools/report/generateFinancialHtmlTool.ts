@@ -81,7 +81,20 @@ export const generateFinancialHtmlTool = new FunctionTool({
       let businessInfo = parseState(toolContext?.state.get('businessInfo'));
       console.log('[generateFinancialHtml] businessInfo:', businessInfo?.name || 'MISSING');
       let documentExtraction = parseState(toolContext?.state.get('documentExtraction'));
-      let comptable = parseState(toolContext?.state.get('comptable'));
+
+      // ✅ DEBUG: Log raw state before parsing
+      const rawComptable = toolContext?.state.get('comptable');
+      console.log('[generateFinancialHtml] 🔍 RAW comptable state:', typeof rawComptable, rawComptable ? 'EXISTS' : 'NULL');
+      if (rawComptable && typeof rawComptable === 'string') {
+        console.log('[generateFinancialHtml] 🔍 RAW comptable (first 500 chars):', rawComptable.substring(0, 500));
+      }
+
+      let comptable = parseState(rawComptable);
+      console.log('[generateFinancialHtml] 🔍 PARSED comptable:', comptable ? 'EXISTS' : 'NULL', comptable ? Object.keys(comptable) : 'N/A');
+      if (comptable?.sig) {
+        console.log('[generateFinancialHtml] 🔍 SIG years:', Object.keys(comptable.sig));
+      }
+
       let valorisation = parseState(toolContext?.state.get('valorisation'));
       let immobilier = parseState(toolContext?.state.get('immobilier'));
       let businessPlan = parseState(toolContext?.state.get('businessPlan'));
@@ -135,7 +148,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       }
 
       // 3. Analyse comptable (with documentExtraction fallback for missing SIG values)
-      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, businessPlan, userComments, documentExtraction);
+      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, params.charts.projectedHealthGauge, businessPlan, userComments, documentExtraction);
       sections_included.push('accounting_analysis');
 
       // 4. Valorisation (avec userComments et options pour section Tabac complète)

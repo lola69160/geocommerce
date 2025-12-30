@@ -135,26 +135,49 @@ export const assessDataQualityTool = new FunctionTool({
       };
 
     } catch (error: any) {
+      console.error('[assessDataQuality] ❌ Exception caught:', error);
+
+      // Try to return partial scores instead of 0
+      let partialCompleteness = 0;
+      let partialReliability = 100;
+      let partialRecency = 0;
+
+      try {
+        let docExtract = parseState(toolContext?.state.get('documentExtraction'));
+        let comptable = parseState(toolContext?.state.get('comptable'));
+        let valo = parseState(toolContext?.state.get('valorisation'));
+        let immo = parseState(toolContext?.state.get('immobilier'));
+
+        partialCompleteness = assessCompleteness(docExtract, comptable, valo, immo);
+        partialRecency = assessRecency(docExtract);
+      } catch (innerError) {
+        console.error('[assessDataQuality] ❌ Partial calculation also failed:', innerError);
+      }
+
+      const partialOverall = Math.round(
+        partialCompleteness * 0.35 + partialReliability * 0.40 + partialRecency * 0.25
+      );
+
       return {
         dataQuality: {
-          completeness: 0,
-          reliability: 0,
-          recency: 0,
-          missing_critical: []
+          completeness: partialCompleteness,
+          reliability: partialReliability,
+          recency: partialRecency,
+          missing_critical: ['Erreur lors de l\'évaluation - données partielles']
         },
         confidenceScore: {
-          overall: 0,
+          overall: partialOverall,
           breakdown: {
-            extraction: 0,
-            comptabilite: 0,
+            extraction: Math.min(partialCompleteness + 10, 100),
+            comptabilite: partialReliability,
             valorisation: 0,
             immobilier: 0
           },
-          interpretation: 'Erreur lors de l\'évaluation'
+          interpretation: `Score partiel calculé malgré une erreur (${error.message})`
         },
         verificationsRequises: [],
         donneesACollector: [],
-        error: error.message || 'Data quality assessment failed'
+        error: error.message || 'Data quality assessment partially failed'
       };
     }
   }
@@ -183,27 +206,39 @@ function assessCompleteness(docExtract: any, comptable: any, valo: any, immo: an
 
   // Analyse comptable (30 points)
   maxScore += 30;
-  if (comptable?.sig) score += 10;
-  if (comptable?.ratios) score += 10;
-  if (comptable?.evolution) score += 5;
-  if (comptable?.benchmark) score += 5;
+  if (comptable) {
+    if (comptable.sig) score += 10;
+    if (comptable.ratios) score += 10;
+    if (comptable.evolution) score += 5;
+    if (comptable.benchmark) score += 5;
+  } else {
+    console.warn('[assessCompleteness] ⚠️ comptable is null - 0/30 points');
+  }
 
   // Valorisation (20 points)
   maxScore += 20;
-  // Support BOTH structures (backward compatibility)
-  const methodes = valo?.methodes || {
-    ebe: valo?.methodeEBE,
-    ca: valo?.methodeCA,
-    patrimoniale: valo?.methodePatrimoniale
-  };
-  if (methodes?.ebe) score += 7;
-  if (methodes?.ca) score += 7;
-  if (methodes?.patrimoniale) score += 6;
+  if (valo) {
+    // Support BOTH structures (backward compatibility)
+    const methodes = valo.methodes || {
+      ebe: valo.methodeEBE,
+      ca: valo.methodeCA,
+      patrimoniale: valo.methodePatrimoniale
+    };
+    if (methodes?.ebe) score += 7;
+    if (methodes?.ca) score += 7;
+    if (methodes?.patrimoniale) score += 6;
+  } else {
+    console.warn('[assessCompleteness] ⚠️ valo is null - 0/20 points');
+  }
 
   // Immobilier (20 points)
   maxScore += 20;
-  if (immo?.bail) score += 10;
-  if (immo?.murs) score += 10;
+  if (immo) {
+    if (immo.bail) score += 10;
+    if (immo.murs) score += 10;
+  } else {
+    console.warn('[assessCompleteness] ⚠️ immo is null - 0/20 points');
+  }
 
   return Math.round((score / maxScore) * 100);
 }
@@ -573,11 +608,15 @@ function generateDocumentsToCollect(docExtract: any, comptable: any, immo: any):
  * Parse state (handle JSON string)
  */
 function parseState(state: any): any {
-  if (!state) return null;
+  if (!state) {
+    console.warn('[assessDataQuality] ⚠️ parseState: state is null/undefined');
+    return null;
+  }
   if (typeof state === 'string') {
     try {
       return JSON.parse(state);
-    } catch {
+    } catch (e) {
+      console.error('[assessDataQuality] ❌ parseState: JSON parse failed', e);
       return null;
     }
   }

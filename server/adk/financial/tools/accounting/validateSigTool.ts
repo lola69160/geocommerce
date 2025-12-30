@@ -171,9 +171,20 @@ export const validateSigTool = new FunctionTool({
       console.log(`   ⚠️ ${summary}\n`);
     }
 
+    // ✅ AJOUT CRITIQUE: Retourner l'objet SIG complet pour que le LLM puisse le copier
+    // Le LLM DOIT inclure cet objet sig dans son JSON de sortie pour préserver les données
+
+    console.log(`\n⚠️⚠️⚠️ INSTRUCTION POUR LE LLM ⚠️⚠️⚠️`);
+    console.log(`TU DOIS COPIER CET OBJET SIG EXACTEMENT DANS TON JSON DE SORTIE :`);
+    console.log(`Années: ${yearsAnalyzed.join(', ')}`);
+    console.log(`Champs par année: ${Object.keys(comptable.sig[yearsAnalyzed[0].toString()] || {}).length} champs`);
+    console.log(`⚠️ NE FILTRE AUCUN CHAMP - COPIE TOUT TEL QUEL !`);
+
     return {
       isValid,
       yearsAnalyzed,
+      sig: comptable.sig, // ✅ IMPORTANT: Objet SIG complet à copier dans le JSON de sortie !
+      INSTRUCTION_CRITIQUE: "⚠️ COPIE l'objet 'sig' ci-dessus INTÉGRALEMENT dans ton JSON de sortie sous la clé 'sig'. NE MODIFIE RIEN, NE FILTRE RIEN. Copie-colle TOUS les champs de TOUTES les années (2021, 2022, 2023) EXACTEMENT comme ils sont.",
       ...(missingYears.length > 0 && { missingYears }),
       ...(incompleteYears.length > 0 && { incompleteYears }),
       ...(warnings.length > 0 && { warnings }),

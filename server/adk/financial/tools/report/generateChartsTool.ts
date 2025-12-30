@@ -62,6 +62,13 @@ export const generateChartsTool = new FunctionTool({
       // CHART 3 : Gauge score de santé (Doughnut chart)
       const healthGauge = generateHealthGauge(comptable);
 
+      // ✅ ADD: CHART 3b : Projected health gauge (if business plan exists)
+      let projectedHealthGauge = null;
+      let businessPlan = parseState(toolContext?.state.get('businessPlan'));
+      if (businessPlan?.projectedHealthScore) {
+        projectedHealthGauge = generateProjectedHealthGauge(businessPlan.projectedHealthScore);
+      }
+
       // CHART 4 : Radar confiance par section
       const confidenceRadar = generateConfidenceRadar(financialValidation);
 
@@ -69,6 +76,7 @@ export const generateChartsTool = new FunctionTool({
         evolutionChart,
         valorisationChart,
         healthGauge,
+        projectedHealthGauge, // ✅ ADD
         confidenceRadar
       };
 
@@ -99,9 +107,29 @@ function generateEvolutionChart(comptable: any): any {
     return getDefaultChart();
   }
 
-  const ca = years.map(y => comptable.sig[y].chiffre_affaires / 1000); // En milliers d'€
-  const ebe = years.map(y => comptable.sig[y].ebe / 1000);
-  const rn = years.map(y => comptable.sig[y].resultat_net / 1000);
+  // Helper to extract value (handle {valeur, pct_ca} format)
+  const extractValue = (rawValue: any) => {
+    if (typeof rawValue === 'object' && rawValue !== null) {
+      return rawValue.valeur !== undefined ? rawValue.valeur : 0;
+    }
+    return rawValue || 0;
+  };
+
+  const ca = years.map(y => extractValue(comptable.sig[y]?.chiffre_affaires) / 1000); // En milliers d'€
+  const ebe = years.map(y => extractValue(comptable.sig[y]?.ebe) / 1000);
+  const rn = years.map(y => extractValue(comptable.sig[y]?.resultat_net) / 1000);
+
+  // ✅ ADD: Frais de Personnel (salaires + charges sociales)
+  const fraisPersonnel = years.map(y => {
+    const salaires = extractValue(comptable.sig[y]?.salaires_personnel) || 0;
+    const chargesSociales = extractValue(comptable.sig[y]?.charges_sociales_personnel) || 0;
+    return (salaires + chargesSociales) / 1000;
+  });
+
+  // ✅ ADD: Charges Externes
+  const chargesExternes = years.map(y =>
+    extractValue(comptable.sig[y]?.autres_achats_charges_externes) / 1000
+  );
 
   // Dynamic title based on available years
   const chartTitle = years.length >= 3
@@ -136,6 +164,26 @@ function generateEvolutionChart(comptable: any): any {
           backgroundColor: 'rgba(245, 158, 11, 0.1)',
           tension: 0.4,
           fill: true
+        },
+        // ✅ ADD: Frais de Personnel (lignes pointillées pour différencier des revenus)
+        {
+          label: 'Frais de Personnel (k€)',
+          data: fraisPersonnel,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          tension: 0.4,
+          fill: false,
+          borderDash: [5, 5] // Dashed line
+        },
+        // ✅ ADD: Charges Externes (lignes pointillées pour différencier des revenus)
+        {
+          label: 'Charges Externes (k€)',
+          data: chargesExternes,
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          tension: 0.4,
+          fill: false,
+          borderDash: [5, 5] // Dashed line
         }
       ]
     },
@@ -385,6 +433,50 @@ function generateHealthGauge(comptable: any): any {
         title: {
           display: true,
           text: `Score de Santé Financière: ${healthScore}/100`,
+          font: { size: 18, weight: 'bold' }
+        },
+        tooltip: {
+          enabled: false
+        }
+      }
+    }
+  };
+}
+
+/**
+ * Génère la jauge de santé financière PROJETÉE (année N+1)
+ */
+function generateProjectedHealthGauge(projectedHealthScore: any): any {
+  const healthScore = projectedHealthScore?.overall || 0;
+
+  // Couleur selon le score
+  let color = '#ef4444'; // Rouge
+  if (healthScore >= 80) color = '#10b981'; // Vert
+  else if (healthScore >= 60) color = '#3b82f6'; // Bleu
+  else if (healthScore >= 40) color = '#f59e0b'; // Orange
+
+  return {
+    type: 'doughnut',
+    data: {
+      labels: ['Score', 'Restant'],
+      datasets: [{
+        data: [healthScore, 100 - healthScore],
+        backgroundColor: [color, '#e5e7eb'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      circumference: 180,
+      rotation: 270,
+      plugins: {
+        legend: {
+          display: false
+        },
+        title: {
+          display: true,
+          text: `Score Projeté N+1: ${healthScore}/100`,
           font: { size: 18, weight: 'bold' }
         },
         tooltip: {

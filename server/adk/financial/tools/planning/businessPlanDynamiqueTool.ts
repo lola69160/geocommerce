@@ -147,22 +147,40 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       // ========================================
 
       // CA actuel (moyenne 3 ans ou dernière année)
+      // ✅ FIX (2025-12-29): Extraire .valeur car SIG retourne {valeur, pct_ca}
       let caActuel = 0;
       if (yearsAnalyzed.length >= 3) {
         const caValues = yearsAnalyzed.slice(0, 3).map((year: number) => {
-          return sig[year.toString()]?.chiffre_affaires || 0;
+          const caData = sig[year.toString()]?.chiffre_affaires;
+          return typeof caData === 'object' ? caData?.valeur || 0 : caData || 0;
         });
         caActuel = Math.round(caValues.reduce((a: number, b: number) => a + b, 0) / caValues.length);
       } else {
-        caActuel = sig[lastYearStr]?.chiffre_affaires || 0;
+        const caData = sig[lastYearStr]?.chiffre_affaires;
+        caActuel = typeof caData === 'object' ? caData?.valeur || 0 : caData || 0;
       }
 
       // Charges actuelles
-      const chargesPersonnelActuel = sig[lastYearStr]?.charges_personnel || 0;
-      const chargesExternesActuel = sig[lastYearStr]?.charges_externes || 0;
+      // ✅ FIX (2025-12-29): charges_personnel = salaires + charges_sociales + charges_exploitant
+      const chargesPersonnelActuel =
+        (typeof sig[lastYearStr]?.salaires_personnel === 'object'
+          ? sig[lastYearStr]?.salaires_personnel?.valeur || 0
+          : sig[lastYearStr]?.salaires_personnel || 0) +
+        (typeof sig[lastYearStr]?.charges_sociales_personnel === 'object'
+          ? sig[lastYearStr]?.charges_sociales_personnel?.valeur || 0
+          : sig[lastYearStr]?.charges_sociales_personnel || 0) +
+        (typeof sig[lastYearStr]?.charges_exploitant === 'object'
+          ? sig[lastYearStr]?.charges_exploitant?.valeur || 0
+          : sig[lastYearStr]?.charges_exploitant || 0);
+      // ✅ FIX (2025-12-29): charges_externes = autres_achats_charges_externes
+      const chargesExternesData = sig[lastYearStr]?.autres_achats_charges_externes;
+      const chargesExternesActuel = typeof chargesExternesData === 'object'
+        ? chargesExternesData?.valeur || 0
+        : chargesExternesData || 0;
 
-      // Loyer actuel avec fallback userComments
-      let loyer_actuel = immobilier?.bail?.loyer_annuel_hc || 0;
+      // Loyer actuel - PRIORITÉ: simulationLoyer > bail > userComments
+      // ✅ FIX (2025-12-29): Utiliser simulationLoyer qui intègre userComments en priorité
+      let loyer_actuel = immobilier?.simulationLoyer?.loyerActuel?.annuel || immobilier?.bail?.loyer_annuel_hc || 0;
       if (loyer_actuel === 0 && userComments?.loyer) {
         // Fallback: userComments avec conversion mensuel → annuel
         const loyerMensuel = userComments.loyer.loyer_actuel_mensuel ||
@@ -172,52 +190,56 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       }
 
       // EBE actuel (normatif si disponible, sinon comptable)
+      // ✅ FIX (2025-12-29): Extraire .valeur car SIG retourne {valeur, pct_ca}
       let ebeActuel = 0;
       if (comptable.ebeRetraitement?.ebe_normatif) {
         ebeActuel = comptable.ebeRetraitement.ebe_normatif;
       } else {
-        ebeActuel = sig[lastYearStr]?.ebe || 0;
+        const ebeData = sig[lastYearStr]?.ebe;
+        ebeActuel = typeof ebeData === 'object' ? ebeData?.valeur || 0 : ebeData || 0;
       }
 
       // ========================================
-      // ÉTAPE 2b: Détection commerce TABAC et split CA
+      // ÉTAPE 2b: Extraction split CA (SANS condition Tabac)
       // ========================================
 
-      // Détecter si commerce de type Tabac (NAF 47.26Z)
+      // Détecter si commerce de type Tabac (NAF 47.26Z) - pour affichage spécifique seulement
       const isTabac = businessInfo?.nafCode ? isTabacCommerce(businessInfo.nafCode) : false;
 
-      // Pour Tabac: extraire split Commissions réglementées / Ventes Boutique
-      let ventesMarchandises = 0; // CA Boutique (ventes de marchandises)
-      let commissionsServices = 0; // Commissions réglementées (production vendue de services)
+      // ✅ Extraire TOUS les champs sans condition (disponibles pour tous les commerces)
+      // Ventes Marchandises (format: { valeur, pct_ca })
+      const ventesMarchandisesData = sig[lastYearStr]?.ventes_marchandises;
+      const ventesMarchandises = typeof ventesMarchandisesData === 'object'
+        ? ventesMarchandisesData?.valeur || 0
+        : ventesMarchandisesData || 0;
 
-      // Taux de marge boutique (pour Tabac)
+      // Production vendue services = Commissions (tabac/loto/presse) ou services
+      const productionServicesData = sig[lastYearStr]?.production_vendue_services;
+      const commissionsServices = typeof productionServicesData === 'object'
+        ? productionServicesData?.valeur || 0
+        : productionServicesData || 0;
+
+      // Marge commerciale pour calcul taux marge
+      const margeCommercialeData = sig[lastYearStr]?.marge_commerciale;
+      const margeCommerciale = typeof margeCommercialeData === 'object'
+        ? margeCommercialeData?.valeur || 0
+        : margeCommercialeData || 0;
+
+      // Taux de marge boutique
       let tauxMargeBoutique = 0.68; // Fallback 68%
+      if (ventesMarchandises > 0 && margeCommerciale > 0) {
+        tauxMargeBoutique = margeCommerciale / ventesMarchandises;
+      }
 
-      if (isTabac && sig[lastYearStr] && caActuel > 0) {
-        // Extraire ventes_marchandises depuis le SIG (format: { valeur, pct_ca })
-        const ventesMarchandisesData = sig[lastYearStr]?.ventes_marchandises;
-        ventesMarchandises = typeof ventesMarchandisesData === 'object'
-          ? ventesMarchandisesData?.valeur || 0
-          : ventesMarchandisesData || 0;
-
-        // Commissions = CA total - Ventes marchandises
-        commissionsServices = caActuel - ventesMarchandises;
-
-        // Extraire taux de marge boutique depuis SIG (marge_commerciale / ventes_marchandises)
-        const margeCommercialeData = sig[lastYearStr]?.marge_commerciale;
-        const margeCommerciale = typeof margeCommercialeData === 'object'
-          ? margeCommercialeData?.valeur || 0
-          : margeCommercialeData || 0;
-
-        if (ventesMarchandises > 0 && margeCommerciale > 0) {
-          tauxMargeBoutique = margeCommerciale / ventesMarchandises;
-        }
-
-        console.log(`[businessPlanDynamique] 🚬 TABAC détecté (NAF: ${businessInfo?.nafCode})`);
-        console.log(`  - CA Total: ${caActuel.toLocaleString('fr-FR')} €`);
-        console.log(`  - Ventes Boutique: ${ventesMarchandises.toLocaleString('fr-FR')} € (${((ventesMarchandises/caActuel)*100).toFixed(1)}%)`);
-        console.log(`  - Commissions: ${commissionsServices.toLocaleString('fr-FR')} € (${((commissionsServices/caActuel)*100).toFixed(1)}%)`);
-        console.log(`  - Taux marge boutique: ${(tauxMargeBoutique*100).toFixed(1)}%`);
+      // Log toujours (pas de condition)
+      console.log(`[businessPlanDynamique] 📊 Données extraites du SIG (${lastYearStr}):`);
+      console.log(`  - CA Total: ${caActuel.toLocaleString('fr-FR')} €`);
+      console.log(`  - Ventes Marchandises: ${ventesMarchandises.toLocaleString('fr-FR')} €`);
+      console.log(`  - Commissions/Services: ${commissionsServices.toLocaleString('fr-FR')} €`);
+      console.log(`  - Charges Personnel: ${chargesPersonnelActuel.toLocaleString('fr-FR')} €`);
+      console.log(`  - Taux marge boutique: ${(tauxMargeBoutique*100).toFixed(1)}%`);
+      if (isTabac) {
+        console.log(`  - 🚬 Commerce TABAC détecté (NAF: ${businessInfo?.nafCode})`);
       }
 
       // ========================================
@@ -285,17 +307,17 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       // Année 0: Actuel
       const chargesFixesAnnee0 = chargesPersonnelActuel + loyer_actuel + autresCharges;
 
-      // Calcul Marge Brute pour Tabac (Année 0)
-      const margeMarchandisesAnnee0 = isTabac ? Math.round(ventesMarchandises * tauxMargeBoutique) : 0;
-      const margeCommissionsAnnee0 = isTabac ? commissionsServices : 0; // 100% sur commissions
-      const margeBruteGlobaleAnnee0 = isTabac ? (margeMarchandisesAnnee0 + margeCommissionsAnnee0) : 0;
+      // ✅ Calcul Marge Brute SANS CONDITION (disponible pour tous les commerces)
+      const margeMarchandisesAnnee0 = Math.round(ventesMarchandises * tauxMargeBoutique);
+      const margeCommissionsAnnee0 = commissionsServices; // 100% sur commissions
+      const margeBruteGlobaleAnnee0 = margeMarchandisesAnnee0 + margeCommissionsAnnee0;
 
       projections.push({
         annee: 0,
         label: 'Actuel (Cédant)',
-        // CA décomposé (Tabac)
-        ...(isTabac && { ventes_marchandises: ventesMarchandises }),
-        ...(isTabac && { commissions_services: commissionsServices }),
+        // ✅ CA décomposé TOUJOURS inclus (pas de condition isTabac)
+        ventes_marchandises: ventesMarchandises,
+        commissions_services: commissionsServices,
         ca: caActuel,
         ca_detail: {
           ca_base: caActuel,
@@ -303,10 +325,10 @@ export const businessPlanDynamiqueTool = new FunctionTool({
           impact_travaux: 0,
           croissance_naturelle: 0
         },
-        // Marge Brute décomposée (Tabac)
-        ...(isTabac && { marge_marchandises: margeMarchandisesAnnee0 }),
-        ...(isTabac && { marge_commissions: margeCommissionsAnnee0 }),
-        ...(isTabac && { marge_brute_globale: margeBruteGlobaleAnnee0 }),
+        // ✅ Marge Brute décomposée TOUJOURS incluse (pas de condition isTabac)
+        marge_marchandises: margeMarchandisesAnnee0,
+        marge_commissions: margeCommissionsAnnee0,
+        marge_brute_globale: margeBruteGlobaleAnnee0,
         charges_fixes: chargesFixesAnnee0,
         charges_detail: {
           salaires: chargesPersonnelActuel,
@@ -375,13 +397,14 @@ export const businessPlanDynamiqueTool = new FunctionTool({
         let impact_travaux_value = 0;
         let croissance_naturelle_value = 0;
 
-        // Variables CA décomposé Tabac
+        // ✅ Variables CA décomposé TOUJOURS calculées (pas de condition isTabac)
         let ventesMarchandisesAnnee = 0;
         let commissionsServicesAnnee = 0;
 
-        if (isTabac && ventesMarchandises > 0) {
+        // ✅ Calcul différencié pour TOUS les commerces (avec ou sans données boutique/commissions)
+        if (ventesMarchandises > 0 || commissionsServices > 0) {
           // ========================================
-          // TABAC: Croissance différenciée
+          // Croissance différenciée sur composantes CA
           // ========================================
 
           // Année 1: Impact horaires sur les deux + Impact travaux sur boutique uniquement
@@ -390,11 +413,18 @@ export const businessPlanDynamiqueTool = new FunctionTool({
             ventesMarchandisesAnnee = ventesMarchandises * (1 + impactHoraires);
             commissionsServicesAnnee = commissionsServices * (1 + impactHoraires);
 
-            // Travaux: +15% sur boutique uniquement
-            ventesMarchandisesAnnee = ventesMarchandisesAnnee * (1 + tabacImpactDetail!.boutique);
+            // Travaux: +15% sur boutique uniquement (si tabacImpactDetail disponible)
+            if (tabacImpactDetail) {
+              ventesMarchandisesAnnee = ventesMarchandisesAnnee * (1 + tabacImpactDetail.boutique);
+              impact_travaux_value = ventesMarchandises * tabacImpactDetail.boutique;
+            } else {
+              // Commerce standard: impact travaux uniforme
+              ventesMarchandisesAnnee = ventesMarchandisesAnnee * (1 + impactTravauxEffectif);
+              commissionsServicesAnnee = commissionsServicesAnnee * (1 + impactTravauxEffectif);
+              impact_travaux_value = caActuel * impactTravauxEffectif;
+            }
 
             impact_horaires_value = (ventesMarchandises + commissionsServices) * impactHoraires;
-            impact_travaux_value = ventesMarchandises * tabacImpactDetail!.boutique;
           }
           // Année 2: Consolidation (pas de nouveau boost)
           else if (i === 2) {
@@ -405,9 +435,9 @@ export const businessPlanDynamiqueTool = new FunctionTool({
           else {
             // Boutique: +3%/an
             ventesMarchandisesAnnee = prevVentesMarchandises * (1 + croissanceRecurrente);
-            // Commissions: plafonné à +2%/an (marché mature)
-            const croissanceCommissionsPlafonnee = Math.min(0.02, croissanceRecurrente);
-            commissionsServicesAnnee = prevCommissionsServices * (1 + croissanceCommissionsPlafonnee);
+            // Commissions: plafonné à +2%/an (marché mature) pour Tabac, sinon croissance normale
+            const croissanceCommissions = isTabac ? Math.min(0.02, croissanceRecurrente) : croissanceRecurrente;
+            commissionsServicesAnnee = prevCommissionsServices * (1 + croissanceCommissions);
 
             croissance_naturelle_value = (ventesMarchandisesAnnee - prevVentesMarchandises) + (commissionsServicesAnnee - prevCommissionsServices);
           }
@@ -418,7 +448,7 @@ export const businessPlanDynamiqueTool = new FunctionTool({
 
         } else {
           // ========================================
-          // Commerce standard (non-Tabac): logique existante
+          // Fallback: Commerce sans détail boutique/commissions
           // ========================================
 
           // Impact horaires (dès année 1)
@@ -443,20 +473,20 @@ export const businessPlanDynamiqueTool = new FunctionTool({
         const ca = Math.round(ca_base);
 
         // ========================================
-        // Calcul Marge Brute (TABAC uniquement)
+        // ✅ Calcul Marge Brute SANS CONDITION (disponible pour tous les commerces)
         // ========================================
-        const margeMarchandisesAnnee = isTabac ? Math.round(ventesMarchandisesAnnee * tauxMargeBoutique) : 0;
-        const margeCommissionsAnnee = isTabac ? Math.round(commissionsServicesAnnee) : 0; // 100%
-        const margeBruteGlobaleAnnee = isTabac ? (margeMarchandisesAnnee + margeCommissionsAnnee) : 0;
+        const margeMarchandisesAnnee = Math.round(ventesMarchandisesAnnee * tauxMargeBoutique);
+        const margeCommissionsAnnee = Math.round(commissionsServicesAnnee); // 100%
+        const margeBruteGlobaleAnnee = margeMarchandisesAnnee + margeCommissionsAnnee;
 
         // ========================================
         // Calcul charges et EBE
         // ========================================
         const charges_fixes = nouveauSalaires + loyerNegocie + autresCharges;
 
-        // Pour Tabac: EBE = Marge Brute Globale - Charges Fixes
-        // Pour autres: EBE = CA - Charges Fixes (approximation)
-        const ebe_normatif = isTabac
+        // EBE = Marge Brute Globale - Charges Fixes (si marge disponible)
+        // Sinon EBE = CA - Charges Fixes (approximation)
+        const ebe_normatif = margeBruteGlobaleAnnee > 0
           ? margeBruteGlobaleAnnee - charges_fixes
           : ca - charges_fixes;
 
@@ -466,29 +496,29 @@ export const businessPlanDynamiqueTool = new FunctionTool({
         projections.push({
           annee: i,
           label: `Année ${i} (${label})`,
-          // CA décomposé (Tabac)
-          ...(isTabac && { ventes_marchandises: Math.round(ventesMarchandisesAnnee) }),
-          ...(isTabac && { commissions_services: Math.round(commissionsServicesAnnee) }),
+          // ✅ CA décomposé TOUJOURS inclus (pas de condition isTabac)
+          ventes_marchandises: Math.round(ventesMarchandisesAnnee),
+          commissions_services: Math.round(commissionsServicesAnnee),
           ca,
           ca_detail: {
             ca_base: i === 1 ? caActuel : projections[i - 1].ca,
             impact_horaires: i === 1 ? impact_horaires_value : 0,
             impact_travaux: i === 1 ? impact_travaux_value : 0,
             croissance_naturelle: i >= 3 ? croissance_naturelle_value : 0,
-            // Détail spécifique Tabac
+            // Détail spécifique Tabac (si disponible)
             ...(tabacImpactDetail && i >= 1 && {
               tabac_detail: {
                 impact_travaux_commissions: 0,
                 impact_travaux_boutique: i === 1 ? Math.round(ventesMarchandises * tabacImpactDetail.boutique) : 0,
-                poids_commissions: Math.round((commissionsServices / caActuel) * 100),
-                poids_boutique: Math.round((ventesMarchandises / caActuel) * 100)
+                poids_commissions: caActuel > 0 ? Math.round((commissionsServices / caActuel) * 100) : 0,
+                poids_boutique: caActuel > 0 ? Math.round((ventesMarchandises / caActuel) * 100) : 0
               }
             })
           },
-          // Marge Brute décomposée (Tabac)
-          ...(isTabac && { marge_marchandises: margeMarchandisesAnnee }),
-          ...(isTabac && { marge_commissions: margeCommissionsAnnee }),
-          ...(isTabac && { marge_brute_globale: margeBruteGlobaleAnnee }),
+          // ✅ Marge Brute décomposée TOUJOURS incluse (pas de condition isTabac)
+          marge_marchandises: margeMarchandisesAnnee,
+          marge_commissions: margeCommissionsAnnee,
+          marge_brute_globale: margeBruteGlobaleAnnee,
           charges_fixes,
           charges_detail: {
             salaires: nouveauSalaires,
@@ -560,12 +590,18 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       const synthese = genererSynthese(projections, indicateursBancaires, params);
       const recommandations = genererRecommandations(projections, indicateursBancaires, params);
 
+      // ✅ Calculate projected health score for year N+1
+      const projectedHealthScore = projections[1]
+        ? calculateProjectedHealthScore(projections[1], comptable)
+        : null;
+
       const result = {
         projections,
         indicateursBancaires,
         hypotheses: params,
         synthese,
         recommandations,
+        projectedHealthScore, // ✅ ADD
         // Métadonnées Tabac (si applicable)
         ...(isTabac && tabacImpactDetail && {
           tabacInfo: {
@@ -738,4 +774,162 @@ function genererRecommandations(projections: any[], indicateurs: any, hypotheses
   }
 
   return recommandations;
+}
+
+// ============================================================================
+// PROJECTED HEALTH SCORE CALCULATION (for year N+1)
+// ============================================================================
+
+/**
+ * Calculate projected health score for year N+1
+ * Uses same logic as calculateHealthScoreTool but with projected data
+ */
+function calculateProjectedHealthScore(projection: any, comptable: any): any {
+  // Extract year N+1 projection data
+  const ca = projection.ca || 0;
+  const ebe = projection.ebe_normatif || 0;
+  const margeBrute = projection.marge_brute_globale || (ca * 0.68);
+  const rn = ebe * 0.6; // Estimate (60% of EBE)
+
+  // Calculate projected ratios
+  const ratios = {
+    marge_brute_pct: ca > 0 ? (margeBrute / ca) * 100 : 0,
+    marge_ebe_pct: ca > 0 ? (ebe / ca) * 100 : 0,
+    marge_nette_pct: ca > 0 ? (rn / ca) * 100 : 0,
+
+    // Use current BFR/délais (assume no change)
+    bfr_jours_ca: comptable?.ratios?.bfr_jours_ca || 0,
+    delai_clients_jours: comptable?.ratios?.delai_clients_jours || 0,
+    delai_fournisseurs_jours: comptable?.ratios?.delai_fournisseurs_jours || 0,
+    rotation_stocks_jours: comptable?.ratios?.rotation_stocks_jours || 0,
+
+    // Assume no debt for projection (conservative)
+    taux_endettement_pct: 0,
+    capacite_autofinancement: ebe * 0.6
+  };
+
+  // Calculate evolution (compare N+1 to current)
+  const yearsAnalyzed = comptable?.yearsAnalyzed || Object.keys(comptable?.sig || {});
+  const currentYear = yearsAnalyzed?.[0];
+  const currentCA = comptable?.sig?.[currentYear]?.chiffre_affaires?.valeur || ca;
+  const currentEBE = comptable?.sig?.[currentYear]?.ebe?.valeur || ebe;
+
+  const evolution = {
+    tendance: ca > currentCA ? 'croissance' : (ca < currentCA * 0.95 ? 'declin' : 'stable'),
+    ca_evolution_pct: currentCA > 0 ? ((ca - currentCA) / currentCA) * 100 : 0,
+    ebe_evolution_pct: currentEBE > 0 ? ((ebe - currentEBE) / currentEBE) * 100 : 0
+  };
+
+  // Use same scoring logic as calculateHealthScoreTool
+  const scoreRentabilite = calculateRentabiliteScoreProjected(ratios);
+  const scoreLiquidite = calculateLiquiditeScoreProjected(ratios);
+  const scoreSolvabilite = calculateSolvabiliteScoreProjected(ratios);
+  const scoreActivite = calculateActiviteScoreProjected(evolution);
+
+  const overall = Math.round(
+    scoreRentabilite * 0.30 + scoreLiquidite * 0.25 +
+    scoreSolvabilite * 0.25 + scoreActivite * 0.20
+  );
+
+  let interpretation = '';
+  if (overall >= 80) interpretation = 'Excellente santé financière projetée';
+  else if (overall >= 60) interpretation = 'Bonne santé financière projetée';
+  else if (overall >= 40) interpretation = 'Santé financière moyenne projetée';
+  else if (overall >= 20) interpretation = 'Santé financière fragile projetée';
+  else interpretation = 'Situation financière critique projetée';
+
+  return {
+    overall,
+    breakdown: {
+      rentabilite: Math.round(scoreRentabilite),
+      liquidite: Math.round(scoreLiquidite),
+      solvabilite: Math.round(scoreSolvabilite),
+      activite: Math.round(scoreActivite)
+    },
+    interpretation,
+    ratios
+  };
+}
+
+function calculateRentabiliteScoreProjected(ratios: any): number {
+  let score = 0;
+  if (ratios.marge_ebe_pct >= 15) score += 40;
+  else if (ratios.marge_ebe_pct >= 10) score += 30;
+  else if (ratios.marge_ebe_pct >= 5) score += 20;
+  else if (ratios.marge_ebe_pct >= 0) score += 10;
+
+  if (ratios.marge_nette_pct >= 8) score += 40;
+  else if (ratios.marge_nette_pct >= 5) score += 30;
+  else if (ratios.marge_nette_pct >= 2) score += 20;
+  else if (ratios.marge_nette_pct >= 0) score += 10;
+
+  if (ratios.marge_brute_pct >= 50) score += 20;
+  else if (ratios.marge_brute_pct >= 30) score += 15;
+  else if (ratios.marge_brute_pct >= 15) score += 10;
+  else if (ratios.marge_brute_pct >= 0) score += 5;
+
+  return Math.min(score, 100);
+}
+
+function calculateLiquiditeScoreProjected(ratios: any): number {
+  let score = 50;
+  if (ratios.bfr_jours_ca < 0) score += 30;
+  else if (ratios.bfr_jours_ca < 30) score += 20;
+  else if (ratios.bfr_jours_ca < 60) score += 10;
+  else score -= 10;
+
+  if (ratios.delai_clients_jours > 0) {
+    if (ratios.delai_clients_jours <= 30) score += 20;
+    else if (ratios.delai_clients_jours <= 60) score += 10;
+    else score -= 10;
+  }
+
+  if (ratios.delai_fournisseurs_jours > 0) {
+    if (ratios.delai_fournisseurs_jours >= 60) score += 20;
+    else if (ratios.delai_fournisseurs_jours >= 45) score += 15;
+    else if (ratios.delai_fournisseurs_jours >= 30) score += 10;
+  }
+
+  if (ratios.rotation_stocks_jours > 0) {
+    if (ratios.rotation_stocks_jours <= 30) score += 10;
+    else if (ratios.rotation_stocks_jours <= 60) score += 5;
+  }
+
+  return Math.max(0, Math.min(score, 100));
+}
+
+function calculateSolvabiliteScoreProjected(ratios: any): number {
+  let score = 50;
+  if (ratios.taux_endettement_pct <= 50) score += 40;
+  else if (ratios.taux_endettement_pct <= 100) score += 30;
+  else if (ratios.taux_endettement_pct <= 150) score += 15;
+  else if (ratios.taux_endettement_pct <= 200) score += 5;
+  else score -= 20;
+
+  if (ratios.capacite_autofinancement > 50000) score += 40;
+  else if (ratios.capacite_autofinancement > 20000) score += 30;
+  else if (ratios.capacite_autofinancement > 0) score += 15;
+  else score -= 10;
+
+  return Math.max(0, Math.min(score, 100));
+}
+
+function calculateActiviteScoreProjected(evolution: any): number {
+  let score = 50;
+  if (evolution.tendance === 'croissance') score += 40;
+  else if (evolution.tendance === 'stable') score += 20;
+  else score -= 20;
+
+  if (evolution.ca_evolution_pct > 20) score += 30;
+  else if (evolution.ca_evolution_pct > 10) score += 20;
+  else if (evolution.ca_evolution_pct > 5) score += 15;
+  else if (evolution.ca_evolution_pct > 0) score += 10;
+  else if (evolution.ca_evolution_pct < -10) score -= 20;
+
+  if (evolution.ebe_evolution_pct > 20) score += 30;
+  else if (evolution.ebe_evolution_pct > 10) score += 20;
+  else if (evolution.ebe_evolution_pct > 0) score += 10;
+  else if (evolution.ebe_evolution_pct < -10) score -= 20;
+
+  return Math.max(0, Math.min(score, 100));
 }

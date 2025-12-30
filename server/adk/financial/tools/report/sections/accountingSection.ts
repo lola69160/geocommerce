@@ -28,6 +28,7 @@ export function generateAccountingSection(
   comptable: any,
   evolutionChart: any,
   healthGauge: any,
+  projectedHealthGauge: any, // ✅ ADD parameter
   businessPlan?: any,
   userComments?: any,
   documentExtraction?: any
@@ -61,8 +62,11 @@ export function generateAccountingSection(
       typeof rawValue === 'object' && rawValue !== null ? rawValue.valeur : (rawValue || 0);
 
     // Indicateurs principaux avec sous-lignes pour détails
+    // ⚠️ ventes_marchandises et production_vendue_services sont CRITIQUES pour Tabac/Presse
     const indicators = [
       { key: 'chiffre_affaires', label: 'Chiffre d\'Affaires', bpKey: 'ca' },
+      { key: 'ventes_marchandises', label: '└─ Ventes Marchandises', isSubRow: true, bpKey: null },
+      { key: 'production_vendue_services', label: '└─ Commissions/Services', isSubRow: true, bpKey: null },
       { key: 'marge_commerciale', label: 'Marge Commerciale', bpKey: null },
       { key: 'marge_brute_globale', label: 'Marge Brute Globale', bpKey: 'marge_brute' },
       { key: 'autres_achats_charges_externes', label: 'Charges Externes', bpKey: 'charges_fixes' },
@@ -94,7 +98,7 @@ export function generateAccountingSection(
         let isNA = false;
 
         if (ind.isSubRow) {
-          // Sous-lignes: extraire depuis SIG uniquement (userComments pour loyer actuel uniquement)
+          // Sous-lignes: extraire depuis SIG avec cas spéciaux
           if (ind.key === 'loyer') {
             // Loyer: SIG charges_locatives > userComments loyer_actuel_mensuel * 12
             const sigLoyer = extractValue(comptable.sig[y]?.charges_locatives);
@@ -103,6 +107,13 @@ export function generateAccountingSection(
           } else if (ind.key === 'salaire_gerant') {
             // Salaire gérant: SIG charges_exploitant uniquement
             value = extractValue(comptable.sig[y]?.charges_exploitant) || 0;
+          } else {
+            // Fallback générique pour sous-lignes (ventes_marchandises, production_vendue_services, etc.)
+            value = extractValue(comptable.sig[y]?.[ind.key]);
+            // Pour les sous-lignes, afficher 0 si non disponible (pas N/A)
+            if (value === undefined || value === null) {
+              value = 0;
+            }
           }
         } else if (ind.key === 'charges_personnel') {
           // Frais de Personnel = salaires_personnel + charges_sociales_personnel
@@ -213,11 +224,30 @@ export function generateAccountingSection(
     html += '</table></div>';
   }
 
-  // Gauge santé
-  html += '<div><div class="chart-container"><canvas id="healthGauge"></canvas></div></div>';
+  // ✅ MODIFIED: Gauges (Current + Projected if available)
+  const hasProjectedScore = projectedHealthGauge !== null;
+
+  if (hasProjectedScore) {
+    // Side-by-side gauges
+    html += '<div style="display: flex; gap: 20px;">';
+    html += '<div style="flex: 1;"><h4 style="text-align: center;">Santé Actuelle (Année N)</h4><div class="chart-container"><canvas id="healthGauge"></canvas></div></div>';
+    html += '<div style="flex: 1;"><h4 style="text-align: center;">Santé Projetée (Année N+1)</h4><div class="chart-container"><canvas id="projectedHealthGauge"></canvas></div></div>';
+    html += '</div>';
+  } else {
+    // Single gauge (backward compatibility)
+    html += '<div><div class="chart-container"><canvas id="healthGauge"></canvas></div></div>';
+  }
+
   html += '</div>';
   html += `<script>
-  new Chart(document.getElementById('healthGauge'), ${JSON.stringify(healthGauge)});
+  new Chart(document.getElementById('healthGauge'), ${JSON.stringify(healthGauge)});`;
+
+  if (hasProjectedScore) {
+    html += `
+  new Chart(document.getElementById('projectedHealthGauge'), ${JSON.stringify(projectedHealthGauge)});`;
+  }
+
+  html += `
   </script>`;
 
   // Benchmark sectoriel
