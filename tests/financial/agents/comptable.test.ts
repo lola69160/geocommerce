@@ -14,12 +14,13 @@ describe('ComptableAgent', () => {
     agent = new ComptableAgent();
     const toolNames = agent.tools.map((t: any) => t.name);
 
-    // Devrait avoir les tools d'analyse comptable
-    expect(toolNames).toContain('calculateSig');
+    // ✅ FIX (2025-12-30): calculateSigTool supprimé le 2025-12-29, remplacé par validateSigTool
+    expect(toolNames).toContain('validateSig');
     expect(toolNames).toContain('calculateRatios');
     expect(toolNames).toContain('analyzeTrends');
     expect(toolNames).toContain('compareToSector');
     expect(toolNames).toContain('calculateHealthScore');
+    expect(toolNames).toContain('calculateEbeRetraitement');
   });
 
   it('should have proper configuration for accounting analysis', () => {

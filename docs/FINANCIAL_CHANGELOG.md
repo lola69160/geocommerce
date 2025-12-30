@@ -4,6 +4,264 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## EBE Bridge Feature - Formulaire Structuré et Visualisation (2025-12-30)
+
+### Objectif
+
+Améliorer la transparence et la compréhension du passage de l'EBE comptable à l'EBE normatif en :
+1. Ajoutant des champs structurés au formulaire (reprise personnel, loyer)
+2. Remplaçant le tableau de retraitement par un "Pont EBE" visuel avec justifications économiques
+3. Permettant à ComptableAgent de générer une analyse contextuelle
+
+### Nouveaux Champs Formulaire
+
+**Fichier:** `src/components/ProfessionalAnalysisModal.jsx`
+
+#### 1. Reprise des salariés (lignes 551-573)
+```jsx
+<label>Reprise des salariés</label>
+<div>
+  <label>
+    <input type="radio" checked={repriseSalaries === true} onChange={() => setRepriseSalaries(true)} />
+    Oui
+  </label>
+  <label>
+    <input type="radio" checked={repriseSalaries === false} onChange={() => setRepriseSalaries(false)} />
+    Non
+  </label>
+</div>
+```
+
+**Impact** : Si `repriseSalaries=false`, le tool `calculateEbeRetraitementTool` crée un retraitement "Suppression Personnel Cédant" qui récupère toute la masse salariale.
+
+#### 2. Loyer commercial (lignes 575-617)
+```jsx
+<label>Loyer actuel (€/mois)</label>
+<input type="number" value={loyerActuel} onChange={(e) => setLoyerActuel(e.target.value)} />
+
+<label>Loyer négocié (€/mois)</label>
+<input type="number" value={loyerNegocie} onChange={(e) => setLoyerNegocie(e.target.value)} />
+```
+
+**Impact** : Ces champs structurés sont prioritaires sur l'extraction NLP du texte `userComments.autres`.
+
+#### 3. Validation client-side (lignes 300-317)
+- `loyerNegocie` fourni sans `loyerActuel` → alerte
+- `loyerNegocie > loyerActuel` → dialogue de confirmation
+- `repriseSalaries=false` sans `frais_personnel_N1` → alerte
+
+### Système de Priorité NLP
+
+**Fichier:** `server.js` (lignes 985-1047)
+
+Les champs structurés prennent la priorité sur l'extraction NLP :
+
+```javascript
+const hasStructuredLoyer = comments.loyer?.loyer_actuel || comments.loyer?.loyer_negocie;
+
+if (hasStructuredLoyer) {
+  console.log('[parseNLP] ✅ Loyer structuré détecté - NLP skip');
+  result.loyer = result.loyer || {};
+
+  if (comments.loyer.loyer_actuel) {
+    result.loyer.loyer_actuel_mensuel = comments.loyer.loyer_actuel;
+  }
+
+  if (comments.loyer.loyer_negocie) {
+    result.loyer.loyer_futur_mensuel = comments.loyer.loyer_negocie;
+    result.loyer.futur_loyer_commercial = comments.loyer.loyer_negocie;
+  }
+} else {
+  // FALLBACK: Extraction NLP du texte (code existant conservé)
+}
+```
+
+### Nouveaux Retraitements EBE
+
+**Fichier:** `server/adk/financial/tools/accounting/calculateEbeRetraitementTool.ts`
+
+#### 1. Schema mis à jour (ligne 34)
+Ajout du champ `justification` obligatoire :
+
+```typescript
+const RetraitementLineSchema = z.object({
+  type: z.string(),
+  description: z.string(),
+  montant: z.number(),
+  source: z.string(),
+  justification: z.string().describe('Justification économique détaillée'),
+  commentaire: z.string().optional()
+});
+```
+
+#### 2. Suppression Personnel Cédant (lignes 239-278)
+```javascript
+const repriseSalaries = userComments?.reprise_salaries;
+
+if (repriseSalaries === false) {
+  const salairesPersonnel = extractSigValue(lastYearSig, 'salaires_personnel') || 0;
+  const chargesSociales = extractSigValue(lastYearSig, 'charges_sociales_personnel') || 0;
+  const masseSalarialeTotale = salairesPersonnel + chargesSociales;
+
+  if (masseSalarialeTotale > 0) {
+    retraitements.push({
+      type: 'suppression_personnel_cedant',
+      description: 'Suppression Personnel Cédant',
+      montant: masseSalarialeTotale,
+      source: 'documentExtraction',
+      justification: 'Pas de reprise de personnel - Économie totale sur charges salariales actuelles',
+      commentaire: `Masse salariale supprimée: ${salairesPersonnel}€ + ${chargesSociales}€`
+    });
+  }
+}
+```
+
+#### 3. Nouvelle Structure RH (lignes 323-359)
+```javascript
+const fraisPersonnelN1 = userComments?.frais_personnel_N1;
+
+if (fraisPersonnelN1 && fraisPersonnelN1 > 0) {
+  const isSuppression = userComments?.reprise_salaries === false;
+  const description = isSuppression ? 'Nouvelle Structure RH' : 'Ajustement Frais Personnel N+1';
+  const justification = isSuppression
+    ? '1 TNS + 1 SMIC + 1 Saisonnier (nouvelle organisation)'
+    : 'Ajustement prévisionnel charges de personnel';
+
+  retraitements.push({
+    type: 'nouvelle_structure_rh',
+    description,
+    montant: -fraisPersonnelN1,  // Négatif = nouveau coût
+    source: 'userComments',
+    justification,
+    commentaire: `Estimation repreneur: ${fraisPersonnelN1}€/an`
+  });
+}
+```
+
+#### 4. Normalisation Loyer (lignes 368-414)
+Priorité aux champs structurés avec calcul automatique de l'économie annuelle :
+
+```javascript
+const loyerActuel = userComments?.loyer?.loyer_actuel || userComments?.loyer?.loyer_actuel_mensuel;
+const loyerNegocie = userComments?.loyer?.loyer_negocie ||
+                     userComments?.loyer?.loyer_futur_mensuel ||
+                     userComments?.loyer?.futur_loyer_commercial;
+
+if (loyerActuel && loyerNegocie && loyerNegocie < loyerActuel) {
+  const economieAnnuelle = (loyerActuel - loyerNegocie) * 12;
+
+  retraitements.push({
+    type: 'normalisation_loyer',
+    description: 'Normalisation Loyer',
+    montant: economieAnnuelle,
+    source: 'userComments',
+    justification: `Passage de ${loyerActuel}€ à ${loyerNegocie}€/mois`,
+    commentaire: `Économie mensuelle: ${(loyerActuel - loyerNegocie)}€ × 12 mois`
+  });
+}
+```
+
+#### 5. Justifications pour tous les retraitements existants
+
+Tous les retraitements existants ont été enrichis avec le champ `justification` :
+
+| Retraitement | Justification |
+|--------------|---------------|
+| Salaire Dirigeant | "Donnée certifiée liasse fiscale" / "Montant fourni par le repreneur" / "Estimation standard gérant majoritaire" |
+| Salariés Non Repris | "{nombre} salarié(s) non conservé(s) - {motif}" |
+| Salaires Saisonniers | "Coût additionnel non présent dans le bilan actuel" |
+| Charges Exceptionnelles | "Charges non récurrentes à neutraliser" |
+| Produits Exceptionnels | "Produits non récurrents à neutraliser" |
+
+### Nouveau Tableau "Pont EBE"
+
+**Fichier:** `server/adk/financial/tools/report/sections/accountingSection.ts` (lignes 279-349)
+
+Remplace `generateEbeRetraitementTable()` par `generateEbeBridgeTable()`.
+
+#### Structure du tableau (3 colonnes)
+
+| Libellé | Flux (€) | Justification Économique |
+|---------|----------|--------------------------|
+| **EBE Comptable 2023 (Base)** | **85 000 €** | Donnée certifiée liasse fiscale 2023 |
+| ➕ Suppression Personnel Cédant | +70 000 € | Pas de reprise de personnel - Économie totale... |
+| ➕ Normalisation Loyer | +12 000 € | Passage de 2 000€ à 1 000€/mois |
+| ➖ Nouvelle Structure RH | -45 000 € | 1 TNS + 1 SMIC + 1 Saisonnier... |
+| **🎯 EBE NORMATIF CIBLE** | **122 000 €** | Capacité réelle du repreneur (+43.5%) |
+
+#### Caractéristiques visuelles
+- **Pas de gradient** : Fond blanc/gris clair pour lisibilité (matching SIG table)
+- **Badges colorés** : ➕ (vert) pour additions, ➖ (orange) pour soustractions
+- **Montants en couleur** : Vert pour positif, rouge pour négatif
+- **Ligne finale mise en évidence** : Fond vert clair avec bordure verte
+
+### Analyse LLM Contextuelle
+
+**Fichier:** `server/adk/financial/agents/ComptableAgent.ts` (lignes 314-321)
+
+Nouvelle règle 6.5 ajoutée :
+
+```typescript
+6.5. ⚠️ NOUVELLE RÈGLE - ANALYSE DÉTAILLÉE DU PONT EBE (OBLIGATOIRE) :
+  Dans ebeRetraitement, ajouter le champ "analyseDetailleeEbe" (2-3 phrases) qui explique :
+  - La différence entre EBE comptable et EBE normatif
+  - Les principaux retraitements effectués (reprise personnel, loyer, nouvelle structure RH)
+  - Le contexte métier basé sur userComments (si reprise_salaries=false, loyer négocié, etc.)
+  - L'impact sur la capacité bénéficiaire réelle du repreneur (% du CA)
+```
+
+Le LLM génère maintenant une analyse contextuelle personnalisée au lieu d'un texte générique.
+
+### Types Backend
+
+**Fichier:** `server/adk/financial/index.ts` (lignes 60-77 et 102-118)
+
+Mise à jour des types `FinancialInput` et `FinancialState` :
+
+```typescript
+userComments?: {
+  frais_personnel_N1?: number;
+  reprise_salaries?: boolean;  // ✨ NOUVEAU
+  loyer?: {
+    loyer_actuel?: number;     // ✨ NOUVEAU (€/mois)
+    loyer_negocie?: number;    // ✨ NOUVEAU (€/mois)
+    futur_loyer_commercial?: number;  // LEGACY (backward compat)
+    loyer_actuel_mensuel?: number;    // LEGACY (backward compat)
+    loyer_futur_mensuel?: number;     // LEGACY (backward compat)
+    loyer_logement_perso?: number;
+    commentaire?: string;
+  };
+  // ... autres champs inchangés
+};
+```
+
+### Fichiers Modifiés (Résumé)
+
+| Fichier | Lignes Modifiées | Description |
+|---------|------------------|-------------|
+| `src/components/ProfessionalAnalysisModal.jsx` | +100 | 3 nouveaux champs + validation client-side |
+| `server/adk/financial/index.ts` | +5 | Types mis à jour |
+| `server.js` | +62 | Système de priorité NLP |
+| `calculateEbeRetraitementTool.ts` | +180 | 3 nouveaux retraitements + justifications |
+| `accountingSection.ts` | +70 | Fonction `generateEbeBridgeTable()` |
+| `ComptableAgent.ts` | +8 | Règle 6.5 pour analyseDetailleeEbe |
+
+### Compatibilité
+
+- ✅ **Backward compatibility** : Les champs legacy (`loyer_actuel_mensuel`, `futur_loyer_commercial`) sont maintenus
+- ✅ **Fallback NLP** : Si les champs structurés ne sont pas fournis, le système utilise l'extraction NLP existante
+- ✅ **Rapports existants** : Les anciens rapports continuent de fonctionner
+
+### Tests Recommandés
+
+1. **Formulaire** : Remplir les 3 nouveaux champs et vérifier l'envoi API
+2. **Validation** : Tester les 3 cas d'alerte (loyer incohérent, reprise sans frais personnel)
+3. **Rapport HTML** : Vérifier que le tableau "Pont EBE" s'affiche avec 3 colonnes
+4. **Analyse LLM** : Vérifier que `analyseDetailleeEbe` est généré et affiché
+5. **Backward compat** : Tester avec un ancien SIRET sans les nouveaux champs
+
+---
+
 ## Frontend: Champ Frais Personnel N+1 (2025-12-30)
 
 ### Contexte

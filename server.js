@@ -982,7 +982,33 @@ app.post('/api/analyze-financial', async (req, res) => {
 
             console.log('[parseNLP] Analyse du texte libre utilisateur...');
 
-            // 1a. LOYER ACTUEL: "loyer mensuel actuel de 2600 €"
+            // ========================================
+            // PRIORITY SYSTEM: Structured fields override NLP
+            // ========================================
+
+            // 1. LOYER - PRIORITY: Use structured fields if present
+            const hasStructuredLoyer = comments.loyer?.loyer_actuel || comments.loyer?.loyer_negocie;
+
+            if (hasStructuredLoyer) {
+                console.log('[parseNLP] ✅ Loyer structuré détecté - NLP skip');
+                result.loyer = result.loyer || {};
+
+                // Keep structured values, no NLP override
+                if (comments.loyer.loyer_actuel) {
+                    result.loyer.loyer_actuel_mensuel = comments.loyer.loyer_actuel; // Maintain legacy compatibility
+                    console.log(`[parseNLP] ✅ Loyer actuel (structuré): ${comments.loyer.loyer_actuel}€/mois`);
+                }
+
+                if (comments.loyer.loyer_negocie) {
+                    result.loyer.loyer_futur_mensuel = comments.loyer.loyer_negocie; // Maintain legacy compatibility
+                    result.loyer.futur_loyer_commercial = comments.loyer.loyer_negocie; // Also used by immobilier
+                    console.log(`[parseNLP] ✅ Loyer négocié (structuré): ${comments.loyer.loyer_negocie}€/mois`);
+                }
+            }
+
+            // FALLBACK: NLP extraction from text (only if no structured fields)
+            if (!hasStructuredLoyer) {
+                // 1a. LOYER ACTUEL: "loyer mensuel actuel de 2600 €"
             const loyerActuelPatterns = [
                 /loyer\s*(?:mensuel\s*)?actuel\s*(?:de\s*)?([\d\s]+)\s*€/i,
                 /loyer\s*(?:mensuel\s*)?(?:de\s*)?([\d\s]+)\s*€.*?(?:descendu|négocié)/i
@@ -1018,6 +1044,7 @@ app.post('/api/analyze-financial', async (req, res) => {
                     }
                 }
             }
+            } // End of if (!hasStructuredLoyer) - NLP fallback
 
             // 2. BUDGET TRAVAUX: "budget de 30000 € de travaux"
             const travauxMatch = text.match(/budget\s*(?:de\s*)?([\d\s]+)\s*€\s*(?:de\s*)?travaux/i) ||

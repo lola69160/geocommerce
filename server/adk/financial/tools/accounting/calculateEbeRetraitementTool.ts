@@ -27,11 +27,12 @@ const CalculateEbeRetraitementInputSchema = z.object({
 });
 
 const RetraitementLineSchema = z.object({
-  type: z.string().describe('Type de retraitement: salaire_dirigeant, salaries_non_repris, salaires_saisonniers, loyer, charges_exceptionnelles, produits_exceptionnels'),
+  type: z.string().describe('Type de retraitement: salaire_dirigeant, salaries_non_repris, salaires_saisonniers, loyer, charges_exceptionnelles, produits_exceptionnels, suppression_personnel_cedant, nouvelle_structure_rh'),
   description: z.string().describe('Description du retraitement'),
   montant: z.number().describe('Montant du retraitement (positif si augmente EBE, négatif si diminue)'),
   source: z.string().describe('Source de l\'information: userComments, documentExtraction, estimation'),
-  commentaire: z.string().optional().describe('Commentaire additionnel')
+  justification: z.string().describe('Justification économique détaillée pour le pont EBE'),
+  commentaire: z.string().optional().describe('Commentaire additionnel technique')
 });
 
 const CalculateEbeRetraitementOutputSchema = z.object({
@@ -218,6 +219,11 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           description: 'Réintégration salaire dirigeant (charges exploitant)',
           montant: salaireGerant,
           source,
+          justification: source === 'sig_extraction'
+            ? 'Donnée certifiée liasse fiscale'
+            : source === 'userComments'
+              ? 'Montant fourni par le repreneur'
+              : 'Estimation standard gérant majoritaire',
           commentaire: source === 'sig_extraction'
             ? 'Valeur extraite directement du SIG (ligne "Charges de l\'exploitant")'
             : source === 'userComments'
@@ -231,7 +237,48 @@ export const calculateEbeRetraitementTool = new FunctionTool({
       }
 
       // ========================================
-      // 2. SALARIÉS NON REPRIS
+      // 2. SUPPRESSION PERSONNEL CÉDANT (CONDITIONAL)
+      // ========================================
+      // Si le repreneur ne reprend PAS le personnel actuel
+      // → On réintègre TOUTE la masse salariale (salaires + charges sociales)
+
+      console.log('\n[EBE Retraitement] ────────────────────────────────');
+      console.log('[EBE Retraitement] ANALYSE PERSONNEL CÉDANT');
+      console.log('[EBE Retraitement] ────────────────────────────────');
+
+      const repriseSalaries = userComments?.reprise_salaries;
+      console.log(`[EBE Retraitement] Reprise salariés cédant: ${repriseSalaries === true ? 'OUI' : repriseSalaries === false ? 'NON' : 'NON RENSEIGNÉ (défaut: OUI)'}`);
+
+      if (repriseSalaries === false) {
+        // Calculate total personnel cost from SIG
+        const salairesPersonnel = extractSigValue(lastYearSig, 'salaires_personnel') || 0;
+        const chargesSociales = extractSigValue(lastYearSig, 'charges_sociales_personnel') || 0;
+        const masseSalarialeTotale = salairesPersonnel + chargesSociales;
+
+        console.log(`[EBE Retraitement]   └─ Salaires personnel: ${salairesPersonnel.toLocaleString('fr-FR')}€`);
+        console.log(`[EBE Retraitement]   └─ Charges sociales: ${chargesSociales.toLocaleString('fr-FR')}€`);
+        console.log(`[EBE Retraitement]   └─ TOTAL masse salariale: ${masseSalarialeTotale.toLocaleString('fr-FR')}€`);
+
+        if (masseSalarialeTotale > 0) {
+          retraitements.push({
+            type: 'suppression_personnel_cedant',
+            description: 'Suppression Personnel Cédant',
+            montant: masseSalarialeTotale,
+            source: 'documentExtraction',
+            justification: 'Pas de reprise de personnel - Économie totale sur charges salariales actuelles',
+            commentaire: `Masse salariale supprimée: ${salairesPersonnel.toLocaleString('fr-FR')}€ (salaires) + ${chargesSociales.toLocaleString('fr-FR')}€ (charges sociales)`
+          });
+
+          console.log(`[EBE Retraitement] ✓ Retraitement personnel supprimé: +${masseSalarialeTotale.toLocaleString('fr-FR')}€`);
+        } else {
+          console.log(`[EBE Retraitement] ⚠️ Aucune charge de personnel détectée dans le SIG`);
+        }
+      } else {
+        console.log(`[EBE Retraitement] ✓ Personnel conservé - pas de retraitement`);
+      }
+
+      // ========================================
+      // 3. SALARIÉS NON REPRIS
       // ========================================
       // Si certains salariés ne sont pas repris (départ à la retraite, licenciement économique)
       // → On réintègre leur masse salariale
@@ -244,6 +291,7 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           description: `Réintégration masse salariale de ${userComments.salaries_non_repris.nombre} salarié(s) non repris`,
           montant: masseSalarialeNonReprise,
           source: 'userComments',
+          justification: `${userComments.salaries_non_repris.nombre} salarié(s) non conservé(s) - ${userComments.salaries_non_repris.motif || 'Départ'}`,
           commentaire: userComments.salaries_non_repris.motif || 'Salariés non repris par le repreneur'
         });
 
@@ -264,11 +312,50 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           description: 'Déduction salaires saisonniers prévus par le repreneur',
           montant: -userComments.salaires_saisonniers_prevus,
           source: 'userComments',
+          justification: 'Coût additionnel non présent dans le bilan actuel',
           commentaire: 'Coût additionnel non présent dans le bilan actuel'
         });
 
         console.log(`[EBE Retraitement] ✓ Salaires saisonniers prévus: -${userComments.salaires_saisonniers_prevus.toLocaleString('fr-FR')}€`);
         console.log(`                     → Coût additionnel non présent dans bilan actuel`);
+      }
+
+      // ========================================
+      // 3.5 NOUVELLE STRUCTURE RH (FROM frais_personnel_N1)
+      // ========================================
+      // Si le repreneur a fourni une estimation des frais personnel N+1
+      // → On déduit cette nouvelle charge de l'EBE
+
+      console.log('\n[EBE Retraitement] ────────────────────────────────');
+      console.log('[EBE Retraitement] NOUVELLE STRUCTURE RH (N+1)');
+      console.log('[EBE Retraitement] ────────────────────────────────');
+
+      const fraisPersonnelN1 = userComments?.frais_personnel_N1;
+      console.log(`[EBE Retraitement] Frais personnel N+1: ${fraisPersonnelN1 ? fraisPersonnelN1.toLocaleString('fr-FR') + '€/an' : 'NON RENSEIGNÉ'}`);
+
+      if (fraisPersonnelN1 && fraisPersonnelN1 > 0) {
+        // Only add this retraitement if personnel was NOT kept
+        // (if personnel kept, this is a net increase; if not kept, it's the new structure cost)
+
+        const isSuppression = userComments?.reprise_salaries === false;
+        const description = isSuppression
+          ? 'Nouvelle Structure RH'
+          : 'Ajustement Frais Personnel N+1';
+
+        const justification = isSuppression
+          ? '1 TNS + 1 SMIC + 1 Saisonnier (nouvelle organisation)'
+          : 'Ajustement prévisionnel charges de personnel';
+
+        retraitements.push({
+          type: 'nouvelle_structure_rh',
+          description,
+          montant: -fraisPersonnelN1, // Negative because it's a new cost
+          source: 'userComments',
+          justification,
+          commentaire: `Estimation repreneur: ${fraisPersonnelN1.toLocaleString('fr-FR')}€/an (charges patronales incluses)`
+        });
+
+        console.log(`[EBE Retraitement] ✓ Nouvelle structure RH: -${fraisPersonnelN1.toLocaleString('fr-FR')}€/an`);
       }
 
       // ========================================
@@ -278,41 +365,52 @@ export const calculateEbeRetraitementTool = new FunctionTool({
       // Si le loyer a été renégocié à la baisse
       // → On ajoute l'économie réalisée
 
-      // PRIORITÉ 1: Utiliser userComments si fourni
+      console.log('\n[EBE Retraitement] ────────────────────────────────');
+      console.log('[EBE Retraitement] ANALYSE LOYER');
+      console.log('[EBE Retraitement] ────────────────────────────────');
+
       let loyerRetraitementAjoute = false;
 
-      if (userComments?.loyer) {
-        const loyerActuelMensuel = userComments.loyer.loyer_actuel_mensuel || 0;
-        const loyerNegocieMensuel = userComments.loyer.loyer_futur_mensuel || 0;
-        const loyerLogementPersoMensuel = userComments.loyer.loyer_logement_perso || 0;
+      // PRIORITY 1: Structured fields (loyer_actuel, loyer_negocie)
+      const loyerActuel = userComments?.loyer?.loyer_actuel || userComments?.loyer?.loyer_actuel_mensuel;
+      const loyerNegocie = userComments?.loyer?.loyer_negocie ||
+                           userComments?.loyer?.loyer_futur_mensuel ||
+                           userComments?.loyer?.futur_loyer_commercial;
 
-        // Si loyer négocié < loyer actuel → économie
-        if (loyerNegocieMensuel > 0 && loyerActuelMensuel > 0 && loyerNegocieMensuel < loyerActuelMensuel) {
-          const economieAnnuelle = (loyerActuelMensuel - loyerNegocieMensuel) * 12;
+      console.log(`[EBE Retraitement] Loyer actuel: ${loyerActuel ? loyerActuel.toLocaleString('fr-FR') + '€/mois' : 'NON RENSEIGNÉ'}`);
+      console.log(`[EBE Retraitement] Loyer négocié: ${loyerNegocie ? loyerNegocie.toLocaleString('fr-FR') + '€/mois' : 'NON RENSEIGNÉ'}`);
 
-          retraitements.push({
-            type: 'loyer',
-            description: 'Économie loyer commercial renégocié',
-            montant: economieAnnuelle,
-            source: 'userComments',
-            commentaire: `Loyer réduit de ${loyerActuelMensuel}€/mois à ${loyerNegocieMensuel}€/mois`
-          });
+      if (loyerActuel && loyerNegocie && loyerNegocie < loyerActuel) {
+        const economieAnnuelle = (loyerActuel - loyerNegocie) * 12;
 
-          loyerRetraitementAjoute = true;
-        }
+        retraitements.push({
+          type: 'normalisation_loyer',
+          description: 'Normalisation Loyer',
+          montant: economieAnnuelle,
+          source: 'userComments',
+          justification: `Passage de ${loyerActuel.toLocaleString('fr-FR')}€ à ${loyerNegocie.toLocaleString('fr-FR')}€/mois`,
+          commentaire: `Économie mensuelle: ${(loyerActuel - loyerNegocie).toLocaleString('fr-FR')}€ × 12 mois`
+        });
 
-        // Si loyer logement personnel inclus dans les charges → avantage en nature
-        if (loyerLogementPersoMensuel > 0) {
-          const avantageAnnuel = loyerLogementPersoMensuel * 12;
+        loyerRetraitementAjoute = true;
+        console.log(`[EBE Retraitement] ✓ Économie loyer: +${economieAnnuelle.toLocaleString('fr-FR')}€/an`);
+      }
 
-          retraitements.push({
-            type: 'loyer',
-            description: 'Loyer logement personnel (avantage en nature gérant)',
-            montant: avantageAnnuel,
-            source: 'userComments',
-            commentaire: `Économie de ${loyerLogementPersoMensuel}€/mois pour le gérant`
-          });
-        }
+      // Loyer logement personnel (avantage en nature)
+      const loyerLogementPerso = userComments?.loyer?.loyer_logement_perso;
+      if (loyerLogementPerso && loyerLogementPerso > 0) {
+        const avantageAnnuel = loyerLogementPerso * 12;
+
+        retraitements.push({
+          type: 'loyer_logement',
+          description: 'Loyer logement personnel (avantage en nature)',
+          montant: avantageAnnuel,
+          source: 'userComments',
+          justification: `Économie logement gérant (${loyerLogementPerso.toLocaleString('fr-FR')}€/mois)`,
+          commentaire: 'Avantage en nature du gérant inclus dans les charges actuelles'
+        });
+
+        console.log(`[EBE Retraitement] ✓ Avantage logement: +${avantageAnnuel.toLocaleString('fr-FR')}€/an`);
       }
 
       // PRIORITÉ 2: Si pas de retraitement loyer via userComments, utiliser la simulation loyer
@@ -328,6 +426,7 @@ export const calculateEbeRetraitementTool = new FunctionTool({
             description: 'Économie loyer commercial (simulation renégociation - scénario réaliste)',
             montant: scenarioRealiste.economieAnnuelle,
             source: 'simulation',
+            justification: `Simulation économie loyer (probabilité ${scenarioRealiste.probabilite})`,
             commentaire: `${scenarioRealiste.description} - Économie: ${scenarioRealiste.economieAnnuelle.toLocaleString('fr-FR')} €/an (probabilité ${scenarioRealiste.probabilite})`
           });
         }
@@ -350,6 +449,7 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           description: 'Réintégration charges exceptionnelles (non récurrentes)',
           montant: chargesExceptionnellesNettes,
           source: 'documentExtraction',
+          justification: 'Charges non récurrentes à neutraliser',
           commentaire: 'Charges exceptionnelles de l\'année de référence à réintégrer'
         });
       }
@@ -369,6 +469,7 @@ export const calculateEbeRetraitementTool = new FunctionTool({
           description: 'Déduction produits exceptionnels (non récurrents)',
           montant: -produitsExceptionnelsNets,
           source: 'documentExtraction',
+          justification: 'Produits non récurrents à neutraliser',
           commentaire: 'Produits exceptionnels de l\'année de référence à retirer'
         });
       }

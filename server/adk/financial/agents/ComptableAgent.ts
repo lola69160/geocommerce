@@ -283,6 +283,7 @@ FORMAT DE SORTIE JSON (STRICT) :
         "description": "Réintégration salaire dirigeant",
         "montant": 35000,
         "source": "estimation",
+        "justification": "Donnée certifiée liasse fiscale",
         "commentaire": "Le repreneur pourra choisir de ne pas se rémunérer (gérant majoritaire)"
       },
       {
@@ -290,13 +291,15 @@ FORMAT DE SORTIE JSON (STRICT) :
         "description": "Loyer logement personnel (avantage en nature gérant)",
         "montant": 7200,
         "source": "userComments",
+        "justification": "Économie logement gérant (600€/mois)",
         "commentaire": "Économie de 600€/mois pour le gérant"
       }
     ],
     "total_retraitements": 42200,
     "ebe_normatif": 127200,
     "ecart_pct": 50,
-    "synthese": "L'EBE Normatif (127 200 €) a été calculé à partir de l'EBE comptable (85 000 €) après 2 retraitement(s)..."
+    "synthese": "L'EBE Normatif (127 200 €) a été calculé à partir de l'EBE comptable (85 000 €) après 2 retraitement(s)...",
+    "analyseDetailleeEbe": "L'EBE Normatif (127 200 €) est significativement supérieur à l'EBE comptable (85 000 €). Cette différence s'explique par une restructuration complète de la masse salariale prévue par le repreneur, transformant une affaire peu rentable en une exploitation dégageant une capacité bénéficiaire réelle de 25% du CA."
   },
 
   "synthese": "L'entreprise affiche une croissance solide (+12.5% CA) avec une rentabilité correcte (marge nette 11%). Le score de santé financière (72/100) témoigne d'une bonne situation globale. Points de vigilance : délai clients à optimiser et marge EBE légèrement sous la moyenne sectorielle. La structure financière est saine avec un endettement maîtrisé (85%)."
@@ -308,6 +311,14 @@ RÈGLES :
 3. Pour alertes : comparer aux benchmarks sectoriels (comparisons[].position)
 4. Pour synthese : résumer en 3-5 phrases max les points clés, mentionner l'EBE Normatif si différent de l'EBE comptable
 5. Si un tool échoue, le mentionner dans le JSON mais continuer avec les autres
+6.5. ⚠️ NOUVELLE RÈGLE - ANALYSE DÉTAILLÉE DU PONT EBE (OBLIGATOIRE) :
+   Dans ebeRetraitement, ajouter le champ "analyseDetailleeEbe" (2-3 phrases) qui explique :
+   - La différence entre EBE comptable et EBE normatif
+   - Les principaux retraitements effectués (reprise personnel, loyer, nouvelle structure RH)
+   - Le contexte métier basé sur userComments (si reprise_salaries=false, si loyer négocié, etc.)
+   - L'impact sur la capacité bénéficiaire réelle du repreneur (% du CA)
+
+   Exemple : "L'EBE Normatif (51 012 €) est significativement supérieur à l'EBE comptable (17 558 €). Cette différence s'explique par une restructuration complète de la masse salariale prévue par le repreneur, transformant une affaire peu rentable en une exploitation dégageant une capacité bénéficiaire réelle de 21% du CA."
 
 ⚠️⚠️⚠️ RÈGLE #6 - ABSOLUMENT CRITIQUE - NE PAS IGNORER ⚠️⚠️⚠️
 

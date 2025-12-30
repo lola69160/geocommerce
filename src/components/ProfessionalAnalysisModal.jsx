@@ -31,6 +31,9 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   const [selectedDocuments, setSelectedDocuments] = useState([]); // Array of document IDs
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [fraisPersonnelN1, setFraisPersonnelN1] = useState(''); // Frais personnel N+1 (€/an)
+  const [repriseSalaries, setRepriseSalaries] = useState(true); // Reprise des salariés du cédant (oui/non)
+  const [loyerActuel, setLoyerActuel] = useState(''); // Loyer actuel (€/mois)
+  const [loyerNegocie, setLoyerNegocie] = useState(''); // Loyer négocié (€/mois)
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
@@ -294,6 +297,25 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
       return;
     }
 
+    // Validate loyer fields
+    if (loyerNegocie && !loyerActuel) {
+      alert('Veuillez renseigner le loyer actuel pour calculer l\'économie');
+      return;
+    }
+
+    if (loyerActuel && loyerNegocie && parseFloat(loyerNegocie) > parseFloat(loyerActuel)) {
+      const confirmProceed = window.confirm(
+        'Le loyer négocié est supérieur au loyer actuel. Voulez-vous continuer ?'
+      );
+      if (!confirmProceed) return;
+    }
+
+    // Validate frais personnel with reprise_salaries
+    if (!repriseSalaries && !fraisPersonnelN1) {
+      alert('Si vous ne reprenez pas le personnel, veuillez indiquer les frais personnel N+1 prévus');
+      return;
+    }
+
     setFinancialStage('running');
     setFinancialError('');
     setFinancialReportHtml('');
@@ -335,6 +357,11 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
           },
           userComments: {
             frais_personnel_N1: fraisPersonnelN1 ? parseFloat(fraisPersonnelN1) : undefined,
+            reprise_salaries: repriseSalaries,
+            loyer: {
+              loyer_actuel: loyerActuel ? parseFloat(loyerActuel) : undefined,
+              loyer_negocie: loyerNegocie ? parseFloat(loyerNegocie) : undefined
+            },
             autres: additionalInfo
           },
           options: {
@@ -420,6 +447,9 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
     setSelectedDocuments([]);
     setAdditionalInfo('');
     setFraisPersonnelN1('');
+    setRepriseSalaries(true);
+    setLoyerActuel('');
+    setLoyerNegocie('');
     setLoadingDocuments(false);
     setDocumentsError('');
 
@@ -535,13 +565,81 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                 type="number"
                 value={fraisPersonnelN1}
                 onChange={(e) => setFraisPersonnelN1(e.target.value)}
-                placeholder="Ex: 45000"
+                placeholder="Ex: 76900"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 min="0"
                 step="1000"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Estimation des frais de personnel pour l'année N+1 (optionnel)
+                Frais personnel prévus après reprise (TNS + salariés + charges)
+              </p>
+            </div>
+
+            {/* Reprise des Salariés Section - NEW */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                Reprise des salariés du cédant
+              </label>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="reprise_salaries"
+                    checked={repriseSalaries === true}
+                    onChange={() => setRepriseSalaries(true)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Oui (conservation)</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="reprise_salaries"
+                    checked={repriseSalaries === false}
+                    onChange={() => setRepriseSalaries(false)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Non (suppression)</span>
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Si "Non", les charges de personnel actuelles seront retraitées
+              </p>
+            </div>
+
+            {/* Loyer Section - NEW */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Loyer commercial
+              </label>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Loyer actuel (€/mois)</label>
+                  <input
+                    type="number"
+                    value={loyerActuel}
+                    onChange={(e) => setLoyerActuel(e.target.value)}
+                    placeholder="Ex: 2600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    min="0"
+                    step="100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Loyer négocié (€/mois)</label>
+                  <input
+                    type="number"
+                    value={loyerNegocie}
+                    onChange={(e) => setLoyerNegocie(e.target.value)}
+                    placeholder="Ex: 1800"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    min="0"
+                    step="100"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Si négocié &lt; actuel, l'économie sera affichée dans le pont EBE
               </p>
             </div>
 

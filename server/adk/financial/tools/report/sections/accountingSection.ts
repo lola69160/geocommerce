@@ -69,7 +69,7 @@ export function generateAccountingSection(
       { key: 'production_vendue_services', label: '└─ Commissions/Services', isSubRow: true, bpKey: null },
       { key: 'marge_commerciale', label: 'Marge Commerciale', bpKey: null },
       { key: 'marge_brute_globale', label: 'Marge Brute Globale', bpKey: 'marge_brute' },
-      { key: 'autres_achats_charges_externes', label: 'Charges Externes', bpKey: 'charges_fixes' },
+      { key: 'autres_achats_charges_externes', label: 'Charges Externes', bpKey: 'charges_externes' },  // ✅ FIX (2025-12-30): charges_externes au lieu de charges_fixes
       { key: 'loyer', label: '└─ dont Loyer', isSubRow: true, bpKey: 'loyer' },
       { key: 'charges_personnel', label: 'Frais de Personnel', bpKey: 'salaires' },
       { key: 'salaire_gerant', label: '└─ dont Salaire Gérant', isSubRow: true, bpKey: 'salaire_dirigeant' },
@@ -116,11 +116,12 @@ export function generateAccountingSection(
             }
           }
         } else if (ind.key === 'charges_personnel') {
-          // Frais de Personnel = salaires_personnel + charges_sociales_personnel
+          // ✅ FIX (2025-12-30): Frais de Personnel = salaires + charges sociales + charges exploitant
           // ⚠️ PAS DE FALLBACK - utiliser uniquement les valeurs de comptable.sig
           const salaires = extractValue(comptable.sig[y]?.salaires_personnel) || 0;
           const chargesSociales = extractValue(comptable.sig[y]?.charges_sociales_personnel) || 0;
-          value = salaires + chargesSociales;
+          const chargesExploitant = extractValue(comptable.sig[y]?.charges_exploitant) || 0;
+          value = salaires + chargesSociales + chargesExploitant;
 
           // Si somme = 0, essayer le champ charges_personnel direct
           if (value === 0) {
@@ -158,6 +159,9 @@ export function generateAccountingSection(
             budgetValue = proj.ca || 0;
           } else if (ind.bpKey === 'marge_brute') {
             budgetValue = proj.marge_brute || (proj.ca ? proj.ca * 0.68 : 0); // Fallback 68%
+          } else if (ind.bpKey === 'charges_externes') {
+            // ✅ FIX (2025-12-30): Charges Externes = autres_charges + loyer (sans salaires)
+            budgetValue = (proj.charges_detail?.autres_charges || 0) + (proj.charges_detail?.loyer || 0);
           } else if (ind.bpKey === 'charges_fixes') {
             budgetValue = proj.charges_fixes || 0;
           } else if (ind.bpKey === 'loyer') {
@@ -197,9 +201,9 @@ export function generateAccountingSection(
     }
   }
 
-  // Tableau de Retraitement EBE
+  // Tableau de Retraitement EBE (Pont EBE)
   if (comptable.ebeRetraitement && comptable.ebeRetraitement.ebe_normatif) {
-    html += generateEbeRetraitementTable(comptable.ebeRetraitement);
+    html += generateEbeBridgeTable(comptable.ebeRetraitement);
   }
 
   // Graphique évolution
@@ -262,70 +266,85 @@ export function generateAccountingSection(
 /**
  * Generate EBE Retraitement table
  */
-function generateEbeRetraitementTable(ebe: any): string {
-  let html = '<h3>💡 Retraitement de l\'EBE - Capacité Normatif du Repreneur</h3>';
-  html += '<div class="summary-box">';
-  html += '<p style="margin-bottom:15px; color:var(--color-text-secondary)">';
-  html += 'L\'EBE Normatif représente la <strong>capacité bénéficiaire réelle</strong> pour le repreneur, après retraitements des éléments non récurrents ou liés au cédant.';
-  html += '</p>';
+/**
+ * Generate EBE Bridge table (replaces EBE Retraitement table)
+ *
+ * Visual design: 3 columns with economic justifications
+ * - Column 1: Libellé (description)
+ * - Column 2: Flux (€, signed with colors)
+ * - Column 3: Justification Économique
+ *
+ * Style: Same as SIG table (simple, clean, no gradient)
+ */
+function generateEbeBridgeTable(ebe: any): string {
+  let html = '<h3>💡 Pont EBE - De la Capacité Comptable à la Capacité Normatif</h3>';
 
-  // Tableau de retraitement
-  html += '<table><thead><tr><th>Ligne de Retraitement</th><th class="text-right">Montant</th><th>Source</th></tr></thead><tbody>';
+  // 3-column table (same style as SIG table)
+  html += '<table>';
+  html += '<thead><tr>';
+  html += '<th style="width: 35%">Libellé</th>';
+  html += '<th class="text-right" style="width: 20%">Flux (€)</th>';
+  html += '<th style="width: 45%">Justification Économique</th>';
+  html += '</tr></thead>';
+  html += '<tbody>';
 
-  // Ligne de base (fond neutre)
+  // Line 1: EBE Comptable (Base) - simple row
   html += `<tr>
-    <td><strong>EBE Comptable (Base)</strong></td>
+    <td><strong>EBE Comptable ${ebe.annee_reference} (Base)</strong></td>
     <td class="text-right"><strong>${ebe.ebe_comptable.toLocaleString('fr-FR')} €</strong></td>
-    <td><span class="badge info">Bilan ${ebe.annee_reference}</span></td>
+    <td><span class="badge info">Donnée certifiée liasse fiscale ${ebe.annee_reference}</span></td>
   </tr>`;
 
-  // Retraitements
+  // Retraitements with badges (green for +, orange for -)
   if (ebe.retraitements && ebe.retraitements.length > 0) {
     ebe.retraitements.forEach((r: any) => {
       const sign = r.montant >= 0 ? '+' : '';
-      const color = r.montant >= 0 ? '#10b981' : '#ef4444';
-      const sourceLabel = r.source === 'userComments' ? 'Utilisateur' : (r.source === 'documentExtraction' ? 'Bilan' : 'Estimation');
+      const color = r.montant >= 0 ? '#10b981' : '#ef4444'; // Green for +, Red for -
+      const badgeClass = r.montant >= 0 ? 'success' : 'warning'; // Green badge for +, Orange for -
+      const badgeLabel = r.montant >= 0 ? '➕' : '➖';
 
       html += `<tr>
-        <td>${r.description}</td>
-        <td class="text-right" style="color:${color}"><strong>${sign}${r.montant.toLocaleString('fr-FR')} €</strong></td>
-        <td><span class="badge ${r.source === 'userComments' ? 'success' : 'info'}">${sourceLabel}</span></td>
+        <td>
+          <span class="badge ${badgeClass}">${badgeLabel}</span>
+          ${r.description}
+        </td>
+        <td class="text-right" style="color:${color}; font-weight: 600;">
+          ${sign}${r.montant.toLocaleString('fr-FR')} €
+        </td>
+        <td style="font-size: 0.95em;">
+          ${r.justification || r.commentaire || '-'}
+        </td>
       </tr>`;
-
-      // Commentaire si disponible
-      if (r.commentaire) {
-        html += `<tr style="font-size:0.85em; color:var(--color-text-secondary)">
-          <td colspan="3" style="padding-left:30px; font-style:italic">${r.commentaire}</td>
-        </tr>`;
-      }
     });
   }
 
-  // Ligne totale (séparateur visuel)
+  // Final line: EBE NORMATIF CIBLE (highlighted row, same style as SIG highlighted rows)
+  const ecartSign = ebe.total_retraitements >= 0 ? '+' : '';
   const ecartColor = ebe.total_retraitements >= 0 ? '#10b981' : '#ef4444';
-  html += `<tr style="border-top:2px solid var(--color-text-primary)">
-    <td><strong>Total Retraitements</strong></td>
-    <td class="text-right" style="color:${ecartColor}"><strong>${ebe.total_retraitements >= 0 ? '+' : ''}${ebe.total_retraitements.toLocaleString('fr-FR')} €</strong></td>
-    <td></td>
-  </tr>`;
 
-  // Ligne EBE Normatif (fond gris clair + séparateur)
-  html += `<tr style="border-top:2px solid var(--color-text-primary); background:var(--color-bg-light)">
-    <td><strong>🎯 EBE NORMATIF (Capacité Repreneur)</strong></td>
-    <td class="text-right"><strong style="font-size:1.2em; color:var(--color-info-text)">${ebe.ebe_normatif.toLocaleString('fr-FR')} €</strong></td>
-    <td><span class="badge success">+${ebe.ecart_pct}%</span></td>
+  html += `<tr style="background: #d1fae5; border-top: 2px solid #10b981; font-weight: 700;">
+    <td style="color: #065f46;">
+      🎯 EBE NORMATIF CIBLE
+    </td>
+    <td class="text-right" style="font-size: 1.2em; color: #065f46;">
+      ${ebe.ebe_normatif.toLocaleString('fr-FR')} €
+    </td>
+    <td style="color: #065f46;">
+      Capacité réelle du repreneur
+      <span class="badge success" style="margin-left: 8px;">${ecartSign}${ebe.ecart_pct}%</span>
+    </td>
   </tr>`;
 
   html += '</tbody></table>';
 
-  // Synthèse textuelle
-  if (ebe.synthese) {
-    html += `<p style="margin-top:15px; padding:10px; background:var(--color-bg-light); border-left:3px solid var(--color-warning-text)">
-      <strong>💡 Synthèse:</strong> ${ebe.synthese}
-    </p>`;
+  // Analysis text (generated by ComptableAgent, not the tool)
+  if (ebe.analyseDetailleeEbe) {
+    html += `<div style="margin-top: 20px; padding: 15px; background: var(--color-bg-light); border-left: 4px solid #0284c7; border-radius: 4px;">
+      <strong style="color: #0369a1;">💡 Analyse :</strong>
+      <p style="margin-top: 8px; color: var(--color-text-primary); line-height: 1.6;">${ebe.analyseDetailleeEbe}</p>
+    </div>`;
   }
 
-  html += '</div>';
   return html;
 }
 

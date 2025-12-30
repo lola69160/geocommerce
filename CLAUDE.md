@@ -337,4 +337,52 @@ Avant ce fix, le code cherchait un match partiel et trouvait NAF 47.11 ("Commerc
 - `accountingSection.ts` - Affichage tableau SIG avec ventes_marchandises et production_vendue_services
 - `sectorBenchmarks.ts` - Benchmark NAF 47.26Z pour Tabac/Presse
 
+#### EBE Bridge Feature - Formulaire Structuré et Visualisation (2025-12-30)
+
+**Fonctionnalité**: Remplacement du tableau de retraitement EBE par un "Pont EBE" visuel qui montre la transformation de l'EBE comptable vers l'EBE normatif avec justifications économiques détaillées.
+
+**Nouveaux champs formulaire** :
+- `reprise_salaries` (oui/non) : Influence le calcul (suppression personnel cédant si non)
+- `loyer_actuel` (€/mois) : Loyer commercial actuel (champ structuré)
+- `loyer_negocie` (€/mois) : Loyer commercial négocié (champ structuré)
+
+**Système de priorité** :
+```javascript
+// Champs structurés > Extraction NLP
+if (hasStructuredLoyer) {
+  // Utilise loyer_actuel et loyer_negocie
+} else {
+  // Fallback: extraction NLP du texte userComments.autres
+}
+```
+
+**Nouveaux types de retraitement** :
+1. **Suppression Personnel Cédant** : Si `reprise_salaries=false`, récupère la masse salariale complète (salaires + charges sociales)
+2. **Nouvelle Structure RH** : Utilise `frais_personnel_N1` fourni par l'utilisateur
+3. **Normalisation Loyer** : Calcul automatique de l'économie annuelle à partir des champs structurés
+
+**Champs retraitement enrichis** :
+- Ajout du champ `justification` (string) à chaque retraitement pour expliquer la logique économique
+- Affichage dans tableau 3 colonnes : Libellé | Flux (€) | Justification Économique
+
+**Tableau "Pont EBE"** :
+- 3 colonnes avec badges colorés (vert +, orange -)
+- Ligne de base : EBE Comptable (badge info)
+- Retraitements avec justifications détaillées
+- Ligne finale : EBE NORMATIF CIBLE (fond vert, mise en évidence)
+- Analyse LLM contextuelle générée par ComptableAgent (`analyseDetailleeEbe`)
+
+**Validation frontend** :
+- Loyer négocié > loyer actuel → dialogue de confirmation
+- Reprise_salaries=false sans frais_personnel_N1 → alerte
+- Loyer négocié fourni sans loyer actuel → alerte
+
+**Fichiers modifiés** :
+- `src/components/ProfessionalAnalysisModal.jsx` : 3 nouveaux champs + validation
+- `server/adk/financial/index.ts` : Types FinancialInput/FinancialState mis à jour
+- `server.js` : Système de priorité NLP (lignes 985-1047)
+- `server/adk/financial/tools/accounting/calculateEbeRetraitementTool.ts` : Nouveaux retraitements + justification
+- `server/adk/financial/tools/report/sections/accountingSection.ts` : Fonction `generateEbeBridgeTable()`
+- `server/adk/financial/agents/ComptableAgent.ts` : Règle 6.5 pour générer analyseDetailleeEbe
+
 See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for complete priority rules.

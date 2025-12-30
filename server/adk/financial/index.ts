@@ -58,8 +58,14 @@ export type FinancialInput = {
     activity: string;
   };
   userComments?: {
+    frais_personnel_N1?: number;       // ✅ NOUVEAU (2025-12-30): Estimation frais personnel année N+1 (€/an)
+    reprise_salaries?: boolean;        // ✅ NOUVEAU (2025-12-30): Reprise des salariés du cédant (true=oui, false=non)
     loyer?: {
-      futur_loyer_commercial?: number;  // Ex: 1500 (nouveau loyer commercial mensuel en €)
+      loyer_actuel?: number;            // ✅ NOUVEAU (2025-12-30): Loyer actuel mensuel (€/mois, structuré)
+      loyer_negocie?: number;           // ✅ NOUVEAU (2025-12-30): Loyer négocié mensuel (€/mois, structuré)
+      futur_loyer_commercial?: number;  // LEGACY: Ex: 1500 (nouveau loyer commercial mensuel en €)
+      loyer_actuel_mensuel?: number;    // LEGACY: Backward compat with NLP extraction
+      loyer_futur_mensuel?: number;     // LEGACY: Backward compat with NLP extraction
       loyer_logement_perso?: number;    // Ex: 600 (part logement personnel mensuel en €)
       commentaire?: string;              // Ex: "le loyer sera baissé à 2100 euros dans le prochain bail"
     };
@@ -99,8 +105,14 @@ export type FinancialState = {
   financialValidation?: any;
   financialReport?: any;
   userComments?: {
+    frais_personnel_N1?: number;       // ✅ NOUVEAU (2025-12-30): Estimation frais personnel année N+1 (€/an)
+    reprise_salaries?: boolean;        // ✅ NOUVEAU (2025-12-30): Reprise des salariés du cédant (true=oui, false=non)
     loyer?: {
-      futur_loyer_commercial?: number;
+      loyer_actuel?: number;            // ✅ NOUVEAU (2025-12-30): Loyer actuel mensuel (€/mois, structuré)
+      loyer_negocie?: number;           // ✅ NOUVEAU (2025-12-30): Loyer négocié mensuel (€/mois, structuré)
+      futur_loyer_commercial?: number;  // LEGACY: Backward compat
+      loyer_actuel_mensuel?: number;    // LEGACY: Backward compat
+      loyer_futur_mensuel?: number;     // LEGACY: Backward compat
       loyer_logement_perso?: number;
       commentaire?: string;
     };
