@@ -145,7 +145,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
         <div
             className="fixed inset-0 flex items-center justify-center z-[2000]"
             style={{
-                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                backgroundColor: 'rgba(26, 26, 36, 0.4)',
                 backdropFilter: 'blur(4px)',
                 animation: 'fadeIn 0.2s ease-out'
             }}
@@ -242,7 +242,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
                     {/* Upload Zone */}
                     <div
                         style={{
-                            border: `2px dashed ${dragActive ? '#3b82f6' : '#d1d5db'}`,
+                            border: `2px dashed ${dragActive ? '#FF6B4A' : '#d1d5db'}`,
                             borderRadius: '12px',
                             padding: '32px',
                             textAlign: 'center',
@@ -259,7 +259,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
                             size={48}
                             style={{
                                 margin: '0 auto 16px',
-                                color: dragActive ? '#3b82f6' : '#9ca3af'
+                                color: dragActive ? '#FF6B4A' : '#9ca3af'
                             }}
                         />
                         <p style={{
@@ -296,7 +296,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
                                 fontSize: '0.9375rem',
                                 fontWeight: '600',
                                 color: 'white',
-                                backgroundColor: uploading ? '#9ca3af' : '#3b82f6',
+                                backgroundColor: uploading ? '#9ca3af' : '#FF6B4A',
                                 border: 'none',
                                 borderRadius: '10px',
                                 cursor: uploading ? 'not-allowed' : 'pointer',
@@ -327,7 +327,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
                             <div style={{
                                 width: `${uploadProgress}%`,
                                 height: '100%',
-                                background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
+                                background: 'linear-gradient(90deg, #FF6B4A 0%, #FF5733 100%)',
                                 transition: 'width 0.3s ease'
                             }} />
                         </div>
@@ -397,7 +397,7 @@ const DocumentUploadModal = ({ isOpen, onClose, business }) => {
                                                 download
                                                 style={{
                                                     padding: '8px',
-                                                    background: '#3b82f6',
+                                                    background: '#FF6B4A',
                                                     color: 'white',
                                                     borderRadius: '6px',
                                                     border: 'none',

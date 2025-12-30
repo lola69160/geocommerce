@@ -3,7 +3,7 @@ import { ShoppingCart, FileText, X, Trash2, Loader2, Sparkles, MapPin, ChevronRi
 import axios from 'axios';
 import { generateMarkdownReport } from '../utils/reportGenerator';
 import ProfessionalAnalysisModal from './ProfessionalAnalysisModal';
-import { Button, Card, CountBadge } from './ui';
+import { Button, Card } from './ui';
 
 /**
  * CartWidget Component - Tech Premium Design System
@@ -91,11 +91,11 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
             relative
             p-4
             rounded-2xl
-            bg-gradient-to-r from-cyan-500 to-cyan-600
+            bg-primary-500
             text-white
-            shadow-dark-xl
-            hover:shadow-glow-cyan
-            hover:from-cyan-400 hover:to-cyan-500
+            shadow-lg
+            hover:shadow-xl
+            hover:bg-primary-600
             transition-all duration-fast
             active:scale-95
             group
@@ -106,13 +106,13 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
           {/* Count Badge */}
           <span className={`
             absolute -top-1 -right-1
-            min-w-[22px] h-[22px]
+            min-w-[24px] h-[24px]
             flex items-center justify-center
-            bg-red-500
+            bg-danger-500
             text-white text-xs font-bold
             rounded-full
-            border-2 border-surface-900
-            shadow-dark-sm
+            border-2 border-white
+            shadow-md
             animate-bounce-in
           `}>
             {cartCount}
@@ -121,12 +121,13 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
           {/* Tooltip */}
           <span className={`
             absolute right-full mr-3 top-1/2 -translate-y-1/2
-            px-3 py-1.5
-            bg-surface-800
-            text-text-primary text-xs font-medium
-            rounded-lg
-            border border-[rgba(255,255,255,0.1)]
-            shadow-dark-lg
+            px-4 py-2
+            bg-white/90
+            backdrop-blur-md
+            text-text-primary text-sm font-medium
+            rounded-xl
+            border border-surface-300
+            shadow-lg
             whitespace-nowrap
             opacity-0 group-hover:opacity-100
             -translate-x-2 group-hover:translate-x-0
@@ -155,19 +156,20 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
       <div className={`
         fixed inset-y-0 right-0 z-[1002]
         w-96 max-w-[90vw]
-        bg-surface-800
-        border-l border-[rgba(255,255,255,0.06)]
-        shadow-dark-2xl
+        bg-white/70
+        backdrop-blur-xl
+        border-l border-white/50
+        shadow-xl
         flex flex-col
         transform transition-transform duration-normal ease-out
         ${isOpen ? 'translate-x-0' : 'translate-x-full'}
       `}>
         {/* Header */}
-        <div className="p-4 border-b border-[rgba(255,255,255,0.06)] bg-surface-900/50">
+        <div className="p-5 border-b border-surface-300 bg-surface-100/80 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/15">
-                <ShoppingCart size={20} className="text-cyan-400" />
+              <div className="p-2.5 rounded-xl bg-primary-100">
+                <ShoppingCart size={20} className="text-primary-600" />
               </div>
               <div>
                 <h2 className="font-display font-bold text-lg text-text-primary">
@@ -184,10 +186,10 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
               className={`
                 p-2
                 rounded-lg
-                text-text-muted
+                text-text-tertiary
                 hover:text-text-primary
-                hover:bg-surface-700
-                transition-colors duration-fast
+                hover:bg-surface-200
+                transition-all duration-fast
               `}
               aria-label="Fermer le panier"
             >
@@ -246,12 +248,12 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
                     flex items-center justify-center gap-2
                     px-3 py-2
                     rounded-lg
-                    bg-gradient-to-r from-violet-500/20 to-violet-600/20
-                    text-violet-400
-                    border border-violet-500/30
+                    bg-gradient-to-r from-accent-violet-200/20 to-accent-violet-300/20
+                    text-accent-violet-700
+                    border border-accent-violet-300/30
                     font-medium text-xs
-                    hover:from-violet-500/30 hover:to-violet-600/30
-                    hover:border-violet-500/50
+                    hover:from-accent-violet-200/30 hover:to-accent-violet-300/30
+                    hover:border-accent-violet-300/50
                     transition-all duration-fast
                     active:scale-98
                     group
@@ -267,11 +269,11 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[rgba(255,255,255,0.06)] bg-surface-900/50 space-y-4">
+        <div className="p-5 border-t border-surface-300 bg-surface-100/80 backdrop-blur-sm space-y-4">
           {/* Summary */}
           <div className="flex items-center justify-between text-sm">
-            <span className="text-text-muted">Total entreprises</span>
-            <span className="font-mono font-bold text-cyan-400">
+            <span className="text-text-secondary font-medium">Total entreprises</span>
+            <span className="font-mono font-bold text-primary-600 text-lg">
               {cartCount}
             </span>
           </div>

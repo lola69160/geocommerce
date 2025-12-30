@@ -45,8 +45,8 @@ const BusinessCard = forwardRef(({
       className={`
         transition-all duration-normal
         ${isSelected
-          ? 'border-cyan-500/50 ring-1 ring-cyan-500/20'
-          : 'hover:border-cyan-500/30'
+          ? 'border-primary-500/50 ring-1 ring-primary-500/20'
+          : 'hover:border-primary-500/30'
         }
       `}
     >
@@ -100,7 +100,7 @@ const BusinessCard = forwardRef(({
 
           {/* In Cart Badge */}
           {isInCart && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700 border border-primary-300">
               <CheckCircle size={10} className="mr-1" />
               Panier
             </span>
@@ -111,7 +111,7 @@ const BusinessCard = forwardRef(({
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-text-muted">
           {getEstablishmentCreationDate(business) && (
             <span className="flex items-center gap-1">
-              <span className="text-cyan-500">Créé:</span>
+              <span className="text-primary-600">Créé:</span>
               {formatDate(getEstablishmentCreationDate(business))}
             </span>
           )}
@@ -140,7 +140,7 @@ const BusinessCard = forwardRef(({
               active:scale-95
               ${hasNote
                 ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                : 'bg-surface-700 text-text-secondary border border-transparent hover:border-cyan-500/30 hover:text-cyan-400'
+                : 'bg-surface-200 text-text-secondary border border-transparent hover:border-primary-500/30 hover:text-primary-600'
               }
             `}
           >
@@ -184,7 +184,7 @@ const BusinessCard = forwardRef(({
               active:scale-95
               ${isInCart
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
-                : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30'
+                : 'bg-primary-100 text-primary-700 border border-primary-300 hover:bg-primary-200'
               }
             `}
           >
@@ -202,7 +202,7 @@ const BusinessCard = forwardRef(({
               e.stopPropagation();
               onToggleExpand(businessId);
             }}
-            className="flex items-center gap-2 text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="flex items-center gap-2 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
           >
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <span>API: recherche-entreprises.api.gouv.fr</span>
@@ -215,8 +215,8 @@ const BusinessCard = forwardRef(({
                 className={`
                   absolute top-2 right-2 z-10
                   p-1.5 rounded-md
-                  bg-surface-700 border border-[rgba(255,255,255,0.1)]
-                  text-text-muted hover:text-cyan-400
+                  bg-surface-200 border border-surface-300
+                  text-text-muted hover:text-primary-600
                   transition-colors duration-fast
                 `}
                 title="Copier le JSON"

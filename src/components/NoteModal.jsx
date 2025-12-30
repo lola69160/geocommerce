@@ -38,7 +38,7 @@ const NoteModal = ({ isOpen, onClose, onSave, initialNote, businessName }) => {
         <ModalHeader className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-cyan-500/15">
-              <FileText size={20} className="text-cyan-400" />
+              <FileText size={20} className="text-primary-700" />
             </div>
             <div>
               <ModalTitle>Note</ModalTitle>
@@ -54,7 +54,7 @@ const NoteModal = ({ isOpen, onClose, onSave, initialNote, businessName }) => {
               rounded-lg
               text-text-muted
               hover:text-text-primary
-              hover:bg-surface-700
+              hover:bg-surface-200
               transition-colors duration-fast
             `}
           >

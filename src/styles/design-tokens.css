@@ -1,100 +1,116 @@
 /* ============================================
    SearchCommerce Design Tokens
-   Theme: Tech Premium Dark Mode
+   Theme: Gojiberry Light Mode
    ============================================ */
 
 :root {
   /* ----------------------------------------
-     SURFACES - Dark Gradient Base
+     SURFACES - Light Beige/Cream Base
      ---------------------------------------- */
-  --surface-950: #050508;      /* Deepest background */
-  --surface-900: #0a0a0f;      /* Primary background */
-  --surface-800: #12121a;      /* Cards, panels */
-  --surface-700: #1a1a24;      /* Elevated surfaces */
-  --surface-600: #24242e;      /* Hover states */
-  --surface-500: #2e2e3a;      /* Active states */
-  --surface-400: #3a3a48;      /* Disabled backgrounds */
+  --surface-50: #fefefe;           /* Pure white cards */
+  --surface-100: #faf8f5;          /* Lightest background (main bg) */
+  --surface-200: #f5f3f0;          /* Secondary background */
+  --surface-300: #f0ede8;          /* Hover states */
+  --surface-400: #e8e4df;          /* Borders, dividers */
+  --surface-500: #d4d0ca;          /* Strong borders */
+  --surface-600: #b8b4ae;          /* Disabled backgrounds */
 
   /* ----------------------------------------
-     ACCENT - Cyan Neon (Primary)
+     PRIMARY - Coral/Orange
      ---------------------------------------- */
-  --accent-cyan-50: #ecfeff;
-  --accent-cyan-100: #cffafe;
-  --accent-cyan-200: #a5f3fc;
-  --accent-cyan-300: #67e8f9;
+  --primary-50: #fff5f0;
+  --primary-100: #ffe8db;
+  --primary-200: #ffd1b8;
+  --primary-300: #ffb494;
+  --primary-400: #ff8a66;
+  --primary-500: #FF6B4A;          /* Main coral CTA */
+  --primary-600: #FF5733;          /* Hover coral */
+  --primary-700: #e64920;
+  --primary-800: #cc3d1a;
+  --primary-900: #b33315;
+
+  /* ----------------------------------------
+     ACCENT COLORS - Pastel
+     ---------------------------------------- */
+  --accent-yellow-50: #fffef0;
+  --accent-yellow-100: #fefce8;
+  --accent-yellow-200: #fef9c3;
+  --accent-yellow-300: #fde68a;    /* Pastel yellow */
+  --accent-yellow-400: #fcd34d;
+
+  --accent-cyan-50: #f0fdff;
+  --accent-cyan-100: #e0fafe;
+  --accent-cyan-200: #baf5fc;
+  --accent-cyan-300: #67e8f9;      /* Pastel cyan */
   --accent-cyan-400: #22d3ee;
-  --accent-cyan-500: #00d4ff;   /* Primary accent */
-  --accent-cyan-600: #0891b2;
-  --accent-cyan-700: #0e7490;
-  --accent-cyan-dim: rgba(0, 212, 255, 0.12);
-  --accent-cyan-glow: 0 0 20px rgba(0, 212, 255, 0.35);
-  --accent-cyan-glow-lg: 0 0 40px rgba(0, 212, 255, 0.5);
+  --accent-cyan-500: #00d4ff;      /* Bright cyan accent */
 
-  /* ----------------------------------------
-     ACCENT - Violet (Secondary)
-     ---------------------------------------- */
   --accent-violet-50: #faf5ff;
   --accent-violet-100: #f3e8ff;
   --accent-violet-200: #e9d5ff;
-  --accent-violet-300: #d8b4fe;
-  --accent-violet-400: #c084fc;
-  --accent-violet-500: #a855f7;  /* Secondary accent */
-  --accent-violet-600: #9333ea;
-  --accent-violet-700: #7c3aed;
-  --accent-violet-dim: rgba(168, 85, 247, 0.12);
-  --accent-violet-glow: 0 0 20px rgba(168, 85, 247, 0.35);
+  --accent-violet-300: #c4b5fd;    /* Pastel violet */
+  --accent-violet-400: #a78bfa;
+
+  --accent-pink-50: #fef5fa;
+  --accent-pink-100: #fce7f3;
+  --accent-pink-200: #fbcfe8;      /* Pastel pink */
+  --accent-pink-300: #f9a8d4;
 
   /* ----------------------------------------
      TEXT
      ---------------------------------------- */
-  --text-primary: #f8fafc;      /* Primary text - bright */
-  --text-secondary: #94a3b8;    /* Secondary text - muted */
-  --text-muted: #64748b;        /* Tertiary text - subtle */
-  --text-disabled: #475569;     /* Disabled text */
-  --text-inverse: #0f172a;      /* Text on light backgrounds */
+  --text-primary: #1f2937;         /* Dark gray - primary text */
+  --text-secondary: #374151;       /* Medium dark - secondary text */
+  --text-tertiary: #6b7280;        /* Medium gray - muted text */
+  --text-muted: #6b7280;           /* Alias for text-tertiary */
+  --text-disabled: #9ca3af;        /* Light gray - disabled */
+  --text-inverse: #ffffff;         /* White text on dark backgrounds */
 
   /* ----------------------------------------
      SEMANTIC COLORS
      ---------------------------------------- */
+  --success-50: #f0fdf4;
+  --success-100: #dcfce7;
   --success-500: #10b981;
-  --success-400: #34d399;
-  --success-dim: rgba(16, 185, 129, 0.12);
-  --success-glow: 0 0 15px rgba(16, 185, 129, 0.3);
+  --success-600: #059669;
+  --success-700: #047857;
 
+  --warning-50: #fffbeb;
+  --warning-100: #fef3c7;
   --warning-500: #f59e0b;
-  --warning-400: #fbbf24;
-  --warning-dim: rgba(245, 158, 11, 0.12);
+  --warning-600: #d97706;
+  --warning-700: #b45309;
 
+  --danger-50: #fef2f2;
+  --danger-100: #fee2e2;
   --danger-500: #ef4444;
-  --danger-400: #f87171;
-  --danger-dim: rgba(239, 68, 68, 0.12);
-  --danger-glow: 0 0 15px rgba(239, 68, 68, 0.3);
+  --danger-600: #dc2626;
+  --danger-700: #b91c1c;
 
+  --info-50: #eff6ff;
+  --info-100: #dbeafe;
   --info-500: #3b82f6;
-  --info-400: #60a5fa;
-  --info-dim: rgba(59, 130, 246, 0.12);
+  --info-600: #2563eb;
+  --info-700: #1d4ed8;
 
   /* ----------------------------------------
      BORDERS & DIVIDERS
      ---------------------------------------- */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-accent: rgba(0, 212, 255, 0.4);
-  --border-accent-dim: rgba(0, 212, 255, 0.2);
+  --border-light: #f5f3f0;         /* Very subtle */
+  --border-subtle: #f5f3f0;        /* Alias for border-light */
+  --border-default: #e8e4df;       /* Default borders */
+  --border-strong: #d4d0ca;        /* Emphasized borders */
+  --border-accent: #FF6B4A;        /* Primary color borders */
 
   /* ----------------------------------------
-     SHADOWS & EFFECTS
+     SHADOWS & EFFECTS (Gojiberry Style - Very Subtle)
      ---------------------------------------- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
-               0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
-               0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5),
-               0 8px 10px -6px rgba(0, 0, 0, 0.4);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.06);    /* For cards */
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.08);   /* For button hover */
+  --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.10);  /* For modals */
+  --shadow-2xl: 0 20px 40px rgba(0, 0, 0, 0.12); /* For overlays */
 
   /* Glow effects */
   --glow-sm: 0 0 10px rgba(0, 212, 255, 0.2);
@@ -104,7 +120,7 @@
   /* ----------------------------------------
      TYPOGRAPHY
      ---------------------------------------- */
-  --font-display: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
@@ -127,12 +143,13 @@
   --font-bold: 700;
   --font-extrabold: 800;
 
-  /* Line heights */
+  /* Line heights - more generous for light mode */
   --leading-none: 1;
   --leading-tight: 1.25;
-  --leading-snug: 1.375;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.625;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+  --leading-loose: 1.8;
 
   /* Letter spacing */
   --tracking-tighter: -0.05em;
@@ -143,7 +160,7 @@
   --tracking-widest: 0.1em;
 
   /* ----------------------------------------
-     SPACING
+     SPACING (Enhanced with larger values)
      ---------------------------------------- */
   --space-0: 0;
   --space-1: 0.25rem;   /* 4px */
@@ -152,21 +169,27 @@
   --space-4: 1rem;      /* 16px */
   --space-5: 1.25rem;   /* 20px */
   --space-6: 1.5rem;    /* 24px */
+  --space-7: 1.75rem;   /* 28px */
   --space-8: 2rem;      /* 32px */
+  --space-9: 2.25rem;   /* 36px */
   --space-10: 2.5rem;   /* 40px */
+  --space-11: 2.75rem;  /* 44px */
   --space-12: 3rem;     /* 48px */
+  --space-14: 3.5rem;   /* 56px */
   --space-16: 4rem;     /* 64px */
+  --space-18: 4.5rem;   /* 72px */
   --space-20: 5rem;     /* 80px */
 
   /* ----------------------------------------
-     BORDER RADIUS
+     BORDER RADIUS (Larger, friendlier)
      ---------------------------------------- */
   --radius-none: 0;
-  --radius-sm: 0.25rem;   /* 4px */
-  --radius-md: 0.5rem;    /* 8px */
-  --radius-lg: 0.75rem;   /* 12px */
-  --radius-xl: 1rem;      /* 16px */
-  --radius-2xl: 1.5rem;   /* 24px */
+  --radius-sm: 0.375rem;   /* 6px */
+  --radius-md: 0.625rem;   /* 10px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-xl: 1rem;       /* 16px */
+  --radius-2xl: 1.25rem;   /* 20px */
+  --radius-3xl: 1.5rem;    /* 24px */
   --radius-full: 9999px;
 
   /* ----------------------------------------
@@ -213,25 +236,56 @@
   --modal-full: 95vw;
 
   /* ----------------------------------------
-     GLASSMORPHISM (Dark Mode)
+     BACKDROP BLUR (Modal only)
      ---------------------------------------- */
-  --glass-bg: rgba(18, 18, 26, 0.8);
-  --glass-bg-elevated: rgba(26, 26, 36, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --backdrop-blur: 16px;
-  --backdrop-blur-lg: 24px;
+  --backdrop-blur: 12px;
+  --backdrop-blur-lg: 16px;
 
   /* ----------------------------------------
-     GRADIENTS
+     GLASSMORPHISM
      ---------------------------------------- */
-  --gradient-dark: linear-gradient(180deg, var(--surface-900) 0%, var(--surface-950) 100%);
-  --gradient-card: linear-gradient(135deg, var(--surface-800) 0%, var(--surface-900) 100%);
-  --gradient-accent: linear-gradient(135deg, var(--accent-cyan-500) 0%, var(--accent-violet-500) 100%);
-  --gradient-accent-dim: linear-gradient(135deg, var(--accent-cyan-dim) 0%, var(--accent-violet-dim) 100%);
-  --gradient-mesh: radial-gradient(at 40% 20%, var(--accent-cyan-dim) 0px, transparent 50%),
-                   radial-gradient(at 80% 0%, var(--accent-violet-dim) 0px, transparent 50%),
-                   radial-gradient(at 0% 50%, var(--accent-cyan-dim) 0px, transparent 50%);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+
+  /* ----------------------------------------
+     FORMS (Gojiberry Style)
+     ---------------------------------------- */
+  --form-input-padding-x: 1.25rem;  /* 20px */
+  --form-input-padding-y: 1rem;     /* 16px */
+  --form-section-gap: 2rem;         /* 32px between sections */
+  --form-label-size: 0.875rem;      /* 14px */
+  --form-help-size: 0.75rem;        /* 12px */
+
+  /* ----------------------------------------
+     MODAL SPECIFIC (Gojiberry Style)
+     ---------------------------------------- */
+  --modal-padding: 2rem;            /* 32px */
+  --modal-gap: 1.5rem;              /* 24px */
+  --modal-width: 95vw;
+  --modal-height: 92vh;
+
+  /* ----------------------------------------
+     BADGE/PILL (Gojiberry Style)
+     ---------------------------------------- */
+  --badge-padding-x: 0.75rem;       /* 12px */
+  --badge-padding-y: 0.375rem;      /* 6px */
+  --badge-radius: 9999px;           /* Full rounded */
+  --badge-font-size: 0.75rem;       /* 12px */
+
+  /* ----------------------------------------
+     PROGRESS CARDS
+     ---------------------------------------- */
+  --progress-card-height: 80px;
+  --progress-icon-size: 40px;
+  --progress-gap: 1rem;             /* 16px */
+
+  /* ----------------------------------------
+     ICON BADGES (Colorful circles in labels)
+     ---------------------------------------- */
+  --icon-badge-size: 1.5rem;        /* 24px */
+  --icon-badge-text-size: 0.75rem;  /* 12px */
 }
 
 /* ============================================
@@ -255,11 +309,9 @@ body {
   font-family: var(--font-body);
   font-size: var(--text-base);
   font-weight: var(--font-regular);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-relaxed);  /* More generous for readability */
   color: var(--text-primary);
-  background-color: var(--surface-900);
-  background-image: var(--gradient-mesh);
-  background-attachment: fixed;
+  background-color: var(--surface-100);  /* Light beige */
   overflow: hidden;
 }
 
@@ -270,22 +322,22 @@ body {
 }
 
 /* ============================================
-   SCROLLBAR STYLING
+   SCROLLBAR STYLING (Light Mode)
    ============================================ */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--surface-900);
+  background: var(--surface-200);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--surface-600);
+  background: var(--surface-400);
   border-radius: var(--radius-full);
-  border: 2px solid var(--surface-900);
+  border: 2px solid var(--surface-200);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -295,7 +347,7 @@ body {
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--surface-600) var(--surface-900);
+  scrollbar-color: var(--surface-400) var(--surface-200);
 }
 
 /* ============================================
@@ -303,8 +355,8 @@ body {
    ============================================ */
 
 ::selection {
-  background: var(--accent-cyan-dim);
-  color: var(--accent-cyan-500);
+  background: var(--accent-yellow-300);
+  color: var(--text-primary);
 }
 
 /* ============================================
@@ -312,7 +364,7 @@ body {
    ============================================ */
 
 :focus-visible {
-  outline: 2px solid var(--accent-cyan-500);
+  outline: 2px solid var(--primary-500);
   outline-offset: 2px;
 }
 
@@ -320,48 +372,7 @@ body {
    UTILITY CLASSES
    ============================================ */
 
-/* Glass panels */
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--backdrop-blur));
-  -webkit-backdrop-filter: blur(var(--backdrop-blur));
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-}
-
-.glass-panel-elevated {
-  background: var(--glass-bg-elevated);
-  backdrop-filter: blur(var(--backdrop-blur-lg));
-  -webkit-backdrop-filter: blur(var(--backdrop-blur-lg));
-  border: 1px solid var(--border-default);
-  box-shadow: var(--shadow-xl);
-}
-
-/* Glow effects */
-.glow-cyan {
-  box-shadow: var(--accent-cyan-glow);
-}
-
-.glow-violet {
-  box-shadow: var(--accent-violet-glow);
-}
-
-.glow-success {
-  box-shadow: var(--success-glow);
-}
-
-.glow-danger {
-  box-shadow: var(--danger-glow);
-}
-
 /* Text utilities */
-.text-gradient {
-  background: var(--gradient-accent);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
 .font-display {
   font-family: var(--font-display);
 }
@@ -377,20 +388,8 @@ body {
 }
 
 .hover-lift:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-xl);
-}
-
-.hover-glow {
-  transition: box-shadow var(--duration-fast) var(--ease-out);
-}
-
-.hover-glow:hover {
-  box-shadow: var(--glow-sm);
-}
-
-.hover-glow-lg:hover {
-  box-shadow: var(--glow-lg);
 }
 
 /* Press effect */

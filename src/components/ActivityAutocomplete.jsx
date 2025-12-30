@@ -115,13 +115,13 @@ const ActivityAutocomplete = ({ onSelect, placeholder, initialValue = null }) =>
           className={`
             w-full
             pl-10 pr-4 py-2.5
-            bg-surface-800
+            bg-surface-300
             text-text-primary
             placeholder:text-text-muted
             border rounded-xl
             transition-all duration-fast
             focus:outline-none
-            focus:bg-surface-700
+            focus:bg-surface-200
             ${isFocused
               ? 'border-violet-500 shadow-glow-violet'
               : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]'
@@ -135,7 +135,7 @@ const ActivityAutocomplete = ({ onSelect, placeholder, initialValue = null }) =>
         <ul className={`
           absolute top-full left-0 right-0
           mt-2
-          bg-surface-800
+          bg-surface-300
           border border-[rgba(255,255,255,0.1)]
           rounded-xl
           overflow-hidden
@@ -155,8 +155,8 @@ const ActivityAutocomplete = ({ onSelect, placeholder, initialValue = null }) =>
                 border-b border-[rgba(255,255,255,0.06)] last:border-b-0
                 transition-colors duration-fast
                 ${highlightedIndex === index
-                  ? 'bg-surface-700'
-                  : 'hover:bg-surface-700'
+                  ? 'bg-surface-200'
+                  : 'hover:bg-surface-200'
                 }
               `}
             >

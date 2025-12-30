@@ -16,40 +16,96 @@ export default {
       },
 
       /* ----------------------------------------
-         COLORS - Tech Premium Dark Mode
+         COLORS - Gojiberry Light Mode + Dark Mode
          ---------------------------------------- */
       colors: {
-        // Surfaces
+        // Surfaces (Light Mode - Gojiberry)
         surface: {
-          950: '#050508',
-          900: '#0a0a0f',
-          800: '#12121a',
-          700: '#1a1a24',
-          600: '#24242e',
-          500: '#2e2e3a',
-          400: '#3a3a48',
+          50: '#fefefe',
+          100: '#faf8f5',
+          200: '#f5f3f0',
+          300: '#f0ede8',
+          400: '#e8e4df',
+          500: '#d4d0ca',
+          600: '#b8b4ae',
         },
-        // Accent Cyan
-        cyan: {
-          50: '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
+        // Primary (Coral/Orange - Gojiberry)
+        primary: {
+          50: '#fff5f0',
+          100: '#ffe8db',
+          200: '#ffd1b8',
+          300: '#ffb494',
+          400: '#ff8a66',
+          500: '#FF6B4A',
+          600: '#FF5733',
+          700: '#e64920',
+          800: '#cc3d1a',
+          900: '#b33315',
+        },
+        // Text colors
+        text: {
+          primary: '#1f2937',
+          secondary: '#374151',
+          tertiary: '#6b7280',
+          disabled: '#9ca3af',
+          inverse: '#ffffff',
+        },
+        // Accent Colors (Pastel - Gojiberry)
+        'accent-cyan': {
+          50: '#f0fdff',
+          100: '#e0fafe',
+          200: '#baf5fc',
           300: '#67e8f9',
           400: '#22d3ee',
-          500: '#00d4ff',
-          600: '#0891b2',
-          700: '#0e7490',
         },
-        // Accent Violet
-        violet: {
+        'accent-yellow': {
+          50: '#fffef0',
+          100: '#fefce8',
+          200: '#fef9c3',
+          300: '#fde68a',
+          400: '#fcd34d',
+        },
+        'accent-violet': {
           50: '#faf5ff',
           100: '#f3e8ff',
           200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#c084fc',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7c3aed',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+        },
+        'accent-pink': {
+          50: '#fef5fa',
+          100: '#fce7f3',
+          200: '#fbcfe8',
+          300: '#f9a8d4',
+        },
+        // Semantic Colors
+        success: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          500: '#10b981',
+          600: '#059669',
+          700: '#047857',
+        },
+        warning: {
+          50: '#fffbeb',
+          100: '#fef3c7',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+        },
+        danger: {
+          50: '#fef2f2',
+          100: '#fee2e2',
+          500: '#ef4444',
+          600: '#dc2626',
+          700: '#b91c1c',
+        },
+        info: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
         },
       },
 
@@ -64,11 +120,6 @@ export default {
         'glow-violet': '0 0 20px rgba(168, 85, 247, 0.35)',
         'glow-success': '0 0 15px rgba(16, 185, 129, 0.3)',
         'glow-danger': '0 0 15px rgba(239, 68, 68, 0.3)',
-        'dark-sm': '0 1px 2px rgba(0, 0, 0, 0.3)',
-        'dark-md': '0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3)',
-        'dark-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4)',
-        'dark-xl': '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)',
-        'dark-2xl': '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
       },
 
       /* ----------------------------------------
@@ -302,11 +353,7 @@ export default {
          BACKGROUND IMAGE (Gradients)
          ---------------------------------------- */
       backgroundImage: {
-        'gradient-dark': 'linear-gradient(180deg, #0a0a0f 0%, #050508 100%)',
-        'gradient-card': 'linear-gradient(135deg, #12121a 0%, #0a0a0f 100%)',
-        'gradient-accent': 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
-        'gradient-accent-dim': 'linear-gradient(135deg, rgba(0, 212, 255, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%)',
-        'gradient-mesh': 'radial-gradient(at 40% 20%, rgba(0, 212, 255, 0.12) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(168, 85, 247, 0.12) 0px, transparent 50%), radial-gradient(at 0% 50%, rgba(0, 212, 255, 0.12) 0px, transparent 50%)',
+        // Gradients removed - using Gojiberry light mode only
       },
     },
   },

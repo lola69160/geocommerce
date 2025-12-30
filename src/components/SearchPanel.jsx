@@ -78,7 +78,7 @@ const SearchPanel = ({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display font-bold text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-400">
+          <h1 className="font-display font-bold text-2xl text-text-primary">
             Commerce
           </h1>
           <p className="font-display font-light text-lg text-text-muted -mt-1 tracking-wider">
@@ -95,8 +95,8 @@ const SearchPanel = ({
           text-sm font-medium
           transition-all duration-fast
           ${debugMode
-            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
-            : 'bg-surface-700 text-text-muted border border-transparent hover:border-cyan-500/20'
+            ? 'bg-primary-100 text-primary-700 border border-primary-300'
+            : 'bg-surface-200 text-text-muted border border-transparent hover:border-primary-500/20'
           }
         `}>
           <Bug size={16} />
@@ -130,7 +130,7 @@ const SearchPanel = ({
             <label className="text-sm font-medium text-text-secondary">
               Rayon de recherche
             </label>
-            <span className="text-sm font-mono font-bold text-cyan-400">
+            <span className="text-sm font-mono font-bold text-primary-700">
               {radius} km
             </span>
           </div>
@@ -144,23 +144,23 @@ const SearchPanel = ({
               className={`
                 w-full h-2
                 appearance-none
-                bg-surface-700
+                bg-surface-200
                 rounded-full
                 cursor-pointer
                 [&::-webkit-slider-thumb]:appearance-none
                 [&::-webkit-slider-thumb]:w-4
                 [&::-webkit-slider-thumb]:h-4
                 [&::-webkit-slider-thumb]:rounded-full
-                [&::-webkit-slider-thumb]:bg-cyan-500
+                [&::-webkit-slider-thumb]:bg-primary-500
                 [&::-webkit-slider-thumb]:shadow-glow-sm
                 [&::-webkit-slider-thumb]:cursor-grab
                 [&::-webkit-slider-thumb]:transition-all
-                [&::-webkit-slider-thumb]:hover:bg-cyan-400
+                [&::-webkit-slider-thumb]:hover:bg-primary-600
                 [&::-webkit-slider-thumb]:hover:shadow-glow-md
                 [&::-moz-range-thumb]:w-4
                 [&::-moz-range-thumb]:h-4
                 [&::-moz-range-thumb]:rounded-full
-                [&::-moz-range-thumb]:bg-cyan-500
+                [&::-moz-range-thumb]:bg-primary-500
                 [&::-moz-range-thumb]:border-none
                 [&::-moz-range-thumb]:cursor-grab
               `}
@@ -196,22 +196,22 @@ const SearchPanel = ({
             text-sm font-medium
             transition-all duration-fast
             ${showFilters
-              ? 'bg-surface-700 text-text-primary'
-              : 'text-text-muted hover:text-text-secondary hover:bg-surface-800'
+              ? 'bg-surface-200 text-text-primary'
+              : 'text-text-muted hover:text-text-secondary hover:bg-surface-300'
             }
           `}
         >
           <SlidersHorizontal size={16} />
           <span>Filtres</span>
           {filterClosedDays && (
-            <span className="ml-auto px-1.5 py-0.5 rounded-full text-xs bg-cyan-500/20 text-cyan-400">
+            <span className="ml-auto px-1.5 py-0.5 rounded-full text-xs bg-primary-100 text-primary-700">
               1
             </span>
           )}
         </button>
 
         {showFilters && (
-          <div className="mt-2 p-3 bg-surface-800 rounded-lg border border-[rgba(255,255,255,0.06)] animate-fade-in-down">
+          <div className="mt-2 p-3 bg-surface-300 rounded-lg border border-surface-300 animate-fade-in-down">
             <label className="flex items-center gap-3 cursor-pointer group">
               <div className={`
                 relative w-5 h-5
@@ -219,8 +219,8 @@ const SearchPanel = ({
                 border-2
                 transition-all duration-fast
                 ${filterClosedDays
-                  ? 'bg-cyan-500 border-cyan-500'
-                  : 'bg-transparent border-text-muted group-hover:border-cyan-500/50'
+                  ? 'bg-primary-500 border-primary-500'
+                  : 'bg-transparent border-text-muted group-hover:border-primary-500/50'
                 }
               `}>
                 <input
@@ -261,8 +261,8 @@ const SearchPanel = ({
             rounded-full
             text-xs font-mono font-bold
             ${results.length > 0
-              ? 'bg-cyan-500/15 text-cyan-400'
-              : 'bg-surface-700 text-text-muted'
+              ? 'bg-primary-100 text-primary-700'
+              : 'bg-surface-200 text-text-muted'
             }
           `}>
             {results.length}
@@ -273,7 +273,7 @@ const SearchPanel = ({
         <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-3">
           {results.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 mb-4 rounded-full bg-surface-700 flex items-center justify-center">
+              <div className="w-16 h-16 mb-4 rounded-full bg-surface-200 flex items-center justify-center">
                 <Search size={24} className="text-text-muted" />
               </div>
               <p className="text-text-muted text-sm">

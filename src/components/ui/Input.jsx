@@ -55,7 +55,7 @@ const Input = React.forwardRef(({
   const getBorderColor = () => {
     if (error) return 'border-red-500 focus:border-red-500';
     if (success) return 'border-emerald-500 focus:border-emerald-500';
-    if (isFocused) return 'border-cyan-500';
+    if (isFocused) return 'border-primary-500';
     return 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]';
   };
 
@@ -68,8 +68,8 @@ const Input = React.forwardRef(({
 
   // Variant styles
   const variantStyles = {
-    default: 'bg-surface-800',
-    filled: 'bg-surface-700',
+    default: 'bg-surface-300',
+    filled: 'bg-surface-200',
   };
 
   return (
@@ -123,7 +123,7 @@ const Input = React.forwardRef(({
             border ${getBorderColor()}
             rounded-xl
             ${getGlow()}
-            focus:bg-surface-700
+            focus:bg-surface-200
             focus:outline-none
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-fast
@@ -187,7 +187,7 @@ export const Textarea = React.forwardRef(({
   const getBorderColor = () => {
     if (error) return 'border-red-500 focus:border-red-500';
     if (success) return 'border-emerald-500 focus:border-emerald-500';
-    if (isFocused) return 'border-cyan-500';
+    if (isFocused) return 'border-primary-500';
     return 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]';
   };
 
@@ -198,8 +198,8 @@ export const Textarea = React.forwardRef(({
   };
 
   const variantStyles = {
-    default: 'bg-surface-800',
-    filled: 'bg-surface-700',
+    default: 'bg-surface-300',
+    filled: 'bg-surface-200',
   };
 
   return (
@@ -232,7 +232,7 @@ export const Textarea = React.forwardRef(({
           border ${getBorderColor()}
           rounded-xl
           ${getGlow()}
-          focus:bg-surface-700
+          focus:bg-surface-200
           focus:outline-none
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-all duration-fast

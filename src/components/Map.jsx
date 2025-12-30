@@ -65,7 +65,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
 
     return (
         <div style={{ minWidth: showDirigeants ? '300px' : '200px', transition: 'all 0.3s ease' }}>
-            <h3 style={{ margin: '0 0 4px 0', color: '#2563eb', fontSize: '1rem' }}>
+            <h3 style={{ margin: '0 0 4px 0', color: '#FF6B4A', fontSize: '1rem' }}>
                 {getDisplayName(business)}
             </h3>
             {hasEnseigne(business) && (
@@ -135,7 +135,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                     style={{
                         flex: 1,
                         padding: '10px 16px',
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                        background: 'linear-gradient(135deg, #FF6B4A 0%, #FF5733 100%)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '10px',
@@ -147,16 +147,16 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                         justifyContent: 'center',
                         gap: '6px',
                         transition: 'all 0.2s',
-                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
+                        boxShadow: '0 4px 6px -1px rgba(255, 107, 74, 0.3)',
                         fontFamily: 'inherit'
                     }}
                     onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 6px 8px -1px rgba(59, 130, 246, 0.4)';
+                        e.currentTarget.style.boxShadow = '0 6px 8px -1px rgba(255, 107, 74, 0.4)';
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(59, 130, 246, 0.3)';
+                        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(255, 107, 74, 0.3)';
                     }}
                 >
                     <span style={{ fontSize: '1.1em' }}>🛒</span>
@@ -175,7 +175,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                             display: 'flex',
                             alignItems: 'center',
                             cursor: 'pointer',
-                            color: '#2563eb',
+                            color: '#FF6B4A',
                             padding: '4px 0'
                         }}
                         onClick={(e) => {
@@ -215,7 +215,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                             display: 'flex',
                             alignItems: 'center',
                             cursor: 'pointer',
-                            color: '#2563eb',
+                            color: '#FF6B4A',
                             padding: '4px 0'
                         }}
                         onClick={(e) => {
@@ -271,7 +271,7 @@ function BusinessPopup({ business, notes, onOpenNoteModal, onAddToCart }) {
                 }
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ display: 'inline-block', marginTop: '8px', color: '#0ea5e9', textDecoration: 'none', fontSize: '0.85rem' }}
+                style={{ display: 'inline-block', marginTop: '8px', color: '#FF6B4A', textDecoration: 'none', fontSize: '0.85rem' }}
             >
                 Voir sur Street View
             </a>

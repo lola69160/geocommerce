@@ -94,8 +94,8 @@ const Modal = ({
       <div
         className={`
           absolute inset-0
-          bg-black/60
-          backdrop-blur-sm
+          bg-surface-900/40
+          backdrop-blur-md
         `}
       />
 
@@ -106,10 +106,10 @@ const Modal = ({
         className={`
           relative
           w-full ${sizeStyles[size]}
-          bg-surface-800
-          border border-[rgba(255,255,255,0.1)]
+          bg-white
+          border-2 border-surface-400
           rounded-2xl
-          shadow-dark-2xl
+          shadow-2xl
           overflow-hidden
           animate-scale-in
           focus:outline-none
@@ -123,14 +123,14 @@ const Modal = ({
             onClick={onClose}
             className={`
               absolute top-4 right-4 z-10
-              w-8 h-8
+              w-9 h-9
               flex items-center justify-center
-              rounded-lg
-              text-text-muted
+              rounded-xl
+              text-text-tertiary
               hover:text-text-primary
-              hover:bg-surface-700
-              transition-colors duration-fast
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500
+              hover:bg-surface-200
+              transition-all duration-fast
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
             `}
             aria-label="Close modal"
           >
@@ -165,7 +165,8 @@ export const ModalHeader = ({
   <div
     className={`
       px-6 pt-6 pb-4
-      border-b border-[rgba(255,255,255,0.06)]
+      border-b border-surface-300
+      bg-surface-50
       ${className}
     `.replace(/\s+/g, ' ').trim()}
     {...props}
@@ -245,9 +246,9 @@ export const ModalFooter = ({
   <div
     className={`
       px-6 py-4
-      border-t border-[rgba(255,255,255,0.06)]
+      border-t border-surface-300
       flex items-center justify-end gap-3
-      bg-surface-900/50
+      bg-surface-50
       ${className}
     `.replace(/\s+/g, ' ').trim()}
     {...props}
@@ -306,7 +307,7 @@ export const ConfirmModal = ({
             px-4 py-2
             bg-gradient-to-r
             ${variant === 'danger' ? 'from-red-500 to-red-600' : ''}
-            ${variant === 'primary' ? 'from-cyan-500 to-cyan-600' : ''}
+            ${variant === 'primary' ? 'from-primary-500 to-primary-600' : ''}
             ${variant === 'success' ? 'from-emerald-500 to-emerald-600' : ''}
             text-white
             rounded-lg

@@ -1,27 +1,25 @@
 import React from 'react';
 
 /**
- * Layout Component - Tech Premium Design System
+ * Layout Component - Gojiberry Light Mode Design System
  *
  * Main application layout with sidebar and map container.
  * Features:
- * - Dark gradient mesh background
+ * - Light beige background
  * - Responsive sidebar (collapsible on mobile)
  * - Smooth slide-in animation
  * - Glass effect on sidebar
  */
 const Layout = ({ sidebar, main }) => {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-surface-900">
-      {/* Gradient Mesh Background */}
+    <div className="flex h-screen w-screen overflow-hidden bg-surface-100">
+      {/* Subtle Light Background Pattern */}
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
           background: `
-            radial-gradient(at 40% 20%, rgba(0, 212, 255, 0.08) 0px, transparent 50%),
-            radial-gradient(at 80% 0%, rgba(168, 85, 247, 0.06) 0px, transparent 50%),
-            radial-gradient(at 0% 50%, rgba(0, 212, 255, 0.05) 0px, transparent 50%),
-            radial-gradient(at 100% 80%, rgba(168, 85, 247, 0.04) 0px, transparent 50%)
+            radial-gradient(at 40% 20%, rgba(255, 107, 74, 0.02) 0px, transparent 50%),
+            radial-gradient(at 80% 0%, rgba(255, 107, 74, 0.015) 0px, transparent 50%)
           `,
         }}
       />
@@ -30,14 +28,13 @@ const Layout = ({ sidebar, main }) => {
       <aside
         className={`
           relative z-fixed
-          w-full
-          md:w-[420px]
+          w-[420px]
           h-full
           flex-shrink-0
-          bg-[rgba(10,10,15,0.95)]
+          bg-white/70
           backdrop-blur-xl
-          border-r border-[rgba(255,255,255,0.06)]
-          shadow-dark-xl
+          border-r border-surface-300
+          shadow-lg
           overflow-y-auto
           overflow-x-hidden
           animate-slide-in-left
@@ -49,10 +46,8 @@ const Layout = ({ sidebar, main }) => {
           style={{
             background: `
               linear-gradient(180deg,
-                rgba(0, 212, 255, 0.03) 0%,
-                transparent 30%,
-                transparent 70%,
-                rgba(168, 85, 247, 0.02) 100%
+                rgba(255, 107, 74, 0.01) 0%,
+                transparent 50%
               )
             `,
           }}
@@ -65,7 +60,7 @@ const Layout = ({ sidebar, main }) => {
       </aside>
 
       {/* Main content (Map) */}
-      <main className="flex-1 h-full relative z-base">
+      <main className="flex-1 h-full w-full relative z-base overflow-hidden">
         {main}
       </main>
     </div>

@@ -127,7 +127,7 @@ const PurchaseHistory = ({ business }) => {
                 style={{
                     background: 'none',
                     border: 'none',
-                    color: '#2563eb',
+                    color: '#FF6B4A',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -149,7 +149,7 @@ const PurchaseHistory = ({ business }) => {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        backgroundColor: 'rgba(26, 26, 36, 0.4)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -195,7 +195,7 @@ const PurchaseHistory = ({ business }) => {
                                 onClick={handleRefresh}
                                 disabled={loading}
                                 style={{
-                                    background: loading ? '#e5e7eb' : '#3b82f6',
+                                    background: loading ? '#e5e7eb' : '#FF6B4A',
                                     border: 'none',
                                     color: 'white',
                                     cursor: loading ? 'not-allowed' : 'pointer',
@@ -221,7 +221,7 @@ const PurchaseHistory = ({ business }) => {
 
                         {loading ? (
                             <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-                                <Loader2 className="animate-spin" size={30} color="#2563eb" />
+                                <Loader2 className="animate-spin" size={30} color="#FF6B4A" />
                             </div>
                         ) : error ? (
                             <div style={{ color: 'red', padding: '10px', textAlign: 'center' }}>
@@ -260,7 +260,7 @@ const PurchaseHistory = ({ business }) => {
                                                 <td style={{
                                                     padding: '12px 10px',
                                                     fontWeight: 'bold',
-                                                    color: '#2563eb'
+                                                    color: '#FF6B4A'
                                                 }}>
                                                     {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(record.amount)}
                                                 </td>
@@ -306,7 +306,7 @@ const PurchaseHistory = ({ business }) => {
                                                         position: 'absolute',
                                                         top: '8px',
                                                         right: '8px',
-                                                        background: copied ? '#10b981' : '#3b82f6',
+                                                        background: copied ? '#10b981' : '#FF6B4A',
                                                         border: 'none',
                                                         color: 'white',
                                                         cursor: 'pointer',

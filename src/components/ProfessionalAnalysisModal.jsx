@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, FileText, CheckCircle, Loader, AlertCircle, Download, Play } from 'lucide-react';
 import axios from 'axios';
 import * as storageService from '../services/storageService';
+import { FormInput, FormTextarea, RadioCardGroup, Button, Badge, Card } from './ui';
 
 /**
  * ProfessionalAnalysisModal - Modal d'analyse professionnelle
@@ -466,419 +467,396 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1100] p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-[90vw] h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
-              <FileText size={28} className="text-purple-600" />
-              <span>Analyse Professionnelle</span>
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
+    <div className="fixed inset-0 bg-surface-900/40 backdrop-blur-md flex items-center justify-center z-[1100] p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-[95vw] h-[92vh] flex flex-col">
+        {/* Header - Gojiberry Style */}
+        <div className="flex items-center justify-between px-8 py-6 border-b border-surface-300">
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-text-primary">
               {business?.nom_complet || business?.nom_raison_sociale || 'Commerce'}
-              {business?.siret && <span className="ml-2 text-gray-400">• SIRET: {business.siret}</span>}
-            </p>
+            </h2>
+            {business?.siret && (
+              <p className="text-sm text-text-tertiary mt-1">
+                SIRET: {business.siret}
+              </p>
+            )}
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition"
+            className="flex-shrink-0 ml-4 p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-all duration-200"
+            aria-label="Fermer"
           >
             <X size={24} />
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content - 50/50 Layout */}
         <div className="flex-1 overflow-hidden flex">
-          {/* LEFT SIDEBAR - Documents */}
-          <div className="w-72 border-r border-gray-200 p-6 overflow-y-auto bg-white hidden lg:block">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-              <FileText size={20} className="text-blue-600" />
-              <span>Documents</span>
-            </h3>
+          {/* LEFT PANEL - Forms (50%) - Gojiberry Style */}
+          <div className="w-1/2 border-r border-surface-300 p-8 overflow-y-auto bg-surface-100 space-y-8">
+            {/* Section 1: Documents */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-500 text-white">
+                  <FileText size={18} />
+                </span>
+                Documents financiers
+              </h3>
 
-            {/* Document List Section */}
-            {loadingDocuments ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader size={24} className="text-blue-600 animate-spin" />
-              </div>
-            ) : documentsError ? (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                {documentsError}
-              </div>
-            ) : documents.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-sm">
-                <FileText size={40} className="mx-auto mb-2 opacity-50" />
-                <p>Aucun document uploadé</p>
-              </div>
-            ) : (
-              <div className="space-y-2 mb-6">
-                {documents.map((doc) => (
-                  <label
-                    key={doc.id}
-                    className="flex items-start space-x-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition border border-gray-200"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedDocuments.includes(doc.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedDocuments([...selectedDocuments, doc.id]);
-                        } else {
-                          setSelectedDocuments(selectedDocuments.filter(id => id !== doc.id));
-                        }
-                      }}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>
-                        {doc.filename}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(doc.size)} • {formatDate(doc.uploadDate)}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {/* Additional Information Section */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Informations complémentaires
-              </label>
-              <textarea
-                value={additionalInfo}
-                onChange={(e) => setAdditionalInfo(e.target.value)}
-                placeholder="Notes, instructions, contexte..."
-                className="w-full h-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-              />
+              {loadingDocuments ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader size={28} className="text-primary-500 animate-spin" />
+                </div>
+              ) : documentsError ? (
+                <div className="p-4 bg-danger-50 border-2 border-danger-200 rounded-xl text-sm text-danger-700">
+                  {documentsError}
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-text-tertiary">
+                  <FileText size={48} className="opacity-30 mb-3" />
+                  <p className="text-sm">Aucun document uploadé</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {documents.map((doc) => (
+                    <Card
+                      key={doc.id}
+                      padding="none"
+                      hover
+                      className={`transition-all duration-200 ${
+                        selectedDocuments.includes(doc.id)
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-surface-300 bg-white'
+                      }`}
+                    >
+                      <label className="flex items-center gap-4 p-5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedDocuments.includes(doc.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDocuments([...selectedDocuments, doc.id]);
+                            } else {
+                              setSelectedDocuments(selectedDocuments.filter(id => id !== doc.id));
+                            }
+                          }}
+                          className="w-5 h-5 rounded-md accent-primary-500 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-text-primary truncate" title={doc.filename}>
+                            {doc.filename}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-text-tertiary">{formatFileSize(doc.size)}</span>
+                            <span className="text-text-tertiary">•</span>
+                            <span className="text-xs text-text-tertiary">{formatDate(doc.uploadDate)}</span>
+                          </div>
+                        </div>
+                      </label>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Frais Personnel N+1 Section */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Frais personnel N+1 (€/an)
-              </label>
-              <input
-                type="number"
-                value={fraisPersonnelN1}
-                onChange={(e) => setFraisPersonnelN1(e.target.value)}
-                placeholder="Ex: 76900"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                min="0"
-                step="1000"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Frais personnel prévus après reprise (TNS + salariés + charges)
-              </p>
-            </div>
+            {/* Section 2: Additional Information */}
+            <FormTextarea
+              label="Informations complémentaires"
+              icon="📝"
+              value={additionalInfo}
+              onChange={(e) => setAdditionalInfo(e.target.value)}
+              placeholder="Notes, instructions, contexte..."
+              rows={5}
+              helpText="Ajoutez toute information utile pour l'analyse"
+            />
 
-            {/* Reprise des Salariés Section - NEW */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Reprise des salariés du cédant
-              </label>
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="reprise_salaries"
-                    checked={repriseSalaries === true}
-                    onChange={() => setRepriseSalaries(true)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Oui (conservation)</span>
-                </label>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="reprise_salaries"
-                    checked={repriseSalaries === false}
-                    onChange={() => setRepriseSalaries(false)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Non (suppression)</span>
-                </label>
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Si "Non", les charges de personnel actuelles seront retraitées
-              </p>
-            </div>
+            {/* Section 3: Frais Personnel N+1 */}
+            <FormInput
+              type="number"
+              label="Frais personnel N+1"
+              icon="€"
+              value={fraisPersonnelN1}
+              onChange={(e) => setFraisPersonnelN1(e.target.value)}
+              placeholder="76 900"
+              prefix="€"
+              min="0"
+              step="1000"
+              helpText="Frais personnel prévus après reprise (TNS + salariés + charges sociales)"
+            />
 
-            {/* Loyer Section - NEW */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+            {/* Section 4: Reprise des Salariés - Radio Cards */}
+            <RadioCardGroup
+              label="Reprise des salariés"
+              icon="👥"
+              value={repriseSalaries}
+              onChange={setRepriseSalaries}
+              options={[
+                {
+                  value: true,
+                  emoji: "✓",
+                  label: "Oui",
+                  description: "Conservation"
+                },
+                {
+                  value: false,
+                  emoji: "✗",
+                  label: "Non",
+                  description: "Suppression"
+                }
+              ]}
+              columns={2}
+              helpText="Si 'Non', les charges de personnel actuelles seront retraitées dans le pont EBE"
+            />
+
+            {/* Section 5: Loyer Commercial */}
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-accent-pink-200 text-text-primary text-xs">
+                  🏠
+                </span>
                 Loyer commercial
               </label>
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Loyer actuel (€/mois)</label>
-                  <input
-                    type="number"
-                    value={loyerActuel}
-                    onChange={(e) => setLoyerActuel(e.target.value)}
-                    placeholder="Ex: 2600"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    min="0"
-                    step="100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Loyer négocié (€/mois)</label>
-                  <input
-                    type="number"
-                    value={loyerNegocie}
-                    onChange={(e) => setLoyerNegocie(e.target.value)}
-                    placeholder="Ex: 1800"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    min="0"
-                    step="100"
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormInput
+                  type="number"
+                  label="Actuel (€/mois)"
+                  value={loyerActuel}
+                  onChange={(e) => setLoyerActuel(e.target.value)}
+                  placeholder="2 600"
+                  prefix="€"
+                  min="0"
+                  step="100"
+                  className="text-sm"
+                />
+                <FormInput
+                  type="number"
+                  label="Négocié (€/mois)"
+                  value={loyerNegocie}
+                  onChange={(e) => setLoyerNegocie(e.target.value)}
+                  placeholder="1 800"
+                  prefix="€"
+                  min="0"
+                  step="100"
+                  className="text-sm"
+                />
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="text-xs text-text-tertiary leading-relaxed">
                 Si négocié &lt; actuel, l'économie sera affichée dans le pont EBE
               </p>
             </div>
 
             {/* Extraction Only Checkbox */}
-            <div className="mb-3">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={extractionOnly}
-                  onChange={(e) => setExtractionOnly(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">
+            <div className="flex items-center gap-3 p-4 bg-white rounded-xl border-2 border-surface-300">
+              <input
+                type="checkbox"
+                checked={extractionOnly}
+                onChange={(e) => setExtractionOnly(e.target.checked)}
+                className="w-5 h-5 rounded-md accent-primary-500 cursor-pointer"
+                id="extraction-only"
+              />
+              <label htmlFor="extraction-only" className="flex-1 cursor-pointer">
+                <span className="text-sm font-medium text-text-primary block">
                   Extraction seulement (debug)
                 </span>
+                {extractionOnly && (
+                  <span className="text-xs text-warning-600 block mt-1">
+                    Le pipeline s'arrêtera après l'extraction Gemini Vision
+                  </span>
+                )}
               </label>
-              {extractionOnly && (
-                <p className="mt-1 text-xs text-amber-600">
-                  Le pipeline s'arrêtera après l'extraction Gemini Vision
-                </p>
-              )}
             </div>
 
-            {/* Rapport Financier Button */}
-            <button
+            {/* Rapport Financier Button - Gojiberry Style */}
+            <Button
               onClick={handleFinancialReport}
               disabled={selectedDocuments.length === 0 || financialStage === 'running'}
-              className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-semibold text-sm transition ${
-                selectedDocuments.length === 0 || financialStage === 'running'
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-              }`}
+              loading={financialStage === 'running'}
+              icon={<FileText size={20} />}
+              badge={selectedDocuments.length > 0 ? selectedDocuments.length : null}
+              size="md"
+              variant="primary"
+              className="w-full"
             >
-              {financialStage === 'running' ? (
-                <>
-                  <Loader size={18} className="animate-spin" />
-                  <span>Analyse en cours...</span>
-                </>
-              ) : (
-                <>
-                  <FileText size={18} />
-                  <span>{extractionOnly ? 'Test extraction' : 'Rapport financier'}</span>
-                  {selectedDocuments.length > 0 && (
-                    <span className="bg-white text-blue-600 rounded-full px-2 py-0.5 text-xs font-bold">
-                      {selectedDocuments.length}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
+              {extractionOnly ? 'Test extraction' : 'Générer le rapport financier'}
+            </Button>
 
-            {/* Financial Report Status */}
+            {/* Financial Report Status - Gojiberry Style */}
             {financialStage === 'completed' && financialSummary && (
-              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm font-semibold text-green-800 mb-2 flex items-center">
-                  <CheckCircle size={16} className="mr-1" />
-                  Rapport financier généré
-                </p>
-                <div className="text-xs text-green-700 space-y-1">
-                  <p>Verdict: <span className="font-bold">{financialSummary.verdict}</span></p>
-                  <p>Score santé: {financialSummary.healthScore}/100</p>
-                  <p>Confiance: {financialSummary.confidence}/100</p>
+              <Card padding="md" className="bg-success-50 border-success-500">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-success-500 flex items-center justify-center">
+                    <CheckCircle size={18} className="text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-success-800 mb-2">
+                      Rapport financier généré
+                    </p>
+                    <div className="space-y-1 text-sm text-success-700">
+                      <p>Verdict: <span className="font-bold">{financialSummary.verdict}</span></p>
+                      <p>Score santé: <span className="font-bold">{financialSummary.healthScore}/100</span></p>
+                      <p>Confiance: <span className="font-bold">{financialSummary.confidence}/100</span></p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </Card>
             )}
 
             {financialStage === 'error' && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm font-semibold text-red-800 mb-1 flex items-center">
-                  <AlertCircle size={16} className="mr-1" />
-                  Erreur
+              <Card padding="md" className="bg-danger-50 border-danger-500">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-danger-500 flex items-center justify-center">
+                    <AlertCircle size={18} className="text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-danger-800 mb-1">Erreur</p>
+                    <p className="text-sm text-danger-700">{financialError}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* RIGHT PANEL - Report/Progress (50%) - Gojiberry Style */}
+          <div className="w-1/2 flex flex-col overflow-hidden bg-white">
+            {/* État: IDLE - Écran de démarrage Gojiberry */}
+            {stage === 'idle' && financialStage !== 'completed' && (
+              <div className="flex-1 flex flex-col items-center justify-center p-12 bg-gradient-to-br from-surface-100 to-white">
+                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-6 shadow-2xl">
+                  <Play className="w-12 h-12 text-white" />
+                </div>
+                <h3 className="text-3xl font-bold text-text-primary mb-3">
+                  Prêt à analyser
+                </h3>
+                <p className="text-text-secondary text-center max-w-md leading-relaxed mb-8">
+                  Remplissez les informations à gauche et générez le rapport financier pour démarrer l'analyse professionnelle complète.
                 </p>
-                <p className="text-xs text-red-700">{financialError}</p>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT SIDEBAR - Progression */}
-          <div className="w-80 border-r border-gray-200 p-6 overflow-y-auto bg-gray-50">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Progression</h3>
-
-            {/* Agents Progress */}
-            <div className="space-y-3">
-              {agents.map((agent) => {
-                const status = progress[agent.id] || 'pending';
-                return (
-                  <div
-                    key={agent.id}
-                    className={`p-4 rounded-lg border-2 transition ${
-                      status === 'completed'
-                        ? 'border-green-500 bg-green-50'
-                        : status === 'running'
-                        ? 'border-blue-500 bg-blue-50 animate-pulse'
-                        : 'border-gray-300 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{agent.icon}</span>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm text-gray-900">{agent.label}</p>
-                      </div>
-                      {status === 'completed' && <CheckCircle size={20} className="text-green-600" />}
-                      {status === 'running' && <Loader size={20} className="text-blue-600 animate-spin" />}
-                      {status === 'pending' && <div className="w-5 h-5 rounded-full border-2 border-gray-300" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Metadata */}
-            {metadata && (
-              <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200">
-                <p className="text-xs font-semibold text-gray-600 mb-2">Statistiques</p>
-                <div className="space-y-1 text-xs text-gray-700">
-                  <p>⏱️ Durée: {Math.round(metadata.duration / 1000)}s</p>
-                  <p>✅ Agents: {metadata.agents_executed}</p>
-                  <p>🕐 {new Date(metadata.timestamp).toLocaleString('fr-FR')}</p>
+                <div className="flex flex-wrap gap-2 justify-center mb-8">
+                  <Badge variant="cyan">10 agents IA</Badge>
+                  <Badge variant="yellow">~2 min</Badge>
+                  <Badge variant="violet">Analyse complète</Badge>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Main Content - Report or Start Screen */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {stage === 'idle' && (
-              <div className="flex-1 flex items-center justify-center p-12">
-                <div className="text-center max-w-md">
-                  <div className="mb-6">
-                    <FileText size={64} className="text-purple-600 mx-auto mb-4" />
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      Rapport de Due Diligence
-                    </h3>
-                    <p className="text-gray-600">
-                      Générez une analyse professionnelle complète avec :
-                    </p>
-                  </div>
-
-                  <ul className="text-left space-y-2 mb-8 text-gray-700">
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Analyse démographique et zone de chalandise</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Analyse état physique et estimation travaux (Gemini Vision)</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Cartographie concurrence et attractivité zone</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Score global multi-critères (GO/NO-GO)</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Recommandations stratégiques IA (Gemini Thinking)</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle size={20} className="text-green-600 mt-0.5" />
-                      <span>Rapport HTML professionnel (style McKinsey)</span>
-                    </li>
-                  </ul>
-
-                  <button
-                    onClick={startAnalysis}
-                    className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition mx-auto"
-                  >
-                    <Play size={24} />
-                    <span>Lancer l'analyse</span>
-                  </button>
-
-                  <p className="mt-4 text-xs text-gray-500">
-                    Durée estimée: 60-180 secondes • 10 agents • Coût API: ~$0.20
-                  </p>
-                </div>
+                <Button
+                  onClick={startAnalysis}
+                  icon={<Play size={20} />}
+                  size="lg"
+                  variant="secondary"
+                >
+                  Lancer l'analyse professionnelle
+                </Button>
               </div>
             )}
 
+            {/* État: RUNNING - Progression des agents Gojiberry */}
             {stage === 'running' && (
-              <div className="flex-1 flex items-center justify-center p-12">
-                <div className="text-center">
-                  <Loader size={64} className="text-purple-600 mx-auto mb-4 animate-spin" />
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Analyse en cours...
+              <div className="flex-1 p-8 overflow-y-auto bg-surface-50">
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold text-text-primary mb-4">
+                    Analyse en cours
                   </h3>
-                  <p className="text-gray-600">
-                    Les agents travaillent sur votre rapport professionnel
-                  </p>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex-1 h-3 bg-surface-300 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all duration-500 rounded-full"
+                        style={{ width: `${(Object.values(progress).filter(s => s === 'completed').length / agents.length) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-text-secondary">
+                      {Object.values(progress).filter(s => s === 'completed').length}/{agents.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {agents.map((agent) => {
+                    const status = progress[agent.id] || 'pending';
+                    const isCompleted = status === 'completed';
+                    const isRunning = status === 'running';
+
+                    return (
+                      <Card
+                        key={agent.id}
+                        padding="none"
+                        className={`transition-all duration-300 ${
+                          isCompleted
+                            ? 'border-success-500 bg-success-50'
+                            : isRunning
+                              ? 'border-primary-500 bg-primary-50 animate-pulse'
+                              : 'border-surface-400 bg-white opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4 p-5">
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-xl ${
+                            isCompleted ? 'bg-success-500' : isRunning ? 'bg-primary-500' : 'bg-surface-400'
+                          }`}>
+                            {isCompleted ? (
+                              <CheckCircle className="w-5 h-5 text-white" />
+                            ) : isRunning ? (
+                              <Loader className="w-5 h-5 text-white animate-spin" />
+                            ) : (
+                              <span className="opacity-50">{agent.icon}</span>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-text-primary">{agent.label}</p>
+                          </div>
+                          {isCompleted && <Badge variant="success">Terminé</Badge>}
+                          {isRunning && <Badge variant="primary">En cours</Badge>}
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
+            {/* État: ERROR - Affichage d'erreur Gojiberry */}
             {stage === 'error' && (
-              <div className="flex-1 flex items-center justify-center p-12">
-                <div className="text-center max-w-md">
-                  <AlertCircle size={64} className="text-red-600 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Erreur d'analyse
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    {errorMessage || 'Une erreur est survenue lors de l\'analyse'}
-                  </p>
-                  <button
-                    onClick={startAnalysis}
-                    className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition mx-auto"
-                  >
-                    <Play size={20} />
-                    <span>Réessayer</span>
-                  </button>
+              <div className="flex-1 flex flex-col items-center justify-center p-12">
+                <div className="w-24 h-24 rounded-3xl bg-danger-500 flex items-center justify-center mb-6 shadow-xl">
+                  <AlertCircle className="w-12 h-12 text-white" />
                 </div>
+                <h3 className="text-2xl font-bold text-text-primary mb-3">
+                  Erreur d'analyse
+                </h3>
+                <p className="text-text-secondary text-center max-w-md mb-8">
+                  {errorMessage || 'Une erreur est survenue lors de l\'analyse'}
+                </p>
+                <Button
+                  onClick={startAnalysis}
+                  icon={<Play size={20} />}
+                  size="md"
+                  variant="primary"
+                >
+                  Réessayer
+                </Button>
               </div>
             )}
 
+            {/* État: COMPLETED - Affichage des rapports Gojiberry */}
             {(stage === 'completed' || financialStage === 'completed') && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Tabs (if both reports are available) */}
+                {/* Tabs (if both reports are available) - Gojiberry Style */}
                 {stage === 'completed' && financialStage === 'completed' && (
-                  <div className="flex border-b border-gray-200 bg-gray-50">
+                  <div className="flex gap-2 p-4 border-b border-surface-300 bg-surface-100">
                     <button
                       onClick={() => setActiveReport('professional')}
-                      className={`flex-1 px-4 py-3 text-sm font-medium transition ${
+                      className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
                         activeReport === 'professional'
-                          ? 'border-b-2 border-purple-600 text-purple-600 bg-white'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                          ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
+                          : 'bg-transparent text-text-secondary hover:bg-white/50'
                       }`}
                     >
-                      📊 Rapport Professionnel
+                      📊 Analyse Professionnelle
                     </button>
                     <button
                       onClick={() => setActiveReport('financial')}
-                      className={`flex-1 px-4 py-3 text-sm font-medium transition ${
+                      className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
                         activeReport === 'financial'
-                          ? 'border-b-2 border-blue-600 text-blue-600 bg-white'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                          ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
+                          : 'bg-transparent text-text-secondary hover:bg-white/50'
                       }`}
                     >
-                      💰 Rapport Financier
+                      💰 Analyse Financière
                     </button>
                   </div>
                 )}
@@ -886,23 +864,26 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                 {/* Professional Report */}
                 {stage === 'completed' && (activeReport === 'professional' || financialStage !== 'completed') && (
                   <>
-                    {/* Toolbar */}
-                    <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                      <p className="text-sm text-gray-600 flex items-center space-x-2">
-                        <CheckCircle size={16} className="text-green-600" />
-                        <span>Rapport professionnel généré</span>
-                      </p>
-                      <button
+                    {/* Toolbar - Gojiberry Style */}
+                    <div className="px-6 py-4 border-b border-surface-300 flex items-center justify-between bg-white">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-success-500 flex items-center justify-center">
+                          <CheckCircle size={18} className="text-white" />
+                        </div>
+                        <span className="font-medium text-text-primary">Rapport professionnel généré</span>
+                      </div>
+                      <Button
                         onClick={downloadReport}
-                        className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition"
+                        icon={<Download size={18} />}
+                        variant="secondary"
+                        size="sm"
                       >
-                        <Download size={18} />
-                        <span>Télécharger HTML</span>
-                      </button>
+                        Télécharger HTML
+                      </Button>
                     </div>
 
                     {/* Report iframe */}
-                    <div className="flex-1 overflow-hidden bg-gray-100">
+                    <div className="flex-1 overflow-hidden bg-surface-200">
                       {reportHtml ? (
                         <iframe
                           srcDoc={reportHtml}
@@ -917,12 +898,12 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center">
                             <AlertCircle size={48} className="text-amber-500 mx-auto mb-4" />
-                            <p className="text-gray-600">
+                            <p className="text-text-secondary">
                               Le rapport a été généré mais le contenu HTML est vide.
                             </p>
                             <button
                               onClick={downloadReport}
-                              className="mt-4 flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition mx-auto"
+                              className="mt-4 flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl font-medium transition mx-auto"
                             >
                               <Download size={18} />
                               <span>Télécharger quand même</span>
@@ -938,17 +919,17 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                 {financialStage === 'completed' && activeReport === 'financial' && (
                   <>
                     {/* Toolbar */}
-                    <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                      <p className="text-sm text-gray-600 flex items-center space-x-2">
-                        <CheckCircle size={16} className="text-green-600" />
+                    <div className="p-4 border-b border-surface-300 flex items-center justify-between bg-surface-100">
+                      <p className="text-sm text-text-secondary flex items-center space-x-2">
+                        <CheckCircle size={16} className="text-success-600" />
                         <span>Rapport financier généré</span>
                         {financialSummary && (
                           <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
                             financialSummary.verdict === 'FAVORABLE'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-success-100 text-success-800'
                               : financialSummary.verdict === 'FAVORABLE AVEC RÉSERVES'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-red-100 text-red-800'
+                              ? 'bg-warning-100 text-warning-800'
+                              : 'bg-danger-100 text-danger-800'
                           }`}>
                             {financialSummary.verdict}
                           </span>
@@ -956,7 +937,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                       </p>
                       <button
                         onClick={downloadFinancialReport}
-                        className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition"
+                        className="flex items-center space-x-2 bg-success-600 hover:bg-success-700 text-white px-4 py-2 rounded-lg font-medium transition"
                       >
                         <Download size={18} />
                         <span>Télécharger HTML</span>
@@ -964,7 +945,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                     </div>
 
                     {/* Report iframe */}
-                    <div className="flex-1 overflow-hidden bg-gray-100">
+                    <div className="flex-1 overflow-hidden bg-surface-200">
                       {financialReportHtml ? (
                         <iframe
                           srcDoc={financialReportHtml}
@@ -979,12 +960,12 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center">
                             <AlertCircle size={48} className="text-amber-500 mx-auto mb-4" />
-                            <p className="text-gray-600">
+                            <p className="text-text-secondary">
                               Le rapport financier a été généré mais le contenu HTML est vide.
                             </p>
                             <button
                               onClick={downloadFinancialReport}
-                              className="mt-4 flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition mx-auto"
+                              className="mt-4 flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl font-medium transition mx-auto"
                             >
                               <Download size={18} />
                               <span>Télécharger quand même</span>
