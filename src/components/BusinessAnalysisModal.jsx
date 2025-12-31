@@ -5,12 +5,19 @@ import * as storageService from '../services/storageService';
 import { FormInput, FormTextarea, RadioCardGroup, Button, Badge, Card } from './ui';
 
 /**
- * ProfessionalAnalysisModal - Modal d'analyse professionnelle
+ * BusinessAnalysisModal - Unified modal for professional & financial analysis
  *
- * Affiche la progression des agents et le rapport HTML généré
+ * Supports two analysis modes:
+ * - Professional: 10-agent ADK pipeline for comprehensive business analysis
+ * - Financial: Document-based financial analysis with benchmarking
+ *
+ * @prop {boolean} isOpen - Modal visibility
+ * @prop {function} onClose - Close handler
+ * @prop {object} business - Business data
+ * @prop {string} initialView - Initial view: 'professional' | 'financial' (default: 'professional')
  */
-export default function ProfessionalAnalysisModal({ isOpen, onClose, business }) {
-  console.log('🎯 ProfessionalAnalysisModal render:', { isOpen, business: business?.nom_complet || business?.siret });
+export default function BusinessAnalysisModal({ isOpen, onClose, business, initialView = 'professional' }) {
+  console.log('🎯 BusinessAnalysisModal render:', { isOpen, business: business?.nom_complet || business?.siret, initialView });
 
   const [stage, setStage] = useState('idle'); // 'idle' | 'running' | 'completed' | 'error'
   const [progress, setProgress] = useState({});
@@ -25,7 +32,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   const [financialSummary, setFinancialSummary] = useState(null);
 
   // Active report tab (when both reports are available)
-  const [activeReport, setActiveReport] = useState('professional'); // 'professional' | 'financial'
+  const [activeReport, setActiveReport] = useState(initialView); // 'professional' | 'financial'
 
   // Document sidebar state
   const [documents, setDocuments] = useState([]);
@@ -69,6 +76,11 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
       loadDocuments();
     }
   }, [isOpen, business?.siren, business?.siret]);
+
+  // Synchronize activeReport with initialView when it changes
+  useEffect(() => {
+    setActiveReport(initialView);
+  }, [initialView]);
 
   const loadDocuments = async () => {
     setLoadingDocuments(true);
@@ -498,14 +510,18 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
           </button>
         </div>
 
-        {/* Content - 50/50 Layout */}
+        {/* Content - Full Width */}
         <div className="flex-1 overflow-hidden flex">
-          {/* LEFT PANEL - Forms (50%) - Gojiberry Style */}
-          <div className="w-1/2 border-r border-surface-300 p-8 overflow-y-auto bg-surface-100 space-y-8">
-            {/* Section 1: Documents */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-500 text-white">
+          {/* MAIN PANEL - Full width for both workflows */}
+          <div className="w-full flex flex-col overflow-hidden bg-white">
+
+            {/* FINANCIAL WORKFLOW - Full width form */}
+            {initialView === 'financial' && (
+              <div className="flex-1 p-8 overflow-y-auto bg-surface-100 space-y-8">
+                {/* Section 1: Documents */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-500 text-white">
                   <FileText size={18} />
                 </span>
                 Documents financiers
@@ -753,12 +769,14 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                 </div>
               </Card>
             )}
-          </div>
+              </div>
+            )}
 
-          {/* RIGHT PANEL - Report/Progress (50%) - Gojiberry Style */}
-          <div className="w-1/2 flex flex-col overflow-hidden bg-white">
-            {/* État: IDLE - Écran de démarrage Gojiberry */}
-            {stage === 'idle' && financialStage !== 'completed' && (
+            {/* PROFESSIONAL WORKFLOW - Full width */}
+            {initialView === 'professional' && (
+              <>
+            {/* État: IDLE - Écran de démarrage */}
+            {stage === 'idle' && (
               <div className="flex-1 flex flex-col items-center justify-center p-12 bg-gradient-to-br from-surface-100 to-white">
                 <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-6 shadow-2xl">
                   <Play className="w-12 h-12 text-white" />
@@ -767,7 +785,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                   Prêt à analyser
                 </h3>
                 <p className="text-text-secondary text-center max-w-md leading-relaxed mb-8">
-                  Remplissez les informations à gauche et générez le rapport financier pour démarrer l'analyse professionnelle complète.
+                  Lancez l'analyse professionnelle complète avec 10 agents IA spécialisés.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center mb-8">
                   <Badge variant="cyan">10 agents IA</Badge>
@@ -871,38 +889,9 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
               </div>
             )}
 
-            {/* État: COMPLETED - Affichage des rapports Gojiberry */}
-            {(stage === 'completed' || financialStage === 'completed') && (
+            {/* État: COMPLETED - Professional Report */}
+            {stage === 'completed' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Tabs (if both reports are available) - Gojiberry Style */}
-                {stage === 'completed' && financialStage === 'completed' && (
-                  <div className="flex gap-2 p-4 border-b border-surface-300 bg-surface-100">
-                    <button
-                      onClick={() => setActiveReport('professional')}
-                      className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
-                        activeReport === 'professional'
-                          ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
-                          : 'bg-transparent text-text-secondary hover:bg-surface-100'
-                      }`}
-                    >
-                      📊 Analyse Professionnelle
-                    </button>
-                    <button
-                      onClick={() => setActiveReport('financial')}
-                      className={`flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
-                        activeReport === 'financial'
-                          ? 'bg-white text-primary-600 shadow-md border-2 border-primary-500'
-                          : 'bg-transparent text-text-secondary hover:bg-surface-100'
-                      }`}
-                    >
-                      💰 Analyse Financière
-                    </button>
-                  </div>
-                )}
-
-                {/* Professional Report */}
-                {stage === 'completed' && (activeReport === 'professional' || financialStage !== 'completed') && (
-                  <>
                     {/* Toolbar - Gojiberry Style */}
                     <div className="px-6 py-4 border-b border-surface-300 flex items-center justify-between bg-white">
                       <div className="flex items-center gap-3">
@@ -951,11 +940,14 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                         </div>
                       )}
                     </div>
-                  </>
-                )}
+              </div>
+            )}
+              </>
+            )}
 
-                {/* Financial Report */}
-                {financialStage === 'completed' && activeReport === 'financial' && (
+            {/* FINANCIAL REPORT - Shown after financial analysis completes */}
+            {financialStage === 'completed' && initialView === 'financial' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
                   <>
                     {/* Toolbar */}
                     <div className="p-4 border-b border-surface-300 flex items-center justify-between bg-surface-100">
@@ -1014,9 +1006,9 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
                       )}
                     </div>
                   </>
-                )}
               </div>
             )}
+
           </div>
         </div>
       </div>

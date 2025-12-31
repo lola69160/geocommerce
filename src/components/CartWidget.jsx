@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ShoppingCart, FileText, X, Trash2, Loader2, Sparkles, MapPin, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { generateMarkdownReport } from '../utils/reportGenerator';
-import ProfessionalAnalysisModal from './ProfessionalAnalysisModal';
+import BusinessAnalysisModal from './BusinessAnalysisModal';
 import { Button, Card } from './ui';
 
 /**
@@ -21,6 +21,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
   const [progress, setProgress] = useState('');
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [currentAnalysisBusiness, setCurrentAnalysisBusiness] = useState(null);
+  const [initialAnalysisView, setInitialAnalysisView] = useState('professional');
 
   const cartItems = Object.values(cart);
   const cartCount = cartItems.length;
@@ -74,6 +75,14 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
   const handleProfessionalAnalysis = (business) => {
     console.log('Opening professional analysis for:', business);
     setCurrentAnalysisBusiness(business);
+    setInitialAnalysisView('professional');
+    setAnalysisModalOpen(true);
+  };
+
+  const handleFinancialAnalysis = (business) => {
+    console.log('Opening financial analysis for:', business);
+    setCurrentAnalysisBusiness(business);
+    setInitialAnalysisView('financial');
     setAnalysisModalOpen(true);
   };
 
@@ -237,29 +246,54 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
                   </button>
                 </div>
 
-                {/* Professional Analysis Button */}
-                <button
-                  onClick={() => handleProfessionalAnalysis(item)}
-                  className={`
-                    w-full mt-3
-                    flex items-center justify-center gap-2
-                    px-3 py-2
-                    rounded-lg
-                    bg-accent-violet-100
-                    text-accent-violet-700
-                    border border-accent-violet-300
-                    font-medium text-xs
-                    hover:bg-accent-violet-200
-                    hover:border-accent-violet-400
-                    transition-all duration-fast
-                    active:scale-98
-                    group
-                  `}
-                >
-                  <Sparkles size={14} className="group-hover:animate-pulse" />
-                  <span>Analyse Professionnelle</span>
-                  <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
+                {/* Professional & Financial Analysis Buttons */}
+                <div className="mt-3 flex gap-2">
+                  {/* Professional Analysis Button */}
+                  <button
+                    onClick={() => handleProfessionalAnalysis(item)}
+                    className={`
+                      flex-1 flex items-center justify-center gap-2
+                      px-3 py-2
+                      rounded-lg
+                      bg-accent-violet-100
+                      text-accent-violet-700
+                      border border-accent-violet-300
+                      font-medium text-xs
+                      hover:bg-accent-violet-200
+                      hover:border-accent-violet-400
+                      transition-all duration-fast
+                      active:scale-98
+                      group
+                    `}
+                  >
+                    <Sparkles size={14} className="group-hover:animate-pulse" />
+                    <span>Analyse Pro</span>
+                    <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Financial Analysis Button */}
+                  <button
+                    onClick={() => handleFinancialAnalysis(item)}
+                    className={`
+                      flex-1 flex items-center justify-center gap-2
+                      px-3 py-2
+                      rounded-lg
+                      bg-accent-cyan-100
+                      text-accent-cyan-700
+                      border border-accent-cyan-300
+                      font-medium text-xs
+                      hover:bg-accent-cyan-200
+                      hover:border-accent-cyan-400
+                      transition-all duration-fast
+                      active:scale-98
+                      group
+                    `}
+                  >
+                    <FileText size={14} className="group-hover:animate-pulse" />
+                    <span>Finances</span>
+                    <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+                </div>
               </div>
             </Card>
           ))}
@@ -290,11 +324,12 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
         </div>
       </div>
 
-      {/* Professional Analysis Modal */}
-      <ProfessionalAnalysisModal
+      {/* Business Analysis Modal */}
+      <BusinessAnalysisModal
         isOpen={analysisModalOpen}
         onClose={() => setAnalysisModalOpen(false)}
         business={currentAnalysisBusiness}
+        initialView={initialAnalysisView}
       />
     </>
   );

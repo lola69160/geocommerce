@@ -237,7 +237,7 @@ Automatic NAF-based sector detection was unreliable:
 
 #### Current Implementation (2025-12-31)
 
-**Form Field**: Required dropdown in `ProfessionalAnalysisModal.jsx` with 9 sectors:
+**Form Field**: Required dropdown in `BusinessAnalysisModal.jsx` with 9 sectors:
 ```javascript
 <select value={secteurActivite} onChange={(e) => setSecteurActivite(e.target.value)} required>
   <option value="47.11">Commerce non spécialisé (Superette, Alimentation)</option>
@@ -463,7 +463,7 @@ if (hasStructuredLoyer) {
 - Loyer négocié fourni sans loyer actuel → alerte
 
 **Fichiers modifiés** :
-- `src/components/ProfessionalAnalysisModal.jsx` : 3 nouveaux champs + validation
+- `src/components/BusinessAnalysisModal.jsx` : 3 nouveaux champs + validation
 - `server/adk/financial/index.ts` : Types FinancialInput/FinancialState mis à jour
 - `server.js` : Système de priorité NLP (lignes 985-1047)
 - `server/adk/financial/tools/accounting/calculateEbeRetraitementTool.ts` : Nouveaux retraitements + justification

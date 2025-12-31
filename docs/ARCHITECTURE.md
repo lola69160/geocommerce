@@ -6,6 +6,8 @@ This document describes the technical architecture of SearchCommerce.
 
 - **Main App**: `src/App.jsx` - manages application state, search flow, enrichment, cart, and notes
 - **Components**: `src/components/` - SearchPanel, Map (Leaflet), CartWidget, NoteModal, Layout, etc.
+  - `CartWidget.jsx` - Shopping cart with dual analysis buttons (Professional + Financial)
+  - `BusinessAnalysisModal.jsx` - Unified modal for professional and financial analysis workflows
 - **Services**: `src/services/` - API clients for backend and external APIs
   - `api.js` - Business search via OpenData API
   - `bodaccService.js` - BODACC data fetching with address parsing and filtering
@@ -36,8 +38,50 @@ This document describes the technical architecture of SearchCommerce.
 - `POST /api/enrich-business` - Full enrichment (photos, reviews, AI context)
 - `POST /api/analyze-business` - Complete analysis orchestration (identity, assets, intelligence)
 - `POST /api/analyze-professional-adk` - **ADK professional analysis pipeline** (10 agents)
+- `POST /api/analyze-financial` - **Financial analysis pipeline** (document extraction + benchmarking)
 - `GET/POST /api/notes` - Notes management
 - `GET/POST/DELETE /api/cart` - Cart management
+
+## Analysis Workflows
+
+The application provides two independent analysis workflows accessible from the cart:
+
+### Professional Analysis (ADK Pipeline)
+- **Trigger**: "Analyse Pro" button (violet) in cart
+- **Modal**: `BusinessAnalysisModal` in full-width mode
+- **Workflow**: 10-agent ADK pipeline for comprehensive business analysis
+  1. Preparation - Data validation and enrichment
+  2. Demographic Analysis - Population and market size
+  3. Google Places Enrichment - Location, reviews, photos
+  4. AI Photo Analysis - Business quality assessment
+  5. Competitor Mapping - Competition analysis
+  6. Cross-Validation - Data consistency checks
+  7. Global Scoring - Overall business scoring
+  8. Conflict Arbitration - Resolve contradictions
+  9. Strategic Recommendations - Actionable insights
+  10. Report Generation - HTML report with charts
+- **Output**: Professional analysis HTML report
+
+### Financial Analysis
+- **Trigger**: "Finances" button (cyan) in cart
+- **Modal**: `BusinessAnalysisModal` in full-width mode
+- **Workflow**: Document-based financial analysis
+  1. Document Selection - User uploads COMPTA/liasse fiscale PDFs
+  2. Sector Selection - Manual selection from 9 predefined sectors
+  3. Financial Inputs - Rent, personnel costs, salary retention
+  4. Gemini Vision Extraction - Extract financial data from documents
+  5. Benchmarking - Compare to sector averages
+  6. Valuation - EBE, CA, Patrimonial methods (or hybrid for Tabac)
+  7. Business Plan - 3-year projections with growth scenarios
+  8. Report Generation - HTML report with financial tables
+- **Output**: Financial analysis HTML report with verdict (FAVORABLE/RÉSERVÉ/DÉFAVORABLE)
+
+### Workflow Separation
+- Each workflow is **completely independent** with its own UI
+- No tabs or switching between workflows within a modal
+- Each modal displays **full-width** (no 50/50 split)
+- Professional workflow: Message + button → progress → report
+- Financial workflow: Form → progress → report
 
 ## Logging
 
