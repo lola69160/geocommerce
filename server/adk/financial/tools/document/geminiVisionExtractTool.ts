@@ -677,12 +677,6 @@ export const geminiVisionExtractTool = new FunctionTool({
           if (parsed.sig.charges_exploitant) {
             console.log(`[geminiVisionExtract] 💼 Charges exploitant (salaire dirigeant): ${parsed.sig.charges_exploitant.valeur}€ (${parsed.sig.charges_exploitant.pct_ca}% CA)`);
           }
-          // Debug production vendue pour diagnostiquer le problème
-          console.log(`[geminiVisionExtract] 🔍 DEBUG Production:`);
-          console.log(`  - production_vendue: ${JSON.stringify(parsed.sig.production_vendue)}`);
-          console.log(`  - production_vendue_services: ${JSON.stringify(parsed.sig.production_vendue_services)}`);
-          console.log(`  - production_exercice: ${JSON.stringify(parsed.sig.production_exercice)}`);
-          console.log(`  - compte_resultat.production_vendue_services: ${parsed.compte_resultat?.production_vendue_services}`);
         }
       } else {
         // Format standard
@@ -843,6 +837,13 @@ export const geminiVisionExtractTool = new FunctionTool({
         if (toolContext?.state && comptaOutput.year) {
           const year = comptaOutput.year.toString();
           const kv = comptaOutput.extractedData.key_values;
+
+          // Debug production pour vérifier les valeurs finales (après fallback)
+          console.log(`[geminiVisionExtract] 🔍 DEBUG Production (après fallback):`);
+          console.log(`  - ventes_marchandises: ${kv.ventes_marchandises}`);
+          console.log(`  - production_vendue_services: ${kv.production_vendue_services}`);
+          console.log(`  - chiffre_affaires: ${kv.chiffre_affaires}`);
+          console.log(`  - Source: ${kv.production_vendue_services > 0 ? 'compte_resultat (prioritaire)' : 'sig (fallback)'}`);
 
           // VALIDATION STRICTE : Vérifier que les champs SIG critiques sont présents
           const requiredSigFields = [

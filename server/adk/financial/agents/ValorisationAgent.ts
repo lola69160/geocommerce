@@ -101,10 +101,13 @@ AVANT DE COMMENCER, vérifier si le commerce est de type Tabac/Presse/FDJ :
 - Codes NAF : 47.26 (Tabac), 47.62 (Presse)
 - OU secteur/activité contient : "tabac", "presse", "fdj", "loto", "pmu"
 
-⚠️ EXEMPLES DE DÉTECTION:
-- NAF 47.26Z → TABAC ✅
-- NAF 56.30Z + sector "Débits de boissons / Tabac" → TABAC ✅ (mot "Tabac" dans secteur)
-- NAF 56.30Z + sector "Bar restaurant" → PAS TABAC ❌
+⚠️ EXEMPLES DE DÉTECTION (basés UNIQUEMENT sur le NAF CODE):
+- NAF 47.26Z (Commerce de détail tabac) → TABAC ✅
+- NAF 47.62Z (Commerce de détail presse) → TABAC ✅
+- NAF 56.30Z (Débits de boissons) → PAS TABAC ❌
+
+IMPORTANT: La détection se base UNIQUEMENT sur le NAF code (47.26 ou 47.62).
+Un "Bar Tabac" avec NAF 56.30Z est considéré comme un BAR, pas un TABAC.
 
 SI COMMERCE TABAC/PRESSE/FDJ DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
 SINON → Utiliser MÉTHODE CLASSIQUE (Étapes 1-4)
@@ -218,12 +221,26 @@ MÉTHODE HYBRIDE (Commerces Tabac/Presse/FDJ UNIQUEMENT)
    - Tu peux AUSSI appeler calculateEbeValuation et synthesizeValuation
    - Cela permet de voir l'écart entre méthode hybride et méthode classique
 
+⚠️⚠️⚠️ RÈGLE CRITIQUE - PRÉSERVATION DU NAF CODE ⚠️⚠️⚠️
+
+Le champ businessInfo.nafCode provient du state et DOIT être préservé TEL QUEL.
+Tu ne dois JAMAIS modifier le NAF code fourni en entrée.
+
+Exemple :
+Si state.businessInfo.nafCode = "47.26Z", alors ton JSON de sortie DOIT contenir:
+{
+  "businessInfo": {
+    "nafCode": "47.26Z"  // ⚠️ COPIE EXACTE - NE PAS MODIFIER
+  }
+}
+
+NE PAS ajouter de champ "sector" à businessInfo (ce champ n'existe pas dans le schéma).
+
 FORMAT DE SORTIE JSON (STRICT) :
 {
   "businessInfo": {
     "name": "Commerce ABC",
-    "nafCode": "47.26Z",
-    "sector": "Tabac-presse"
+    "nafCode": "47.26Z"
   },
 
   "methodeEBE": {
@@ -312,8 +329,7 @@ FORMAT DE SORTIE JSON (STRICT) :
 {
   "businessInfo": {
     "name": "Tabac Presse du Centre",
-    "nafCode": "47.26Z",
-    "sector": "Commerce de détail de produits à base de tabac"
+    "nafCode": "47.26Z"
   },
 
   "methodeHybride": {  // ⚠️ NOUVEAU - Remplace methodeEBE, methodeCA, methodePatrimoniale pour les Tabacs

@@ -75,7 +75,9 @@ export const assessDataQualityTool = new FunctionTool({
       let comptable = parseState(toolContext?.state.get('comptable'));
       let valorisation = parseState(toolContext?.state.get('valorisation'));
       let immobilier = parseState(toolContext?.state.get('immobilier'));
-      let crossValidation = parseState(toolContext?.state.get('financialValidation'));
+      // NOTE: crossValidation sera toujours null car ce tool est appelé PAR
+      // FinancialValidationAgent AVANT qu'il n'écrive state.financialValidation
+      let crossValidation = null;
 
       // 1. ÉVALUER LA COMPLÉTUDE
       const completeness = assessCompleteness(documentExtraction, comptable, valorisation, immobilier);

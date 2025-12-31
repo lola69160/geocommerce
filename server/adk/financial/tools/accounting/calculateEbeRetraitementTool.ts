@@ -134,24 +134,11 @@ export const calculateEbeRetraitementTool = new FunctionTool({
         return 0;
       };
 
-      // Calculer EBE de référence (moyenne 3 dernières années ou dernière année)
-      let ebeComptable = 0;
-      let anneeReference = 0;
-
-      if (yearsAnalyzed.length >= 3) {
-        // Moyenne des 3 dernières années
-        const ebeValues = yearsAnalyzed.slice(0, 3).map((year: number) => {
-          const yearStr = year.toString();
-          return extractSigValue(sig[yearStr], 'ebe');
-        });
-        ebeComptable = Math.round(ebeValues.reduce((a: number, b: number) => a + b, 0) / ebeValues.length);
-        anneeReference = yearsAnalyzed[0]; // Année la plus récente
-      } else {
-        // Dernière année disponible
-        anneeReference = yearsAnalyzed[0];
-        const lastYear = anneeReference.toString();
-        ebeComptable = extractSigValue(sig[lastYear], 'ebe');
-      }
+      // Calculer EBE de référence (TOUJOURS dernière année pour le Pont EBE)
+      // Note: La moyenne 3 ans est utilisée pour la VALORISATION, pas pour le retraitement
+      const anneeReference = yearsAnalyzed[0]; // Année la plus récente
+      const lastYear = anneeReference.toString();
+      const ebeComptable = extractSigValue(sig[lastYear], 'ebe');
 
       // Array des retraitements
       const retraitements: Array<{

@@ -232,8 +232,9 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       }
 
       // Log toujours (pas de condition)
-      console.log(`[businessPlanDynamique] 📊 Données extraites du SIG (${lastYearStr}):`);
-      console.log(`  - CA Total: ${caActuel.toLocaleString('fr-FR')} €`);
+      const caSource = yearsAnalyzed.length >= 3 ? 'moyenne 3 ans' : lastYearStr;
+      console.log(`[businessPlanDynamique] 📊 Données extraites du SIG:`);
+      console.log(`  - CA Total (${caSource}): ${caActuel.toLocaleString('fr-FR')} €`);
       console.log(`  - Ventes Marchandises: ${ventesMarchandises.toLocaleString('fr-FR')} €`);
       console.log(`  - Commissions/Services: ${commissionsServices.toLocaleString('fr-FR')} €`);
       console.log(`  - Charges Personnel: ${chargesPersonnelActuel.toLocaleString('fr-FR')} €`);
