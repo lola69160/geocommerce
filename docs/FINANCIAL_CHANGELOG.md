@@ -4,6 +4,302 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Correction Anomalies Pipeline Financier - 5 Corrections Critiques (2025-12-31)
+
+### Objectif
+
+Corriger 5 anomalies détectées lors de l'analyse du log de génération du rapport financier pour garantir la précision des données affichées et la cohérence des calculs.
+
+### Anomalies Corrigées
+
+#### 1. EBE Comptable incorrect dans le Pont EBE (CRITIQUE)
+
+**Problème :** Le tableau "Pont EBE - De la Capacité Comptable à la Capacité Normatif" affichait 29 421 € pour "EBE Comptable 2023 (Base)" au lieu de 17 558 € (valeur réelle de 2023).
+
+**Cause Racine :** Le code calculait automatiquement la moyenne des 3 dernières années (49 952 € + 20 754 € + 17 558 €) / 3 = 29 421 €.
+
+**Impact Business :**
+- EBE Normatif **surévalué** de +11 863 € (+23%)
+- Valorisation potentiellement incorrecte (impact de ~35 000 € si méthode EBE × 3)
+
+**Solution Implémentée :**
+
+**Fichier :** `calculateEbeRetraitementTool.ts` (lignes 137-154)
+
+```typescript
+// ❌ AVANT (calcul moyenne 3 ans)
+if (yearsAnalyzed.length >= 3) {
+  const ebeValues = yearsAnalyzed.slice(0, 3).map((year: number) => {
+    const yearStr = year.toString();
+    return extractSigValue(sig[yearStr], 'ebe');
+  });
+  ebeComptable = Math.round(ebeValues.reduce((a, b) => a + b, 0) / ebeValues.length);
+}
+
+// ✅ APRÈS (année de référence uniquement)
+// Calculer EBE de référence (TOUJOURS dernière année pour le Pont EBE)
+// Note: La moyenne 3 ans est utilisée pour la VALORISATION, pas pour le retraitement
+const anneeReference = yearsAnalyzed[0]; // Année la plus récente
+const lastYear = anneeReference.toString();
+const ebeComptable = extractSigValue(sig[lastYear], 'ebe');
+```
+
+**Résultat :**
+- ✅ EBE Comptable 2023 : 29 421 € → 17 558 €
+- ✅ EBE Normatif : 51 012 € → 39 149 € (recalculé automatiquement)
+
+---
+
+#### 2. NAF Code modifié incorrectement (CRITIQUE)
+
+**Problème :** Le NAF code était modifié par le LLM (47.26Z → 56.30Z) pour un "Bar Tabac Presse Jeux PMU", le classant comme BAR au lieu de TABAC.
+
+**Cause Racine :**
+1. Exemples JSON dans `ValorisationAgent.ts` incluaient un champ `"sector"` inexistant dans le schéma TypeScript
+2. Le LLM inférait le secteur depuis le nom du commerce et modifiait le NAF en conséquence
+3. Instructions ambiguës suggérant qu'un NAF 56.30Z + secteur "Tabac" = TABAC
+
+**Impact Business :**
+- ❌ Valorisation basée sur méthode BAR (EBE, CA, Patrimonial) au lieu de HYBRIDE (Bloc Réglementé + Bloc Commercial)
+- ❌ Business Plan avec croissance bar au lieu de spécificités tabac
+
+**Solution Implémentée :**
+
+**Fichier :** `ValorisationAgent.ts`
+
+**Modification A :** Suppression champ `sector` inexistant (lignes 241-244, 330-333)
+```typescript
+// ❌ AVANT
+{
+  "businessInfo": {
+    "name": "Commerce ABC",
+    "nafCode": "47.26Z",
+    "sector": "Tabac-presse"  // ← N'existe pas dans le schéma !
+  }
+}
+
+// ✅ APRÈS
+{
+  "businessInfo": {
+    "name": "Commerce ABC",
+    "nafCode": "47.26Z"
+    // Pas de champ "sector"
+  }
+}
+```
+
+**Modification B :** Ajout règle de préservation NAF (après ligne 220)
+```typescript
+⚠️⚠️⚠️ RÈGLE CRITIQUE - PRÉSERVATION DU NAF CODE ⚠️⚠️⚠️
+
+Le champ businessInfo.nafCode provient du state et DOIT être préservé TEL QUEL.
+Tu ne dois JAMAIS modifier le NAF code fourni en entrée.
+
+Exemple :
+Si state.businessInfo.nafCode = "47.26Z", alors ton JSON de sortie DOIT contenir:
+{
+  "businessInfo": {
+    "nafCode": "47.26Z"  // ⚠️ COPIE EXACTE - NE PAS MODIFIER
+  }
+}
+
+NE PAS ajouter de champ "sector" à businessInfo (ce champ n'existe pas dans le schéma).
+```
+
+**Modification C :** Clarification exemples de détection (lignes 104-110)
+```typescript
+// ❌ AVANT (ambigu - suggère qu'un Bar Tabac peut être 56.30Z)
+⚠️ EXEMPLES DE DÉTECTION:
+- NAF 47.26Z → TABAC ✅
+- NAF 56.30Z + sector "Débits de boissons / Tabac" → TABAC ✅ (mot "Tabac" dans secteur)
+
+// ✅ APRÈS (clair - seul le NAF compte)
+⚠️ EXEMPLES DE DÉTECTION (basés UNIQUEMENT sur le NAF CODE):
+- NAF 47.26Z (Commerce de détail tabac) → TABAC ✅
+- NAF 47.62Z (Commerce de détail presse) → TABAC ✅
+- NAF 56.30Z (Débits de boissons) → PAS TABAC ❌
+
+IMPORTANT: La détection se base UNIQUEMENT sur le NAF code (47.26 ou 47.62).
+Un "Bar Tabac" avec NAF 56.30Z est considéré comme un BAR, pas un TABAC.
+```
+
+**Résultat :**
+- ✅ NAF code 47.26Z préservé
+- ✅ Valorisation HYBRIDE (Tabac/Presse) correcte
+- ✅ Business Plan avec spécificités tabac
+
+---
+
+#### 3. Log CA Business Plan ambigu (AMÉLIORATION)
+
+**Problème :** Le log affichait `CA Total (2023): 240 361 €` alors que la valeur était une moyenne des 3 dernières années, créant une confusion lors du débogage.
+
+**Solution Implémentée :**
+
+**Fichier :** `businessPlanDynamiqueTool.ts` (lignes 235-237)
+
+```typescript
+// ❌ AVANT (trompeur)
+console.log(`[businessPlanDynamique] 📊 Données extraites du SIG (2023):
+  - CA Total: ${caActuel.toLocaleString('fr-FR')} €`);
+
+// ✅ APRÈS (explicite)
+const caSource = yearsAnalyzed.length >= 3 ? 'moyenne 3 ans' : lastYearStr;
+console.log(`[businessPlanDynamique] 📊 Données extraites du SIG:`);
+console.log(`  - CA Total (${caSource}): ${caActuel.toLocaleString('fr-FR')} €`);
+```
+
+**Résultat attendu dans le log :**
+```
+[businessPlanDynamique] 📊 Données extraites du SIG:
+  - CA Total (moyenne 3 ans): 240 361 €
+```
+
+---
+
+#### 4. Log DEBUG production_vendue_services trompeur (LOG)
+
+**Problème :** Le log DEBUG affichait `production_vendue_services: 0` alors que la valeur finale était 120 143 € (après fallback compte_resultat → sig).
+
+**Cause Racine :** Le DEBUG était placé **avant** le fallback qui extrayait la vraie valeur depuis `compte_resultat.production_vendue_services`.
+
+**Solution Implémentée :**
+
+**Fichier :** `geminiVisionExtractTool.ts`
+
+```typescript
+// ❌ AVANT (ligne 681-686 - affiche réponse Gemini brute)
+console.log(`[geminiVisionExtract] 🔍 DEBUG Production:
+  - production_vendue_services: ${JSON.stringify(parsed.sig?.production_vendue_services)}
+  // VALEUR AVANT FALLBACK = 0 ❌
+`);
+
+// ✅ APRÈS (déplacé APRÈS ligne 794 - affiche valeurs finales après fallback)
+// Supprimé lignes 681-686 et ajouté APRÈS la construction de `kv` (ligne 841-846):
+console.log(`[geminiVisionExtract] 🔍 DEBUG Production (après fallback):`);
+console.log(`  - ventes_marchandises: ${kv.ventes_marchandises}`);
+console.log(`  - production_vendue_services: ${kv.production_vendue_services}`);
+console.log(`  - chiffre_affaires: ${kv.chiffre_affaires}`);
+console.log(`  - Source: ${kv.production_vendue_services > 0 ? 'compte_resultat (prioritaire)' : 'sig (fallback)'}`);
+```
+
+**Résultat attendu dans le log :**
+```
+[geminiVisionExtract] 🔍 DEBUG Production (après fallback):
+  - ventes_marchandises: 120455
+  - production_vendue_services: 120143  ← CORRECT (au lieu de 0)
+  - chiffre_affaires: 240597
+  - Source: compte_resultat (prioritaire)
+```
+
+---
+
+#### 5. Warning parseState null/undefined (WARNING)
+
+**Problème :** Warning répété dans les logs : `[assessDataQualityTool] ⚠️ parseState: state is null/undefined`
+
+**Cause Racine :** Référence circulaire - `FinancialValidationAgent` appelle `assessDataQualityTool` qui essaie de lire `state.financialValidation`, mais cette clé n'existe pas encore car l'agent n'a pas terminé son exécution.
+
+**Solution Implémentée :**
+
+**Fichier :** `assessDataQualityTool.ts` (lignes 78-80)
+
+```typescript
+// ❌ AVANT (génère warning car state.financialValidation n'existe pas encore)
+let crossValidation = parseState(toolContext?.state.get('financialValidation'));
+
+// ✅ APRÈS (explicite - le tool est appelé PAR l'agent qui écrit cette clé)
+// NOTE: crossValidation sera toujours null car ce tool est appelé PAR
+// FinancialValidationAgent AVANT qu'il n'écrive state.financialValidation
+let crossValidation = null;
+```
+
+**Résultat :**
+- ✅ Warning supprimé des logs
+- ✅ Code explicite sur le comportement attendu
+
+---
+
+### Résumé des Modifications
+
+| Fichier | Lignes Modifiées | Type | Description |
+|---------|------------------|------|-------------|
+| `calculateEbeRetraitementTool.ts` | 137-154 | Simplification | Supprimer calcul moyenne, utiliser uniquement année de référence |
+| `ValorisationAgent.ts` | 104-110 | Clarification | Clarifier exemples de détection NAF |
+| `ValorisationAgent.ts` | Après 220 | Ajout | Ajouter règle préservation NAF avec triple warning |
+| `ValorisationAgent.ts` | 241-244, 330-333 | Suppression | Supprimer champ `sector` des exemples JSON |
+| `businessPlanDynamiqueTool.ts` | 235-237 | Amélioration | Préciser "moyenne 3 ans" dans le log |
+| `geminiVisionExtractTool.ts` | 681-686 → 841-846 | Déplacement | Déplacer DEBUG après fallback |
+| `assessDataQualityTool.ts` | 78-80 | Remplacement | Remplacer par `null` explicite |
+
+**Total :** 5 fichiers, +42/-35 lignes
+
+---
+
+### Impact Métier
+
+#### Avant Corrections
+
+- ❌ EBE Normatif **surévalué** : 51 012 € (basé sur moyenne 3 ans)
+- ❌ Valorisation potentiellement **incorrecte** (mauvais NAF code)
+- ⚠️ Logs trompeurs créant confusion lors du débogage
+- ⚠️ Warnings parasites dans les logs
+
+#### Après Corrections
+
+- ✅ EBE Normatif **réaliste** : 39 149 € (basé sur 2023)
+- ✅ Valorisation **cohérente** (NAF code préservé)
+- ✅ Logs **clairs** et **précis**
+- ✅ Pas de warnings parasites
+
+**Différence d'EBE Normatif :** -11 863 € (-23%)
+**Impact sur Valorisation :** Potentiellement -35 589 € si utilisation méthode EBE (3× EBE)
+
+---
+
+### Tests de Non-Régression
+
+#### Test 1 : EBE Comptable correct
+**Input :** SIRET 53840462500013 avec 3 années de COMPTA (2021, 2022, 2023)
+
+**Vérifications :**
+1. ✅ Log : `[EBE Retraitement] EBE Comptable de base: 17 558 €`
+2. ✅ Tableau HTML "Pont EBE" : "EBE Comptable 2023 (Base) : 17 558 €"
+3. ✅ EBE Normatif : ~39 149 € (au lieu de 51 012 €)
+
+#### Test 2 : NAF Code préservé
+**Input :** Bar Tabac Presse Jeux PMU avec NAF 47.26Z
+
+**Vérifications :**
+1. ✅ Log : `[calculateTabacValuation] Type commerce détecté: tabac_touristique`
+2. ✅ Output JSON : `"nafCode": "47.26Z"` (PAS 56.30Z)
+3. ✅ Rapport HTML : Méthode HYBRIDE (Tabac/Presse)
+
+#### Test 3 : Log CA Business Plan clair
+**Vérification :**
+```
+[businessPlanDynamique] 📊 Données extraites du SIG:
+  - CA Total (moyenne 3 ans): 240 361 €  ← Précise "moyenne 3 ans"
+```
+
+#### Test 4 : Log DEBUG production_vendue_services correct
+**Vérification :**
+```
+[geminiVisionExtract] 🔍 DEBUG Production (après fallback):
+  - production_vendue_services: 120143  ← Affiche la valeur finale
+```
+
+#### Test 5 : Warning parseState supprimé
+**Vérification :** Le log ne contient PLUS `[assessDataQualityTool] ⚠️ parseState: state is null/undefined`
+
+---
+
+### Plan de Référence
+
+Plan détaillé disponible dans : `C:\Users\laure\.claude\plans\effervescent-beaming-sun.md`
+
+---
+
 ## Simplification du Rapport HTML - Suppression d'Éléments (2025-12-31)
 
 ### Objectif
