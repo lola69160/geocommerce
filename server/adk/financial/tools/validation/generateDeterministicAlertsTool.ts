@@ -84,11 +84,11 @@ export const generateDeterministicAlertsTool = new FunctionTool({
       }
 
       // 2. Get sector benchmark for comparison
-      const nafCode = businessInfo?.nafCode || businessInfo?.naf_code || '';
-      const benchmark = findSectorBenchmark(nafCode) || DEFAULT_BENCHMARK;
+      const sectorCode = businessInfo?.secteurActivite || '';
+      const benchmark = findSectorBenchmark(sectorCode) || DEFAULT_BENCHMARK;
 
       if (debug) {
-        console.log('[generateDeterministicAlerts] NAF:', nafCode, '→ Sector:', benchmark.sector);
+        console.log('[generateDeterministicAlerts] Sector code:', sectorCode, '→ Sector:', benchmark.sector);
       }
 
       // 3. Build context object for rule evaluation

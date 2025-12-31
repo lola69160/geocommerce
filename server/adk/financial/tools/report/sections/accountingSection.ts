@@ -353,7 +353,7 @@ function generateEbeBridgeTable(ebe: any): string {
  */
 function generateBenchmarkSection(benchmark: any): string {
   let html = '<h3>Comparaison Sectorielle</h3>';
-  html += `<p><strong>Secteur:</strong> ${benchmark.sector} (NAF ${benchmark.nafCode})</p>`;
+  html += `<p><strong>Secteur:</strong> ${benchmark.sector}</p>`;
 
   if (benchmark.comparisons && benchmark.comparisons.length > 0) {
     html += '<table><thead><tr><th>Ratio</th><th class="text-right">Entreprise</th><th class="text-right">Moyenne Secteur</th><th class="text-center">Position</th></tr></thead><tbody>';

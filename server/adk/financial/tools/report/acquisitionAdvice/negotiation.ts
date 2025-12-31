@@ -13,10 +13,10 @@ import { getBenchmarkByNaf } from './types';
 export function generateBenchmarkSection(
   comptable: any,
   valorisation: any,
-  nafCode: string,
+  sectorCode: string,
   benchmarkLabel: string
 ): string {
-  const benchmark = getBenchmarkByNaf(nafCode);
+  const benchmark = getBenchmarkByNaf(sectorCode);
   const valeurRecommandee = valorisation?.synthese?.valeur_recommandee || 0;
 
   let html = '<div class="benchmark-section">';
@@ -157,9 +157,9 @@ export function generateBuyerArguments(
 export function generateSellerArguments(
   comptable: any,
   professionalData: ProfessionalReportData | null,
-  nafCode: string
+  sectorCode: string
 ): string {
-  const isTabac = nafCode.includes('47.26');
+  const isTabac = sectorCode.includes('47.26');
 
   let html = '<div class="seller-arguments">';
   html += '<h4>Arguments Vendeur (maintien du prix)</h4>';
@@ -225,11 +225,11 @@ export function generateNegotiationGrid(
   comptable: any,
   immobilier: any,
   professionalData: ProfessionalReportData | null,
-  nafCode: string
+  sectorCode: string
 ): string {
   let html = '<div class="negotiation-grid">';
   html += generateBuyerArguments(comptable, immobilier, professionalData);
-  html += generateSellerArguments(comptable, professionalData, nafCode);
+  html += generateSellerArguments(comptable, professionalData, sectorCode);
   html += '</div>';
   return html;
 }

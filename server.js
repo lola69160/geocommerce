@@ -940,6 +940,10 @@ app.post('/api/analyze-financial', async (req, res) => {
             return res.status(400).json({ error: 'Missing businessInfo parameter (must include name)' });
         }
 
+        if (!businessInfo.secteurActivite) {
+            return res.status(400).json({ error: 'Le champ "Secteur d\'activité" est obligatoire' });
+        }
+
         logger.info('Starting Financial ADK analysis', {
             siret: businessInfo.siret || 'N/A',
             name: businessInfo.name,
@@ -1109,7 +1113,8 @@ app.post('/api/analyze-financial', async (req, res) => {
             businessInfo: {
                 name: businessInfo.name,
                 siret: businessInfo.siret || '',
-                nafCode: businessInfo.nafCode || '',
+                nafCode: businessInfo.nafCode || '',              // NAF from API (audit trail only)
+                secteurActivite: businessInfo.secteurActivite,    // User-selected sector (required)
                 activity: businessInfo.activity || ''
             },
             userComments: enrichedUserComments,

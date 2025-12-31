@@ -54,7 +54,8 @@ export type FinancialInput = {
   businessInfo?: {
     name: string;
     siret: string;
-    nafCode: string;
+    nafCode?: string;              // NAF code from API (for audit trail only)
+    secteurActivite: string;       // User-selected sector (NAF code format)
     activity: string;
   };
   userComments?: {

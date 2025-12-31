@@ -169,31 +169,24 @@ export const SECTOR_BENCHMARKS: SectorBenchmark[] = [
 ];
 
 /**
- * Trouve le benchmark sectoriel pour un code NAF donné.
- * Supporte les matchs partiels (ex: "47.11F" matchera "47.11")
+ * Find sector benchmark by exact sector code
+ * @param sectorCode - NAF code (e.g., '47.26') from user selection
+ * @returns SectorBenchmark or null if not found
  */
-export function findSectorBenchmark(nafCode: string): SectorBenchmark | null {
-  if (!nafCode) return null;
+export function findSectorBenchmark(sectorCode: string): SectorBenchmark | null {
+  if (!sectorCode) return null;
 
-  // Normaliser le code NAF (enlever lettres, espaces)
-  const normalized = nafCode.replace(/[A-Z\s]/gi, '').trim();
+  // Direct lookup - user has selected exact sector from dropdown
+  const benchmark = SECTOR_BENCHMARKS.find(b => b.nafCode === sectorCode);
 
-  // Chercher match exact
-  let match = SECTOR_BENCHMARKS.find(b => b.nafCode === normalized);
-  if (match) return match;
+  if (!benchmark) {
+    console.warn(`⚠️ [findSectorBenchmark] No benchmark found for sector: ${sectorCode}`);
+    console.warn(`Available sectors: ${SECTOR_BENCHMARKS.map(b => b.nafCode).join(', ')}`);
+    return null;
+  }
 
-  // Chercher match partiel (ex: "47.11" pour "47.11F")
-  // Essayer avec les 4 premiers caractères
-  const prefix4 = normalized.substring(0, 4);
-  match = SECTOR_BENCHMARKS.find(b => b.nafCode.startsWith(prefix4));
-  if (match) return match;
-
-  // Essayer avec les 2 premiers (division NAF)
-  const prefix2 = normalized.substring(0, 2);
-  match = SECTOR_BENCHMARKS.find(b => b.nafCode.startsWith(prefix2));
-  if (match) return match;
-
-  return null;
+  console.log(`✅ [findSectorBenchmark] Found: ${benchmark.sector} (${sectorCode})`);
+  return benchmark;
 }
 
 /**

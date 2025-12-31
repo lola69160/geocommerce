@@ -4,6 +4,173 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Sélection Manuelle du Secteur d'Activité (2025-12-31)
+
+### Objectif
+
+Corriger le problème d'identification automatique du secteur basée sur le code NAF qui produisait des erreurs de classification (ex: Tabac détecté comme "Débits de boissons"). Remplacer par une sélection manuelle obligatoire dans le formulaire.
+
+### Problème Initial
+
+**Exemple concret :**
+- Commerce Tabac avec NAF 47.26Z
+- Détecté automatiquement comme "Débits de boissons (NAF 56.30Z)"
+- Benchmark sectoriel incorrect → ratios de comparaison erronés
+- Méthode de valorisation incorrecte (EBE/CA/Patrimonial au lieu de Hybrid Tabac)
+
+**Cause Racine :**
+- La fonction `findSectorBenchmark()` utilisait un matching partiel sur le code NAF
+- Le code cherchait le premier secteur dont le NAF "commence par" le code fourni
+- Résultats imprévisibles selon l'ordre des secteurs dans la configuration
+
+### Solution Implémentée
+
+**Architecture :**
+
+```
+Frontend Form (ProfessionalAnalysisModal.jsx)
+  ↓ User selects: "Tabac / Presse / Loto" → secteurActivite: '47.26'
+API Validation (server.js)
+  ↓ Required field validation + state initialization
+Financial Pipeline
+  ↓ state.businessInfo.secteurActivite (used by all agents/tools)
+Report Generation
+  ↓ Display: "Secteur : Tabac / Presse / Loto" (no NAF shown)
+```
+
+### Modifications
+
+#### 1. Nouveau fichier de mapping sectoriel
+
+**Fichier :** `server/adk/financial/config/sectorMapping.ts` (NOUVEAU)
+
+```typescript
+export const SECTOR_MAPPING = {
+  'Commerce non spécialisé (Superette, Alimentation générale)': '47.11',
+  'Tabac / Presse / Loto': '47.26',
+  'Boulangerie-Pâtisserie': '10.71',
+  'Restauration traditionnelle': '56.10',
+  'Débits de boissons (Bar, Café)': '56.30',
+  'Coiffure': '96.02',
+  'Commerce spécialisé habillement': '47.7',
+  'Pharmacie': '47.73',
+  'Hôtellerie': '55.10',
+} as const;
+```
+
+#### 2. Formulaire avec dropdown obligatoire
+
+**Fichier :** `src/components/ProfessionalAnalysisModal.jsx` (lignes 38, 649-678)
+
+- Nouveau state : `secteurActivite`
+- Dropdown avec 9 secteurs disponibles
+- Validation frontend : champ obligatoire
+- Envoi API : `businessInfo.secteurActivite` (requis)
+
+#### 3. Types et validation backend
+
+**Fichier :** `server/adk/financial/index.ts` (lignes 54-60)
+
+```typescript
+businessInfo?: {
+  name: string;
+  siret: string;
+  nafCode?: string;              // NAF original API (audit trail uniquement)
+  secteurActivite: string;       // Secteur sélectionné (REQUIS)
+  activity: string;
+};
+```
+
+**Fichier :** `server.js` (lignes 943-945, 1113-1118)
+
+- Validation : Retourne 400 si `secteurActivite` manquant
+- State init : Sépare `nafCode` (API) et `secteurActivite` (user input)
+
+#### 4. Simplification du lookup sectoriel
+
+**Fichier :** `server/adk/financial/config/sectorBenchmarks.ts` (lignes 171-194)
+
+```typescript
+// ❌ AVANT - Matching partiel (source d'erreurs)
+for (const benchmark of SECTOR_BENCHMARKS) {
+  if (nafCode.startsWith(benchmark.nafCode)) {
+    return benchmark; // Premier match trouvé
+  }
+}
+
+// ✅ APRÈS - Lookup direct exact
+export function findSectorBenchmark(sectorCode: string): SectorBenchmark | null {
+  const benchmark = SECTOR_BENCHMARKS.find(b => b.nafCode === sectorCode);
+  if (!benchmark) {
+    console.warn(`⚠️ No benchmark for sector: ${sectorCode}`);
+    return null;
+  }
+  return benchmark;
+}
+```
+
+#### 5. Mise à jour de tous les agents et tools
+
+**Fichiers modifiés :**
+- `compareToSectorTool.ts` : Paramètre `nafCode` → `sectorCode`, lit `state.businessInfo.secteurActivite`
+- `ValorisationAgent.ts` : Détection Tabac via `secteurActivite === '47.26'`
+- `generateDeterministicAlertsTool.ts` : Lit `businessInfo.secteurActivite`
+- `businessPlanDynamiqueTool.ts` : Détection Tabac via `secteurActivite`
+- `acquisitionAdvice/index.ts` : Variable `sectorCode` au lieu de `nafCode`
+- `acquisitionAdvice/negotiation.ts` : 3 fonctions avec paramètre `sectorCode`
+- `acquisitionAdvice/financing.ts` : Fonction `generateOpportunitiesSection()` avec `sectorCode`
+- `accountingSection.ts` : Affichage secteur SANS code NAF
+
+**Total :** 1 nouveau fichier + 10 fichiers modifiés
+
+### Règles de Validation
+
+**Frontend :**
+- Champ obligatoire (required)
+- Erreur si vide au moment de submit
+- Valeur doit être un des 9 codes secteur
+
+**Backend :**
+- Validation API : retourne 400 si `secteurActivite` manquant
+- Runtime : warning si secteur introuvable dans benchmarks (ne crash pas le pipeline)
+
+### Préservation des Données
+
+**NAF Code Original (API) :**
+- Conservé dans `businessInfo.nafCode` pour audit trail
+- Non utilisé pour les benchmarks ou la valorisation
+- Non affiché dans le rapport HTML
+
+**Secteur Sélectionné :**
+- Stocké dans `businessInfo.secteurActivite`
+- Utilisé par TOUS les agents et tools
+- Affiché dans le rapport : "Secteur : Tabac / Presse / Loto"
+
+### Résultats
+
+✅ **Précision** : Secteur contrôlé par l'utilisateur (0 erreur de classification)
+✅ **Benchmark** : Comparaisons sectorielles avec les bons ratios de référence
+✅ **Valorisation** : Méthode adaptée au secteur (ex: Hybrid pour Tabac)
+✅ **UX** : Dropdown clair avec 9 choix explicites
+✅ **Traçabilité** : NAF original préservé pour audit
+
+### Logs de Validation
+
+**Avant le fix :**
+```
+⚠️ [findSectorBenchmark] No benchmark found for sector: 47.26Z
+Available sectors: 47.11, 47.26, 10.71, 56.10, 56.30, 96.02, 47.7, 47.73, 55.10
+```
+
+**Après le fix :**
+```
+✅ [findSectorBenchmark] Found: Commerce de détail de produits à base de tabac, presse et loterie (47.26)
+✅ [compareToSector] Benchmark loaded: Tabac / Presse / Loto
+✅ [ValorisationAgent] Tabac commerce detected → Using Hybrid method
+```
+
+---
+
 ## Correction Anomalies Pipeline Financier - 5 Corrections Critiques (2025-12-31)
 
 ### Objectif

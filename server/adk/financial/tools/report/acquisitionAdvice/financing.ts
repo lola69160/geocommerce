@@ -220,12 +220,12 @@ export function generateOpportunitiesSection(
   immobilier: any,
   userComments: any,
   professionalData: any,
-  nafCode: string
+  sectorCode: string
 ): string {
   let html = '<h3>Opportunites de Creation de Valeur</h3>';
   html += '<table><thead><tr><th>Levier</th><th>Potentiel</th><th>Impact Estime</th><th>Investissement</th></tr></thead><tbody>';
 
-  const isTabac = nafCode.includes('47.26');
+  const isTabac = sectorCode.includes('47.26');
 
   if (comptable?.ratios?.charges_personnel_ratio > 30) {
     html += `<tr>

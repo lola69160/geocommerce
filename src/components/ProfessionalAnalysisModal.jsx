@@ -35,6 +35,7 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
   const [repriseSalaries, setRepriseSalaries] = useState(true); // Reprise des salariés du cédant (oui/non)
   const [loyerActuel, setLoyerActuel] = useState(''); // Loyer actuel (€/mois)
   const [loyerNegocie, setLoyerNegocie] = useState(''); // Loyer négocié (€/mois)
+  const [secteurActivite, setSecteurActivite] = useState(''); // Secteur d'activité sélectionné (code NAF)
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
@@ -317,6 +318,12 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
       return;
     }
 
+    // Validate secteur d'activité (REQUIRED)
+    if (!secteurActivite) {
+      alert('Veuillez sélectionner un secteur d\'activité');
+      return;
+    }
+
     setFinancialStage('running');
     setFinancialError('');
     setFinancialReportHtml('');
@@ -353,7 +360,8 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
           businessInfo: {
             name: business.nom_complet || business.nom_raison_sociale || 'Commerce',
             siret: business.siret || business.siren,
-            nafCode: business.activite_principale || '',
+            nafCode: business.activite_principale || '',      // NAF from API (audit trail)
+            secteurActivite: secteurActivite,                  // User-selected sector (REQUIRED)
             activity: business.libelle_activite_principale || ''
           },
           userComments: {
@@ -642,6 +650,37 @@ export default function ProfessionalAnalysisModal({ isOpen, onClose, business })
               </div>
               <p className="text-xs text-text-tertiary leading-relaxed">
                 Si négocié &lt; actuel, l'économie sera affichée dans le pont EBE
+              </p>
+            </div>
+
+            {/* Section 6: Secteur d'activité - REQUIRED */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-accent-orange-200 text-text-primary text-xs">
+                  🏪
+                </span>
+                Secteur d'activité
+                <span className="text-error-600 ml-1">*</span>
+              </label>
+              <select
+                value={secteurActivite}
+                onChange={(e) => setSecteurActivite(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm bg-white border-2 border-surface-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                required
+              >
+                <option value="">-- Sélectionner un secteur --</option>
+                <option value="47.11">Commerce non spécialisé (Superette, Alimentation)</option>
+                <option value="47.26">Tabac / Presse / Loto</option>
+                <option value="10.71">Boulangerie-Pâtisserie</option>
+                <option value="56.10">Restauration traditionnelle</option>
+                <option value="56.30">Débits de boissons (Bar, Café)</option>
+                <option value="96.02">Coiffure</option>
+                <option value="47.7">Commerce spécialisé habillement</option>
+                <option value="47.73">Pharmacie</option>
+                <option value="55.10">Hôtellerie</option>
+              </select>
+              <p className="text-xs text-text-tertiary leading-relaxed">
+                Sélectionnez le secteur pour obtenir des benchmarks sectoriels pertinents
               </p>
             </div>
 

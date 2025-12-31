@@ -46,10 +46,10 @@ export function generateAcquisitionAdviceSection(params: AcquisitionAdviceParams
   let html = '<div class="page-break"></div>';
   html += '<h2>Conseils pour le Rachat</h2>';
 
-  // Get NAF code and benchmark
-  const nafCode = businessInfo?.naf_code || businessInfo?.nafCode || businessInfo?.activite_code || '';
+  // Get sector code and benchmark
+  const sectorCode = businessInfo?.secteurActivite || businessInfo?.nafCode || businessInfo?.naf_code || '';
   const sectorBenchmark = comptable?.benchmark;
-  const benchmarkLabel = sectorBenchmark?.sector || getBenchmarkByNaf(nafCode).label;
+  const benchmarkLabel = sectorBenchmark?.sector || getBenchmarkByNaf(sectorCode).label;
 
   // Valeurs cles
   const valeurRecommandee = valorisation?.synthese?.valeur_recommandee || 0;
@@ -68,17 +68,17 @@ export function generateAcquisitionAdviceSection(params: AcquisitionAdviceParams
   html += generateRisksSection(comptable, immobilier, businessPlan, professionalData);
 
   // Section 3: Opportunites
-  html += generateOpportunitiesSection(comptable, immobilier, userComments, professionalData, nafCode);
+  html += generateOpportunitiesSection(comptable, immobilier, userComments, professionalData, sectorCode);
 
   // Section 4: Checklist Due Diligence
   html += generateChecklistSection(comptable, immobilier);
 
   // Section 5: Benchmark Sectoriel
-  html += generateBenchmarkSection(comptable, valorisation, nafCode, benchmarkLabel);
+  html += generateBenchmarkSection(comptable, valorisation, sectorCode, benchmarkLabel);
 
   // Section 6: Strategie de Negociation (ZOPA + Arguments)
   html += generateZopaSection(valeurBasse, valeurHaute, valeurRecommandee);
-  html += generateNegotiationGrid(comptable, immobilier, professionalData, nafCode);
+  html += generateNegotiationGrid(comptable, immobilier, professionalData, sectorCode);
 
   // Section 7: Concessions (Nibbles)
   html += generateNibblesSection();

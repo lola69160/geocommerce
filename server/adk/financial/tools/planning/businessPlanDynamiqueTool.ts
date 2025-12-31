@@ -203,8 +203,8 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       // ÉTAPE 2b: Extraction split CA (SANS condition Tabac)
       // ========================================
 
-      // Détecter si commerce de type Tabac (NAF 47.26Z) - pour affichage spécifique seulement
-      const isTabac = businessInfo?.nafCode ? isTabacCommerce(businessInfo.nafCode) : false;
+      // Détecter si commerce de type Tabac (secteur 47.26) - pour affichage spécifique seulement
+      const isTabac = businessInfo?.secteurActivite ? isTabacCommerce(businessInfo.secteurActivite) : false;
 
       // ✅ Extraire TOUS les champs sans condition (disponibles pour tous les commerces)
       // Ventes Marchandises (format: { valeur, pct_ca })

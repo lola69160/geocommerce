@@ -8,7 +8,7 @@ import { findSectorBenchmark, DEFAULT_BENCHMARK } from '../../config/sectorBench
  * Compare to Sector Tool
  *
  * Compare les ratios de l'entreprise avec les moyennes sectorielles.
- * Utilise le code NAF pour identifier le secteur d'activité.
+ * Utilise le secteur d'activité sélectionné par l'utilisateur.
  *
  * Pour chaque ratio, détermine si l'entreprise est:
  * - "superieur" : Au-dessus de la moyenne sectorielle (+10% ou plus)
@@ -17,7 +17,7 @@ import { findSectorBenchmark, DEFAULT_BENCHMARK } from '../../config/sectorBench
  */
 
 const CompareToSectorInputSchema = z.object({
-  nafCode: z.string().optional().describe('Code NAF de l\'entreprise (ex: 47.11F)')
+  sectorCode: z.string().optional().describe('Code secteur (format NAF, ex: 47.26) - lu depuis state.businessInfo.secteurActivite si non fourni')
 });
 
 const CompareToSectorOutputSchema = z.object({
@@ -72,11 +72,11 @@ export const compareToSectorTool = new FunctionTool({
         };
       }
 
-      // Récupérer le code NAF
-      let nafCode = params.nafCode;
+      // Récupérer le secteur d'activité (sélectionné par l'utilisateur)
+      let sectorCode = params.sectorCode;
 
-      // Si pas fourni en paramètre, essayer de lire depuis businessInfo
-      if (!nafCode) {
+      // Si pas fourni en paramètre, lire depuis businessInfo
+      if (!sectorCode) {
         let businessInfo = toolContext?.state.get('businessInfo') as any;
 
         if (typeof businessInfo === 'string') {
@@ -87,11 +87,24 @@ export const compareToSectorTool = new FunctionTool({
           }
         }
 
-        nafCode = businessInfo?.nafCode || '';
+        sectorCode = businessInfo?.secteurActivite || '';
       }
 
+      if (!sectorCode) {
+        return {
+          benchmark: {
+            nafCode: '',
+            sector: '',
+            comparisons: []
+          },
+          error: 'Secteur d\'activité non spécifié - impossible de comparer'
+        };
+      }
+
+      console.log(`🔍 [compareToSector] Using sector code: ${sectorCode}`);
+
       // Trouver le benchmark sectoriel
-      const sectorBenchmark = findSectorBenchmark(nafCode) || DEFAULT_BENCHMARK;
+      const sectorBenchmark = findSectorBenchmark(sectorCode) || DEFAULT_BENCHMARK;
 
       const { ratios } = comptable;
 

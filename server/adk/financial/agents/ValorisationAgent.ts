@@ -98,16 +98,16 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 ⚠️ IMPORTANT: DÉTECTION DU TYPE DE COMMERCE
 
 AVANT DE COMMENCER, vérifier si le commerce est de type Tabac/Presse/FDJ :
-- Codes NAF : 47.26 (Tabac), 47.62 (Presse)
-- OU secteur/activité contient : "tabac", "presse", "fdj", "loto", "pmu"
+- Vérifier state.businessInfo.secteurActivite === '47.26' (Tabac/Presse/Loto)
+- OU state.businessInfo.secteurActivite === '47.62' (Presse uniquement)
 
-⚠️ EXEMPLES DE DÉTECTION (basés UNIQUEMENT sur le NAF CODE):
-- NAF 47.26Z (Commerce de détail tabac) → TABAC ✅
-- NAF 47.62Z (Commerce de détail presse) → TABAC ✅
-- NAF 56.30Z (Débits de boissons) → PAS TABAC ❌
+⚠️ EXEMPLES DE DÉTECTION (basés sur le SECTEUR SÉLECTIONNÉ par l'utilisateur):
+- secteurActivite = '47.26' → TABAC ✅
+- secteurActivite = '47.62' → PRESSE ✅
+- secteurActivite = '56.30' (Débits de boissons) → PAS TABAC ❌
 
-IMPORTANT: La détection se base UNIQUEMENT sur le NAF code (47.26 ou 47.62).
-Un "Bar Tabac" avec NAF 56.30Z est considéré comme un BAR, pas un TABAC.
+IMPORTANT: La détection se base UNIQUEMENT sur state.businessInfo.secteurActivite (choisi par l'utilisateur).
+Le secteur '47.26' correspond à "Tabac / Presse / Loto".
 
 SI COMMERCE TABAC/PRESSE/FDJ DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
 SINON → Utiliser MÉTHODE CLASSIQUE (Étapes 1-4)

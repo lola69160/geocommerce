@@ -224,6 +224,60 @@ export class MyAgent extends LlmAgent {
 3. Run `npm run test:financial` before committing
 4. Check logs in `logs/` for errors
 
+### Sector Selection (Sélection du Secteur d'Activité)
+
+**CRITICAL**: The application uses **manual sector selection** instead of automatic NAF code detection.
+
+#### Why Manual Selection?
+
+Automatic NAF-based sector detection was unreliable:
+- Used partial matching (e.g., `nafCode.startsWith('47')`)
+- Produced classification errors (e.g., Tabac detected as "Débits de boissons")
+- Led to incorrect benchmarks and valuation methods
+
+#### Current Implementation (2025-12-31)
+
+**Form Field**: Required dropdown in `ProfessionalAnalysisModal.jsx` with 9 sectors:
+```javascript
+<select value={secteurActivite} onChange={(e) => setSecteurActivite(e.target.value)} required>
+  <option value="47.11">Commerce non spécialisé (Superette, Alimentation)</option>
+  <option value="47.26">Tabac / Presse / Loto</option>
+  <option value="10.71">Boulangerie-Pâtisserie</option>
+  <option value="56.10">Restauration traditionnelle</option>
+  <option value="56.30">Débits de boissons (Bar, Café)</option>
+  <option value="96.02">Coiffure</option>
+  <option value="47.7">Commerce spécialisé habillement</option>
+  <option value="47.73">Pharmacie</option>
+  <option value="55.10">Hôtellerie</option>
+</select>
+```
+
+**Data Flow**:
+```
+User Selection → businessInfo.secteurActivite (required)
+                businessInfo.nafCode (API original, audit only)
+  ↓
+Backend Validation → 400 if secteurActivite missing
+  ↓
+State Init → state.businessInfo.secteurActivite
+  ↓
+All Agents/Tools → Use secteurActivite for benchmarks/valuation
+  ↓
+Report Display → "Secteur : Tabac / Presse / Loto" (no NAF shown)
+```
+
+**Key Files**:
+- `server/adk/financial/config/sectorMapping.ts` - Sector mapping constants
+- `server/adk/financial/config/sectorBenchmarks.ts` - Direct lookup (no partial matching)
+- `server/adk/financial/tools/accounting/compareToSectorTool.ts` - Reads `secteurActivite`
+- `server/adk/financial/agents/ValorisationAgent.ts` - Tabac detection via `secteurActivite === '47.26'`
+
+**Validation Rules**:
+- Frontend: Required field, must select one of 9 sectors
+- Backend: API returns 400 if missing, warns if sector not found in benchmarks
+
+See [docs/FINANCIAL_CHANGELOG.md](docs/FINANCIAL_CHANGELOG.md#sélection-manuelle-du-secteur-dactivité-2025-12-31) for complete implementation details.
+
 ### Tabac/Presse Specifics (NAF 47.26Z)
 
 Special handling for Tabac commerce:
