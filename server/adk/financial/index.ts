@@ -55,7 +55,8 @@ export type FinancialInput = {
     name: string;
     siret: string;
     nafCode?: string;              // NAF code from API (for audit trail only)
-    secteurActivite: string;       // User-selected sector (NAF code format)
+    secteurActivite: string;       // User-selected sector code (NAF format, e.g., '47.26')
+    secteurActiviteLabel?: string; // User-selected sector label (for display, e.g., 'Tabac / Presse / Loto')
     activity: string;
   };
   userComments?: {

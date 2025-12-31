@@ -1140,7 +1140,8 @@ app.post('/api/analyze-financial', async (req, res) => {
                 name: businessInfo.name,
                 siret: businessInfo.siret || '',
                 nafCode: businessInfo.nafCode || '',              // NAF from API (audit trail only)
-                secteurActivite: businessInfo.secteurActivite,    // User-selected sector (required)
+                secteurActivite: businessInfo.secteurActivite,    // User-selected sector code (required)
+                secteurActiviteLabel: businessInfo.secteurActiviteLabel || '', // User-selected sector label (for display)
                 activity: businessInfo.activity || ''
             },
             userComments: enrichedUserComments,

@@ -141,7 +141,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       }
 
       // 3. Analyse comptable (with documentExtraction fallback for missing SIG values)
-      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, params.charts.projectedHealthGauge, businessPlan, userComments, documentExtraction);
+      html += generateAccountingSection(comptable, params.charts.evolutionChart, params.charts.healthGauge, params.charts.projectedHealthGauge, businessPlan, userComments, documentExtraction, businessInfo);
       sections_included.push('accounting_analysis');
 
       // 4. Valorisation (avec userComments et options pour section Tabac complète)

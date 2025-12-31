@@ -239,7 +239,12 @@ Automatic NAF-based sector detection was unreliable:
 
 **Form Field**: Required dropdown in `BusinessAnalysisModal.jsx` with 9 sectors:
 ```javascript
-<select value={secteurActivite} onChange={(e) => setSecteurActivite(e.target.value)} required>
+<select value={secteurActivite} onChange={(e) => {
+  const code = e.target.value;
+  const label = code ? e.target.options[e.target.selectedIndex].text : '';
+  setSecteurActivite(code);
+  setSecteurActiviteLabel(label);
+}} required>
   <option value="47.11">Commerce non spécialisé (Superette, Alimentation)</option>
   <option value="47.26">Tabac / Presse / Loto</option>
   <option value="10.71">Boulangerie-Pâtisserie</option>
@@ -254,27 +259,33 @@ Automatic NAF-based sector detection was unreliable:
 
 **Data Flow**:
 ```
-User Selection → businessInfo.secteurActivite (required)
+User Selection → businessInfo.secteurActivite (code NAF, e.g., '47.26')
+              → businessInfo.secteurActiviteLabel (label exact, e.g., 'Tabac / Presse / Loto')
                 businessInfo.nafCode (API original, audit only)
   ↓
 Backend Validation → 400 if secteurActivite missing
   ↓
-State Init → state.businessInfo.secteurActivite
+State Init → state.businessInfo.secteurActivite (for calculations)
+          → state.businessInfo.secteurActiviteLabel (for display)
   ↓
 All Agents/Tools → Use secteurActivite for benchmarks/valuation
   ↓
-Report Display → "Secteur : Tabac / Presse / Loto" (no NAF shown)
+Report Display → Uses secteurActiviteLabel (preserves exact user selection)
+                 Example: "Secteur: Tabac / Presse / Loto"
 ```
 
 **Key Files**:
 - `server/adk/financial/config/sectorMapping.ts` - Sector mapping constants
 - `server/adk/financial/config/sectorBenchmarks.ts` - Direct lookup (no partial matching)
-- `server/adk/financial/tools/accounting/compareToSectorTool.ts` - Reads `secteurActivite`
+- `server/adk/financial/tools/accounting/compareToSectorTool.ts` - Reads `secteurActivite` (code)
 - `server/adk/financial/agents/ValorisationAgent.ts` - Tabac detection via `secteurActivite === '47.26'`
+- `server/adk/financial/tools/report/sections/accountingSection.ts` - Displays `secteurActiviteLabel` (FIX 2025-12-31)
 
 **Validation Rules**:
 - Frontend: Required field, must select one of 9 sectors
 - Backend: API returns 400 if missing, warns if sector not found in benchmarks
+
+**CRITICAL (2025-12-31)**: The sector label displayed in reports MUST be the exact text from the dropdown (e.g., "Tabac / Presse / Loto"), NOT a transformed/mapped version from `sectorBenchmarks.ts`. This ensures consistency between user selection and report display. The `secteurActiviteLabel` field preserves the exact user choice.
 
 See [docs/FINANCIAL_CHANGELOG.md](docs/FINANCIAL_CHANGELOG.md#sélection-manuelle-du-secteur-dactivité-2025-12-31) for complete implementation details.
 

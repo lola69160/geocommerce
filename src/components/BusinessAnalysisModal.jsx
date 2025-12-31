@@ -43,6 +43,7 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
   const [loyerActuel, setLoyerActuel] = useState(''); // Loyer actuel (€/mois)
   const [loyerNegocie, setLoyerNegocie] = useState(''); // Loyer négocié (€/mois)
   const [secteurActivite, setSecteurActivite] = useState(''); // Secteur d'activité sélectionné (code NAF)
+  const [secteurActiviteLabel, setSecteurActiviteLabel] = useState(''); // Label exact du secteur pour affichage
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
@@ -607,7 +608,8 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
             name: business.nom_complet || business.nom_raison_sociale || 'Commerce',
             siret: business.siret || business.siren,
             nafCode: business.activite_principale || '',      // NAF from API (audit trail)
-            secteurActivite: secteurActivite,                  // User-selected sector (REQUIRED)
+            secteurActivite: secteurActivite,                  // User-selected sector code (REQUIRED)
+            secteurActiviteLabel: secteurActiviteLabel,        // User-selected sector label (for display)
             activity: business.libelle_activite_principale || ''
           },
           userComments: {
@@ -1008,7 +1010,12 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
               </label>
               <select
                 value={secteurActivite}
-                onChange={(e) => setSecteurActivite(e.target.value)}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const label = code ? e.target.options[e.target.selectedIndex].text : '';
+                  setSecteurActivite(code);
+                  setSecteurActiviteLabel(label);
+                }}
                 className="w-full px-3 py-2.5 text-sm bg-white border-2 border-surface-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                 required
               >

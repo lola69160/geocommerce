@@ -31,7 +31,8 @@ export function generateAccountingSection(
   projectedHealthGauge: any, // ✅ ADD parameter
   businessPlan?: any,
   userComments?: any,
-  documentExtraction?: any
+  documentExtraction?: any,
+  businessInfo?: any
 ): string {
   if (!comptable) {
     return '<h2>📈 Analyse Comptable</h2><p class="no-data">Données comptables non disponibles</p>';
@@ -256,7 +257,7 @@ export function generateAccountingSection(
 
   // Benchmark sectoriel
   if (comptable.benchmark) {
-    html += generateBenchmarkSection(comptable.benchmark);
+    html += generateBenchmarkSection(comptable.benchmark, businessInfo);
   }
 
   html += '<div class="page-break"></div>';
@@ -351,9 +352,12 @@ function generateEbeBridgeTable(ebe: any): string {
 /**
  * Generate benchmark section
  */
-function generateBenchmarkSection(benchmark: any): string {
+function generateBenchmarkSection(benchmark: any, businessInfo?: any): string {
   let html = '<h3>Comparaison Sectorielle</h3>';
-  html += `<p><strong>Secteur:</strong> ${benchmark.sector}</p>`;
+
+  // ✅ FIX: Use user-selected sector label (exact text from dropdown) instead of benchmark.sector
+  const sectorLabel = businessInfo?.secteurActiviteLabel || benchmark.sector;
+  html += `<p><strong>Secteur:</strong> ${sectorLabel}</p>`;
 
   if (benchmark.comparisons && benchmark.comparisons.length > 0) {
     html += '<table><thead><tr><th>Ratio</th><th class="text-right">Entreprise</th><th class="text-right">Moyenne Secteur</th><th class="text-center">Position</th></tr></thead><tbody>';
