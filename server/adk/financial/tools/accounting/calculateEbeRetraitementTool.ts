@@ -146,6 +146,7 @@ export const calculateEbeRetraitementTool = new FunctionTool({
         description: string;
         montant: number;
         source: string;
+        justification?: string;
         commentaire?: string;
       }> = [];
 

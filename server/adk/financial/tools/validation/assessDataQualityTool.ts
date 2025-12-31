@@ -616,7 +616,14 @@ function parseState(state: any): any {
   }
   if (typeof state === 'string') {
     try {
-      return JSON.parse(state);
+      // Strip markdown code blocks if present (LLM sometimes wraps JSON in ```json ... ```)
+      let cleanState = state.trim();
+      if (cleanState.startsWith('```json')) {
+        cleanState = cleanState.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+      } else if (cleanState.startsWith('```')) {
+        cleanState = cleanState.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+      }
+      return JSON.parse(cleanState);
     } catch (e) {
       console.error('[assessDataQuality] ❌ parseState: JSON parse failed', e);
       return null;

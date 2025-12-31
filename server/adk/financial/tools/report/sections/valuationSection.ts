@@ -19,9 +19,8 @@ export function generateValuationSection(
     return '<h2>💰 Valorisation du Fonds</h2><p class="no-data">Données de valorisation non disponibles</p>';
   }
 
-  // Prix demandé par le vendeur
-  const transactionCosts = documentExtraction?.transactionCosts;
-  const prixDemande = transactionCosts?.prix_fonds || valorisation?.comparaisonPrix?.prix_affiche || 0;
+  // Prix demandé par le vendeur (alimenté par valorisation.comparaisonPrix.prix_affiche)
+  const prixDemande = valorisation?.comparaisonPrix?.prix_affiche || 0;
 
   let html = '<h2>💰 Valorisation du Fonds</h2>';
 

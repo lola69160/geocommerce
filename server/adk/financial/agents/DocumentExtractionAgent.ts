@@ -3,8 +3,7 @@ import {
   extractPdfTool,
   geminiVisionExtractTool,    // NEW - primary extraction method (Vision)
   parseTablesHeuristicTool,   // RENAMED - fallback only
-  listDocumentsTool,          // NEW - mandatory document listing
-  extractTransactionCostsTool // NEW - extract transaction costs
+  listDocumentsTool           // NEW - mandatory document listing
 } from '../tools/document';
 import type { FinancialState } from '../index';
 
@@ -55,8 +54,7 @@ export class DocumentExtractionAgent extends LlmAgent {
         listDocumentsTool,           // NEW - MANDATORY first call to get exact filenames
         extractPdfTool,              // Still needed for raw_text fallback
         geminiVisionExtractTool,     // NEW - primary method (Vision API)
-        parseTablesHeuristicTool,    // RENAMED - fallback only if Vision fails
-        extractTransactionCostsTool  // NEW - extract transaction costs and financing
+        parseTablesHeuristicTool     // RENAMED - fallback only if Vision fails
       ],
 
       // Instruction système
@@ -126,24 +124,6 @@ b) EXTRACTION HEURISTIQUE (FALLBACK si Vision échoue)
 
    ⚠️ Toujours utiliser le filename exact de l'étape 1
 
-c) EXTRACTION COÛTS DE TRANSACTION (IMPORTANT - vérifier le nom du fichier!)
-   SI geminiVisionExtract a détecté documentType = "cout_transaction"
-   OU SI le nom du fichier contient un de ces patterns (même si classé "projet_vente"):
-      - "cout" + "transaction"
-      - "offre" + "achat"
-      - "cout" + "acquisition"
-      - "financement" + "acquisition"
-
-   ALORS appeler:
-   extractTransactionCosts({ filename: "EXACT_FILENAME_FROM_STEP_1" })
-
-   Retourne: { success: true, transactionCosts: { prix_fonds, honoraires_ht, frais_acte_ht, ..., mensualites } }
-
-   ⚠️ Ce tool extrait automatiquement tous les coûts et le financement
-   ⚠️ Les données seront injectées dans state.transactionCosts (géré automatiquement)
-   ⚠️ IMPORTANT: Les documents "projet_vente" peuvent contenir des coûts de transaction !
-   ⚠️ Exemple: "Cout transaction Mme Ardouin (offre).pdf" → appeler extractTransactionCosts
-
 ═══════════════════════════════════════════════════════════════════════════════
 ÉTAPE 3 : CONSTRUIRE LE JSON FINAL
 ═══════════════════════════════════════════════════════════════════════════════
@@ -170,22 +150,6 @@ Après avoir traité TOUS les documents, construire le JSON final :
     "years_covered": [2023],
     "missing_documents": [],
     "extraction_methods": {"vision": 1, "heuristic": 0}
-  },
-  "transactionCosts": {  // NOUVEAU - Inclure si un document "cout_transaction" a été trouvé
-    "prix_fonds": 320000,
-    "honoraires_ht": 25600,
-    "frais_acte_ht": 6400,
-    "debours": 900,
-    "droits_enregistrement": 11310,
-    "tva": 6400,
-    "stock_fonds_roulement": 90000,
-    "loyer_avance": 2400,
-    "total_investissement": 465000,
-    "apport_requis": 125600,
-    "credit_sollicite": 318000,
-    "duree_credit_mois": 84,
-    "taux_credit": 3.2,
-    "mensualites": 4230.55
   }
 }
 

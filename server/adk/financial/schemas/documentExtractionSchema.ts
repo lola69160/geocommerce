@@ -24,7 +24,7 @@ export const TableSchema = z.object({
 export const ExtractedDataSchema = z.object({
   raw_text: z.string(),
   tables: z.array(TableSchema),
-  key_values: z.record(z.any()).optional()
+  key_values: z.record(z.string(), z.any()).optional()
 });
 
 export const ExtractedDocumentSchema = z.object({

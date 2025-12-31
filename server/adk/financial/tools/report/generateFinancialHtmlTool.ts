@@ -27,7 +27,8 @@ import {
   generateValuationSection,
   generateRealEstateSection,
   generateBusinessPlanSection,
-  generateOpportunitySection
+  generateOpportunitySection,
+  generateFinancingPlanSection
 } from './sections';
 
 // Acquisition Advice
@@ -116,13 +117,11 @@ export const generateFinancialHtmlTool = new FunctionTool({
       let userComments = parseState(toolContext?.state.get('userComments'));
 
       // 2a. Section Opportunité de Reprise (nouvelle section stratégique avec Gemini)
-      const transactionCosts = documentExtraction?.transactionCosts;
       const opportunityHtml = await generateOpportunitySection(
         comptable,
         valorisation,
         businessPlan,
-        userComments,
-        transactionCosts
+        userComments
       );
       html += opportunityHtml;
       sections_included.push('opportunity_section');
@@ -161,7 +160,11 @@ export const generateFinancialHtmlTool = new FunctionTool({
         sections_included.push('business_plan');
       }
 
-      // 6bis. Conseils pour le Rachat (enrichi avec rapport professionnel)
+      // 6bis. Plan de Financement
+      html += generateFinancingPlanSection(userComments, comptable);
+      sections_included.push('financing_plan');
+
+      // 7. Conseils pour le Rachat (enrichi avec rapport professionnel)
       // Extraire le SIREN depuis businessInfo
       const siret = businessInfo?.siret || '';
       const siren = siret.substring(0, 9);

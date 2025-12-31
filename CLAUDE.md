@@ -471,3 +471,129 @@ if (hasStructuredLoyer) {
 - `server/adk/financial/agents/ComptableAgent.ts` : Règle 6.5 pour générer analyseDetailleeEbe
 
 See [docs/FINANCIAL_PIPELINE.md](docs/FINANCIAL_PIPELINE.md) for complete priority rules.
+
+#### Transaction Financing Form - Formulaire de Financement Complet (2025-12-31)
+
+**Fonctionnalité**: Formulaire structuré en 3 sections avec architecture **deux colonnes** (Scénario Initial | Scénario Négocié) pour capturer toutes les données d'acquisition et de financement d'un fonds de commerce.
+
+**Architecture UX** :
+- Layout : Deux colonnes côte-à-côte pour comparer Initial vs Négocié
+- Calculs automatiques : 8 champs calculés en temps réel (lecture seule)
+- Validations : 6 règles (warnings + erreurs bloquantes)
+- Design : Headers colorés distinctifs, badges "Auto", totaux highlighted
+
+**Section 7: Données du Projet** (💰 Investment Data - Cyan)
+```javascript
+// 6 champs de saisie + 2 auto-calculés × 2 scénarios
+- Prix du fonds de commerce (€)
+- Honoraires HT (€)
+- Frais d'actes HT (€)
+- TVA sur honoraires (auto-calc: (honoraires + frais) × 20.6%) ← READ-ONLY
+- Droits d'enregistrement et débours (€)
+- Stock et Fonds de roulement (€)
+- Loyer d'avance / caution (€) - distinct du loyer mensuel
+- TOTAL INVESTISSEMENT (auto-calc: somme des 7 postes) ← READ-ONLY, HIGHLIGHTED
+```
+
+**Section 8: Données du Financement** (🏦 Financing Sources - Orange)
+```javascript
+// 3 champs de saisie + 1 auto-calculé × 2 scénarios
+- Apport personnel (€)
+- Prêt Relais TVA (€) - court-terme ~4%
+- Crédit Vendeur (€) - facilite négociation
+- MONTANT PRÊT PRINCIPAL (auto-calc: Total - apport - prêt relais - crédit vendeur) ← READ-ONLY, HIGHLIGHTED
+```
+
+**Section 9: Paramètres de l'Emprunt** (📊 Loan Parameters - Violet)
+```javascript
+// 3 champs de saisie + 1 auto-calculé × 2 scénarios
+- Durée du prêt (années, 1-25)
+- Taux d'intérêt nominal (%, step: 0.1)
+- Taux d'assurance ADI (%, step: 0.05)
+- ESTIMATION ANNUELLE (auto-calc: formule annuité × 12 mois) ← READ-ONLY, HIGHLIGHTED
+```
+
+**Calculs automatiques (8 useEffect hooks)** :
+1. **TVA** : `(honoraires_ht + frais_acte_ht) × 0.206`
+2. **Total investissement** : `prix_fonds + honoraires + frais_actes + tva + debours + stock + loyer_avance`
+3. **Prêt principal** : `total_investissement - apport - pret_relais_tva - credit_vendeur` (jamais négatif)
+4. **Estimation annuelle** : Formule d'annuité avec gestion du cas taux = 0%
+   ```javascript
+   r = (taux_interet + taux_assurance) / 100 / 12  // Taux mensuel
+   n = duree × 12  // Nombre de mois
+   Mensualité = P × (r × (1+r)^n) / ((1+r)^n - 1)
+   Estimation annuelle = Mensualité × 12
+   ```
+
+**Règles de validation frontend (6 règles)** :
+1. **Scénario incomplet** : Warning si Initial rempli mais pas Négocié (confirmation)
+2. **Prix négocié > Prix initial** : Warning inhabituel (confirmation)
+3. **Apport > Total investissement** : Erreur bloquante
+4. **Durée = 0 mais prêt > 0** : Erreur bloquante incohérence
+5. **Taux intérêt > 15%** : Warning valeur élevée (confirmation)
+6. **Prêt principal négatif** : Erreur bloquante (somme apports > total)
+
+**Système de priorité backend** :
+```javascript
+// parseTransactionFinancing() dans server.js
+PRIORITY 0: Formulaire manuel (userComments.transactionFinancing)
+PRIORITY 1: Extraction PDF (state.transactionCosts) - future
+PRIORITY 2: NLP fallback - future
+
+// Les données manuelles du formulaire écrasent toujours l'extraction PDF
+```
+
+**Types TypeScript** :
+```typescript
+// server/adk/financial/index.ts
+userComments?: {
+  transactionFinancing?: {
+    initial?: {
+      // Investment Data
+      prix_fonds?: number;
+      honoraires_ht?: number;
+      frais_acte_ht?: number;
+      tva_sur_honoraires?: number;     // Auto-calculated
+      debours?: number;
+      stock_fonds_roulement?: number;
+      loyer_avance?: number;
+      total_investissement?: number;   // Auto-calculated
+
+      // Financing Sources
+      apport_personnel?: number;
+      pret_relais_tva?: number;
+      credit_vendeur?: number;
+      pret_principal?: number;         // Auto-calculated
+
+      // Loan Parameters
+      duree_annees?: number;
+      taux_interet?: number;
+      taux_assurance?: number;
+      estimation_annuelle?: number;    // Auto-calculated
+    };
+    negocie?: {
+      // Même structure que initial
+    };
+  };
+};
+```
+
+**Fichiers modifiés** :
+- `src/components/BusinessAnalysisModal.jsx` : 44 state variables, 8 useEffect, 3 sections JSX (+908 lignes)
+- `server/adk/financial/index.ts` : Types FinancialInput/FinancialState (+102 lignes)
+- `server.js` : Fonction `parseTransactionFinancing()` avec priorité (+26 lignes)
+
+**État actuel (Phase 1)** :
+- ✅ Formulaire complet avec calculs automatiques
+- ✅ Validations robustes frontend
+- ✅ Types backend et système de priorité
+- ✅ Données envoyées au backend via API
+- ⏳ Utilisation dans rapport HTML (Phase 2 future)
+
+**Phase 2 (Future)** :
+- Créer `generateFinancingAnalysisTool.ts` pour exploiter les données
+- Ajouter section "Plan de Financement" dans le rapport HTML
+- Tableau comparatif Initial vs Négocié
+- Simulation de remboursement d'emprunt avec échéancier
+
+See commit `22f1c22` (2025-12-31) for complete implementation.

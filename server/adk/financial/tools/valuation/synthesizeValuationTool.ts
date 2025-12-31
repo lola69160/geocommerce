@@ -131,7 +131,7 @@ export const synthesizeValuationTool = new FunctionTool({
         }
       }
 
-      // NOUVEAU: Lire documentExtraction pour transactionCosts
+      // Lire documentExtraction pour businessInfo (NAF code)
       let documentExtraction = toolContext?.state.get('documentExtraction') as any;
 
       if (typeof documentExtraction === 'string') {
@@ -142,10 +142,24 @@ export const synthesizeValuationTool = new FunctionTool({
         }
       }
 
-      // Si prix_affiche non fourni en params, utiliser transactionCosts.prix_fonds
+      // Lire userComments pour transactionFinancing
+      let userComments = toolContext?.state.get('userComments') as any;
+
+      if (typeof userComments === 'string') {
+        try {
+          userComments = JSON.parse(userComments);
+        } catch (e) {
+          // Pas critique
+        }
+      }
+
+      // Si prix_affiche non fourni en params, utiliser transactionFinancing.prix_fonds
       let prixAffiche = params.prix_affiche;
-      if (!prixAffiche && documentExtraction?.transactionCosts?.prix_fonds) {
-        prixAffiche = documentExtraction.transactionCosts.prix_fonds;
+      if (!prixAffiche && userComments?.transactionFinancing) {
+        const scenario = userComments.transactionFinancing.negocie?.prix_fonds > 0
+          ? userComments.transactionFinancing.negocie
+          : userComments.transactionFinancing.initial;
+        prixAffiche = scenario?.prix_fonds || 0;
       }
 
       // Déterminer la méthode privilégiée

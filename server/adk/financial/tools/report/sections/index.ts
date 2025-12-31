@@ -17,5 +17,8 @@ export { generateBusinessPlanSection } from './businessPlanSection';
 // Opportunity section (new - strategic reprise section)
 export { generateOpportunitySection } from './opportunitySection';
 
+// Financing plan section
+export { generateFinancingPlanSection } from './financingPlanSection';
+
 // Re-export types and utilities if needed
 export type { } from './coverPage';

@@ -81,10 +81,6 @@ Les données sont passées via state (accessible dans les tools) :
     * ebeRetraitement.ecart_pct : Écart en % entre EBE comptable et normatif
 - state.documentExtraction : Documents comptables extraits (bilans, comptes de résultat)
   - documentExtraction.documents[] : Liste des documents avec tableaux
-  - documentExtraction.transactionCosts : Coûts de transaction (NOUVEAU)
-    * transactionCosts.prix_fonds : Prix du fonds affiché par le vendeur
-    * transactionCosts.total_investissement : Investissement total requis
-    * transactionCosts.credit_sollicite : Crédit nécessaire
 - state.businessInfo : Informations sur l'entreprise
   - businessInfo.name : Nom de l'entreprise
   - businessInfo.nafCode : Code NAF (pour coefficients sectoriels)

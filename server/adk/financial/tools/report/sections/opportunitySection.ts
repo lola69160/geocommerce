@@ -137,26 +137,31 @@ IMPORTANT: Mets en avant la vision strategique et les leviers de croissance envi
 /**
  * Generate the Projet Vendeur table HTML
  */
-function generateProjetVendeurTable(transactionCosts: any): string {
-  if (!transactionCosts || !transactionCosts.prix_fonds) {
+function generateProjetVendeurTable(transactionFinancing: any): string {
+  // Utiliser le scénario négocié si disponible, sinon initial
+  const scenario = transactionFinancing?.negocie?.total_investissement > 0
+    ? transactionFinancing.negocie
+    : transactionFinancing?.initial;
+
+  if (!scenario || !scenario.prix_fonds) {
     return `
       <div class="opportunity-missing">
-        Document "Cout de transaction" non fourni. Les details du projet vendeur ne peuvent pas etre affiches.
+        Formulaire de financement non renseigne. Les details du projet vendeur ne peuvent pas etre affiches.
       </div>
     `;
   }
 
-  const prixFonds = transactionCosts.prix_fonds || 0;
-  const honorairesHT = transactionCosts.honoraires_ht || 0;
-  const fraisActeHT = transactionCosts.frais_acte_ht || 0;
-  const debours = transactionCosts.debours || 0;
-  const droitsEnregistrement = transactionCosts.droits_enregistrement || 0;
-  const tva = transactionCosts.tva || 0;
-  const stockFdR = transactionCosts.stock_fonds_roulement || 0;
-  const loyerAvance = transactionCosts.loyer_avance || 0;
-  const totalInvestissement = transactionCosts.total_investissement || 0;
+  const prixFonds = scenario.prix_fonds || 0;
+  const honorairesHT = scenario.honoraires_ht || 0;
+  const fraisActeHT = scenario.frais_acte_ht || 0;
+  const tva = scenario.tva_sur_honoraires || 0;
+  const debours = scenario.debours || 0;  // INCLUT droits d'enregistrement (fusionné)
+  const stockFdR = scenario.stock_fonds_roulement || 0;
+  const loyerAvance = scenario.loyer_avance || 0;
+  const totalInvestissement = scenario.total_investissement || 0;
 
-  const totalHonoraires = honorairesHT + fraisActeHT + debours + droitsEnregistrement + tva;
+  // Ne plus utiliser droits_enregistrement séparé (fusionné avec debours)
+  const totalHonoraires = honorairesHT + fraisActeHT + tva + debours;
   const totalStockFdR = stockFdR + loyerAvance;
 
   return `
@@ -179,7 +184,7 @@ function generateProjetVendeurTable(transactionCosts: any): string {
         ${totalHonoraires > 0 ? `
         <tr>
           <td class="detail" colspan="2">
-            (Negociation ${honorairesHT.toLocaleString('fr-FR')} EUR + Acte ${fraisActeHT.toLocaleString('fr-FR')} EUR + Droits ${droitsEnregistrement.toLocaleString('fr-FR')} EUR + Debours ${debours.toLocaleString('fr-FR')} EUR + TVA ${tva.toLocaleString('fr-FR')} EUR)
+            (Negociation ${honorairesHT.toLocaleString('fr-FR')} EUR + Acte ${fraisActeHT.toLocaleString('fr-FR')} EUR + Droits & Debours ${debours.toLocaleString('fr-FR')} EUR + TVA ${tva.toLocaleString('fr-FR')} EUR)
           </td>
         </tr>
         ` : ''}
@@ -206,7 +211,7 @@ function generateProjetVendeurTable(transactionCosts: any): string {
 /**
  * Generate Key Figures (Chiffres Cles Projetes) HTML
  */
-function generateKeyFigures(comptable: any, businessPlan: any, transactionCosts: any, userComments: any): string {
+function generateKeyFigures(comptable: any, businessPlan: any, transactionFinancing: any, userComments: any): string {
   // Extract values
   const ebeComptable = comptable?.ebeRetraitement?.ebe_comptable || 0;
   const ebeNormatif = comptable?.ebeRetraitement?.ebe_normatif || 0;
@@ -219,11 +224,16 @@ function generateKeyFigures(comptable: any, businessPlan: any, transactionCosts:
   const years = comptable?.sig ? Object.keys(comptable.sig).sort().reverse() : [];
   const lastYear = years[0] || '2023';
 
-  // Apport personnel from userComments or transactionCosts
-  const apportPersonnel = userComments?.apport_personnel || transactionCosts?.apport_requis || 0;
+  // Utiliser le scénario négocié si disponible, sinon initial
+  const scenario = transactionFinancing?.negocie?.total_investissement > 0
+    ? transactionFinancing.negocie
+    : transactionFinancing?.initial;
+
+  // Apport personnel from transactionFinancing
+  const apportPersonnel = scenario?.apport_personnel || 0;
 
   // Loan capacity assessment
-  const annuitePrevue = businessPlan?.financement?.annuite || (transactionCosts?.mensualites ? transactionCosts.mensualites * 12 : 0);
+  const annuitePrevue = scenario?.estimation_annuelle || 0;
   const capaciteRemboursement = ebeAnnee1 - annuitePrevue;
   const ratioEndettement = ebeAnnee1 > 0 ? (annuitePrevue / ebeAnnee1 * 100) : 100;
 
@@ -263,9 +273,9 @@ function generateKeyFigures(comptable: any, businessPlan: any, transactionCosts:
       <div class="key-figure-card">
         <div class="label">Apport personnel</div>
         <div class="value blue">${apportPersonnel.toLocaleString('fr-FR')} EUR</div>
-        ${transactionCosts?.total_investissement ? `
+        ${scenario?.total_investissement ? `
         <div class="comparison">
-          ${((apportPersonnel / transactionCosts.total_investissement) * 100).toFixed(0)}% du total
+          ${((apportPersonnel / scenario.total_investissement) * 100).toFixed(0)}% du total
         </div>
         ` : ''}
       </div>
@@ -281,8 +291,7 @@ export async function generateOpportunitySection(
   comptable: any,
   valorisation: any,
   businessPlan: any,
-  userComments: any,
-  transactionCosts: any
+  userComments: any
 ): Promise<string> {
   console.log('[opportunitySection] Generating opportunity section...');
 
@@ -292,9 +301,12 @@ export async function generateOpportunitySection(
   // Generate Le Projet text (async Gemini call) - only if userComments.autres exists
   const leProjetText = await generateLeProjetText(userComments);
 
+  // Extract transactionFinancing from userComments
+  const transactionFinancing = userComments?.transactionFinancing;
+
   // Generate static sections
-  const projetVendeurTable = generateProjetVendeurTable(transactionCosts);
-  const keyFiguresHtml = generateKeyFigures(comptable, businessPlan, transactionCosts, userComments);
+  const projetVendeurTable = generateProjetVendeurTable(transactionFinancing);
+  const keyFiguresHtml = generateKeyFigures(comptable, businessPlan, transactionFinancing, userComments);
 
   console.log('[opportunitySection] Section generated successfully');
 

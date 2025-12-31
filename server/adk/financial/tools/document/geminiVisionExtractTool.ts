@@ -66,7 +66,6 @@ DOCUMENT TYPE DETECTION (analyser le CONTENU, pas seulement le titre):
   * Critère clé : présence de BILAN ET COMPTE DE RÉSULTAT dans le même document
 - "bail" : Contrat de location commerciale 3-6-9
 - "projet_vente" : Proposition de cession de fonds de commerce
-- "cout_transaction" : Document détaillant coûts acquisition (prix fonds, honoraires, frais, stock, financement)
 - "autre" : Non identifié
 
 RÈGLE IMPORTANTE: Si le document contient BILAN + COMPTE DE RÉSULTAT → type = "liasse_fiscale"
@@ -194,7 +193,7 @@ FORMAT DE SORTIE:
 Retourner un JSON avec TOUS les tableaux identifiés, même s'ils semblent similaires.
 Structure exacte attendue:
 {
-  "documentType": "liasse_fiscale" | "bilan" | "compte_resultat" | "bail" | "cout_transaction" | "autre",
+  "documentType": "liasse_fiscale" | "bilan" | "compte_resultat" | "bail" | "autre",
   "year": 2023,
   "confidence": 0.85,
   "extraction_details": {

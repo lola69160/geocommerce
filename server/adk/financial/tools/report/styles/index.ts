@@ -1132,6 +1132,244 @@ export function generateCSS(): string {
       print-color-adjust: exact;
     }
   }
+
+  /* ========================================
+     FINANCING PLAN SECTION
+     ======================================== */
+
+  /* Empty state message */
+  .financing-empty-state {
+    background: var(--color-bg-light);
+    border: 1px solid var(--color-table-border);
+    border-left: 4px solid var(--color-warning-text);
+    border-radius: 8px;
+    padding: 25px;
+    text-align: center;
+    margin: 20px 0;
+  }
+
+  .financing-empty-state p {
+    color: var(--color-text-secondary);
+    margin: 8px 0;
+  }
+
+  /* Financing table styles */
+  .financing-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background: white;
+    border: 1px solid var(--color-table-border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .financing-table thead th {
+    background: #0369a1;
+    color: white;
+    padding: 14px 16px;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 2px solid #0284c7;
+  }
+
+  .financing-table thead th.text-right {
+    text-align: right;
+  }
+
+  .financing-table tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-table-border);
+    color: var(--color-text-primary);
+  }
+
+  .financing-table tbody td.text-right {
+    text-align: right;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-weight: 500;
+  }
+
+  /* Section headers in table */
+  .financing-table .section-header td {
+    background: var(--color-table-header);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    padding: 14px 16px;
+    border-top: 2px solid var(--color-table-border);
+    border-bottom: 1px solid var(--color-table-border);
+  }
+
+  /* Total rows */
+  .financing-table .total-row td {
+    background: #f0f9ff;
+    font-weight: 700;
+    color: #0369a1;
+    border-top: 2px solid #0284c7;
+    border-bottom: 2px solid #0284c7;
+    padding: 14px 16px;
+  }
+
+  /* N/A values */
+  .financing-table .na {
+    color: var(--color-text-muted);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* Difference colors */
+  .financing-table .positive {
+    color: var(--color-success-text);
+    font-weight: 600;
+  }
+
+  .financing-table .negative {
+    color: var(--color-error-text);
+    font-weight: 600;
+  }
+
+  /* Key Indicators Grid */
+  .key-indicators-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin: 25px 0;
+  }
+
+  @media (max-width: 768px) {
+    .key-indicators-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Indicator Cards */
+  .indicator-card {
+    background: white;
+    border: 1px solid var(--color-table-border);
+    border-radius: 10px;
+    padding: 22px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .indicator-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Color-coded borders */
+  .indicator-card {
+    border-left: 4px solid #94a3b8;
+  }
+
+  .indicator-card.success {
+    border-left-color: #059669;
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  }
+
+  .indicator-card.caution {
+    border-left-color: #f59e0b;
+    background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+  }
+
+  .indicator-card.warning {
+    border-left-color: #dc2626;
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+  }
+
+  /* Indicator content */
+  .indicator-label {
+    font-size: 0.88em;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .indicator-value {
+    font-size: 1.9em;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+  }
+
+  .indicator-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+  }
+
+  .indicator-badge.success {
+    background: #059669;
+    color: white;
+  }
+
+  .indicator-badge.caution {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .indicator-badge.warning {
+    background: #dc2626;
+    color: white;
+  }
+
+  .indicator-detail {
+    font-size: 0.82em;
+    color: var(--color-text-muted);
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  /* No data message in indicators */
+  .no-data {
+    color: var(--color-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+  }
+
+  /* Print styles for financing section */
+  @media print {
+    .financing-table,
+    .indicator-card {
+      break-inside: avoid;
+    }
+
+    .financing-table thead th,
+    .financing-table .total-row td {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .indicator-card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .indicator-badge.success {
+      background: #059669 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .indicator-badge.caution {
+      background: #f59e0b !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .indicator-badge.warning {
+      background: #dc2626 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
 </style>
 `;
 }

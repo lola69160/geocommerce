@@ -26,7 +26,7 @@ export const VisionExtractionOutputSchema = z.object({
       rows: z.array(z.array(z.string())),
       caption: z.string().optional()
     })),
-    key_values: z.record(z.any()).optional()
+    key_values: z.record(z.string(), z.any()).optional()
   }),
   reasoning: z.string().optional(),
   method: z.enum(['vision', 'heuristic', 'vision_failed']),
