@@ -81,7 +81,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
     <>
       {/* Floating Cart Button */}
       <div className={`
-        fixed top-4 left-[436px] z-[1000]
+        fixed top-4 right-4 z-[1000]
         transition-all duration-normal ease-out
         ${isOpen ? 'translate-x-[200%] opacity-0' : 'translate-x-0 opacity-100'}
       `}>
@@ -120,7 +120,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
 
           {/* Tooltip */}
           <span className={`
-            absolute right-full mr-3 top-1/2 -translate-y-1/2
+            absolute left-full ml-3 top-1/2 -translate-y-1/2
             px-4 py-2
             bg-white
             text-text-primary text-sm font-medium
@@ -129,7 +129,7 @@ const CartWidget = ({ cart, notes, onRemoveFromCart }) => {
             shadow-lg
             whitespace-nowrap
             opacity-0 group-hover:opacity-100
-            -translate-x-2 group-hover:translate-x-0
+            translate-x-2 group-hover:translate-x-0
             transition-all duration-fast
             pointer-events-none
           `}>

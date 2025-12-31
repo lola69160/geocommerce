@@ -4,6 +4,128 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Simplification du Rapport HTML - Suppression d'Éléments (2025-12-31)
+
+### Objectif
+
+Simplifier le rapport financier HTML en supprimant des sections jugées non essentielles ou redondantes pour améliorer la clarté et la lisibilité du document.
+
+### Éléments Supprimés
+
+#### 1. Bloc "Synthèse Exécutive" complet
+
+**Fichier:** `server/adk/financial/tools/report/generateFinancialHtmlTool.ts`
+
+**Suppressions (fonction `generateExecutiveSummary()`):**
+- Titre "📊 Synthèse Exécutive"
+- Verdict (FAVORABLE/DÉFAVORABLE)
+- Fourchette de valorisation (min-max, valeur recommandée)
+- Prix demandé vendeur et écart prix/estimation
+- Investissement Total Estimé (valorisation + budget travaux)
+- Bloc de scores :
+  - Score Santé Financière (0-100)
+  - Score de Confiance (0-100)
+  - Marge EBE (%)
+
+**Conservé:**
+- Tableau de comparaison EBE (si données disponibles)
+- Points Forts Financiers
+- Points de Vigilance
+
+#### 2. Section "Éléments Complémentaires Fournis" complète
+
+**Fichier:** `server/adk/financial/tools/report/generateFinancialHtmlTool.ts`
+
+**Suppressions:**
+- Fonction `generateUserCommentsSection()` (lignes 808-898, 91 lignes supprimées)
+- Appel à cette fonction dans le rapport principal (lignes 134-138)
+
+**Sous-sections supprimées:**
+- Informations sur le Loyer (futur loyer négocié, part logement personnel)
+- Informations sur les Travaux (budget prévu, précisions)
+- Conditions de Vente (négociation possible, précisions)
+- Autres Informations (commentaires textuels de l'utilisateur)
+
+**Note:** Le formulaire `ProfessionalAnalysisModal.jsx` continue de collecter ces données (pour usage interne potentiel), mais elles ne s'affichent plus dans le rapport HTML généré.
+
+#### 3. Score de Confiance sur la Page de Garde
+
+**Fichier:** `server/adk/financial/tools/report/sections/coverPage.ts`
+
+**Suppressions:**
+- Badge "Score de Confiance: XX/100"
+- Breakdown des sous-scores :
+  - Complétude (/100)
+  - Fiabilité (/100)
+  - Fraîcheur (/100)
+
+**Conservé:**
+- Nom de l'entreprise
+- Sous-titre "Analyse Financière - Due Diligence"
+- Date de génération du rapport
+
+### Impact sur le Code
+
+#### Calculs conservés (arrière-plan)
+
+Les tools suivants continuent de fonctionner (calculs internes) mais leurs résultats ne sont plus affichés :
+- `calculateHealthScoreTool.ts` : Score Santé Financière
+- `assessDataQualityTool.ts` : Score de Confiance
+
+Ces scores peuvent être utilisés pour des analyses futures ou des logs de diagnostic.
+
+#### Variables devenues inutilisées
+
+Dans `generateExecutiveSummary()`, les variables suivantes ne sont plus utilisées :
+- `healthScore`, `confidenceScore`
+- `verdict`, `verdictClass`
+- `valoMin`, `valoMax`, `valoMediane`, `valoMedianeNum`
+- `prixDemande`
+
+Ces variables sont conservées pour compatibilité avec les agents qui calculent ces valeurs.
+
+### Structure du Rapport Après Modifications
+
+```
+1. Page de garde (nom + sous-titre + date uniquement)
+2. Section Opportunités
+3. Tableau de comparaison EBE (conservé si données disponibles)
+4. Points Forts Financiers
+5. Points de Vigilance
+6. Commentaires Stratégiques
+7. Analyse Comptable
+8. Valorisation
+9. Analyse Immobilière
+10. Business Plan Dynamique
+11. Complétude des Données
+12. Validation Financière
+13. Annexes
+```
+
+### Modifications de Fichiers
+
+| Fichier | Lignes supprimées | Description |
+|---------|-------------------|-------------|
+| `generateFinancialHtmlTool.ts` | ~50 lignes | Bloc Synthèse Exécutive (verdict, valorisation, scores) |
+| `generateFinancialHtmlTool.ts` | ~5 lignes | Appel à `generateUserCommentsSection()` |
+| `generateFinancialHtmlTool.ts` | ~91 lignes | Fonction `generateUserCommentsSection()` complète |
+| `coverPage.ts` | ~20 lignes | Score de confiance et breakdown |
+
+**Total:** ~166 lignes supprimées
+
+### Tests de Régression
+
+**Vérifications effectuées:**
+- ✅ Absence du bloc "Fourchette de Valorisation"
+- ✅ Absence du verdict (FAVORABLE/DÉFAVORABLE)
+- ✅ Absence des scores (Santé Financière, Score de Confiance, Marge EBE)
+- ✅ Absence de la section "Éléments Complémentaires Fournis"
+- ✅ Présence des Points Forts et Points de Vigilance
+- ✅ Cohérence du reste du rapport
+- ✅ Compilation TypeScript sans erreurs liées aux modifications
+
+---
+
 ## EBE Bridge Feature - Formulaire Structuré et Visualisation (2025-12-30)
 
 ### Objectif

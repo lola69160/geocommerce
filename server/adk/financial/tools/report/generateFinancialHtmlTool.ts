@@ -131,12 +131,6 @@ export const generateFinancialHtmlTool = new FunctionTool({
       html += generateExecutiveSummary(comptable, valorisation, financialValidation, userComments, businessPlan, documentExtraction);
       sections_included.push('executive_summary');
 
-      // 2bis. Éléments complémentaires utilisateur
-      if (userComments && Object.keys(userComments).length > 0) {
-        html += generateUserCommentsSection(userComments);
-        sections_included.push('user_comments');
-      }
-
       // 2ter. Commentaires stratégiques
       const strategicCommentaries = analyzeAndGenerateCommentaries(comptable, immobilier, userComments, businessInfo, valorisation, businessPlan);
       if (strategicCommentaries && strategicCommentaries.length > 0) {
@@ -515,55 +509,6 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
 ` : '';
 
   return `
-<h2>📊 Synthèse Exécutive</h2>
-
-<div class="verdict ${verdictClass}">${verdict}</div>
-
-<div class="summary-box">
-  <h3>Fourchette de Valorisation</h3>
-  <div class="info-grid">
-    <div class="info-label">Fourchette</div>
-    <div class="info-value">${valoMin} € - ${valoMax} €</div>
-    <div class="info-label">Valorisation Recommandée</div>
-    <div class="info-value"><strong>${valoMediane} €</strong></div>
-    ${prixDemande > 0 ? `
-    <div class="info-label">Prix Demandé Vendeur</div>
-    <div class="info-value">${prixDemande.toLocaleString('fr-FR')} €</div>
-    <div class="info-label">Écart Prix / Estimation</div>
-    <div class="info-value" style="color: ${((prixDemande - valoMedianeNum) / valoMedianeNum * 100) > 0 ? 'var(--color-error-text)' : 'var(--color-success-text)'}">
-      ${((prixDemande - valoMedianeNum) / valoMedianeNum * 100) > 0 ? '+' : ''}${((prixDemande - valoMedianeNum) / valoMedianeNum * 100).toFixed(1)}%
-    </div>` : ''}
-  </div>
-  ${userComments?.travaux?.budget_prevu ? `
-  <div class="alert-box info" style="margin-top: 15px;">
-    <strong>💰 Investissement Total Estimé</strong>
-    <div class="info-grid" style="margin-top: 10px;">
-      <div class="info-label">Valorisation du fonds</div>
-      <div class="info-value">${valoMediane} €</div>
-      <div class="info-label">+ Budget travaux</div>
-      <div class="info-value">${userComments.travaux.budget_prevu.toLocaleString('fr-FR')} €</div>
-      <div class="info-label"><strong>Total investissement</strong></div>
-      <div class="info-value"><strong>${(parseFloat(valoMediane.replace(/\s/g, '')) + userComments.travaux.budget_prevu).toLocaleString('fr-FR')} €</strong></div>
-    </div>
-  </div>
-  ` : ''}
-</div>
-
-<div class="score-grid">
-  <div class="score-card">
-    <div class="score-value">${healthScore}</div>
-    <div class="score-label">Santé Financière</div>
-  </div>
-  <div class="score-card">
-    <div class="score-value">${confidenceScore}</div>
-    <div class="score-label">Score de Confiance</div>
-  </div>
-  <div class="score-card">
-    <div class="score-value">${comptable?.ratios?.marge_ebe_pct?.toFixed(1) || 0}%</div>
-    <div class="score-label">Marge EBE</div>
-  </div>
-</div>
-
 ${comparisonTable}
 
 <h3>✅ Points Forts Financiers</h3>
@@ -857,98 +802,6 @@ function generateAnnexes(documentExtraction: any, comptable: any, valorisation: 
   html += '<tr><td><strong>Taux d\'endettement</strong></td><td>Dettes / Capitaux propres</td></tr>';
   html += '</table>';
 
-  return html;
-}
-
-/**
- * Génère la section des commentaires utilisateur
- */
-function generateUserCommentsSection(userComments: any): string {
-  let html = '<h2>💬 Éléments Complémentaires Fournis</h2>';
-  html += '<div class="alert-box info">';
-  html += '<strong>Informations fournies par l\'utilisateur lors de l\'analyse :</strong>';
-  html += '</div>';
-
-  // Loyer
-  if (userComments.loyer) {
-    html += '<h3>Informations sur le Loyer</h3>';
-    html += '<div class="info-grid">';
-
-    if (userComments.loyer.futur_loyer_commercial) {
-      html += '<div class="info-label">Futur loyer commercial négocié</div>';
-      html += `<div class="info-value"><strong>${userComments.loyer.futur_loyer_commercial.toLocaleString('fr-FR')} € / mois</strong></div>`;
-    }
-
-    if (userComments.loyer.loyer_logement_perso) {
-      html += '<div class="info-label">Part logement personnel incluse</div>';
-      html += `<div class="info-value"><strong>${userComments.loyer.loyer_logement_perso.toLocaleString('fr-FR')} € / mois</strong></div>`;
-    }
-
-    if (userComments.loyer.commentaire) {
-      html += '<div class="info-label">Précisions</div>';
-      html += `<div class="info-value"><em>"${userComments.loyer.commentaire}"</em></div>`;
-    }
-
-    html += '</div>';
-
-    // Calcul automatique
-    if (userComments.loyer.futur_loyer_commercial && userComments.loyer.loyer_logement_perso) {
-      const loyerCommercialPur = userComments.loyer.futur_loyer_commercial - userComments.loyer.loyer_logement_perso;
-      html += '<div class="summary-box">';
-      html += '<h4>Décomposition du Loyer Négocié</h4>';
-      html += '<table>';
-      html += `<tr><td>Loyer commercial pur (exploitation)</td><td class="text-right"><strong>${loyerCommercialPur.toLocaleString('fr-FR')} € / mois</strong></td></tr>`;
-      html += `<tr><td>Avantage en nature (logement personnel)</td><td class="text-right"><strong>${userComments.loyer.loyer_logement_perso.toLocaleString('fr-FR')} € / mois</strong></td></tr>`;
-      html += `<tr><td><strong>Total loyer</strong></td><td class="text-right"><strong>${userComments.loyer.futur_loyer_commercial.toLocaleString('fr-FR')} € / mois</strong></td></tr>`;
-      html += `<tr><td colspan="2"><em style="font-size:0.9em">💡 L'avantage en nature doit être retraité dans l'EBE pour obtenir la rentabilité réelle.</em></td></tr>`;
-      html += '</table>';
-      html += '</div>';
-    }
-  }
-
-  // Travaux
-  if (userComments.travaux) {
-    html += '<h3>Informations sur les Travaux</h3>';
-    html += '<div class="info-grid">';
-
-    if (userComments.travaux.budget_prevu) {
-      html += '<div class="info-label">Budget travaux prévu</div>';
-      html += `<div class="info-value"><strong>${userComments.travaux.budget_prevu.toLocaleString('fr-FR')} €</strong></div>`;
-    }
-
-    if (userComments.travaux.commentaire) {
-      html += '<div class="info-label">Précisions</div>';
-      html += `<div class="info-value"><em>"${userComments.travaux.commentaire}"</em></div>`;
-    }
-
-    html += '</div>';
-  }
-
-  // Conditions de vente
-  if (userComments.conditions_vente) {
-    html += '<h3>Conditions de Vente</h3>';
-    html += '<div class="info-grid">';
-
-    if (userComments.conditions_vente.negociation_possible !== undefined) {
-      html += '<div class="info-label">Négociation possible</div>';
-      html += `<div class="info-value">${userComments.conditions_vente.negociation_possible ? '✅ Oui' : '❌ Non'}</div>`;
-    }
-
-    if (userComments.conditions_vente.commentaire) {
-      html += '<div class="info-label">Précisions</div>';
-      html += `<div class="info-value"><em>"${userComments.conditions_vente.commentaire}"</em></div>`;
-    }
-
-    html += '</div>';
-  }
-
-  // Autres commentaires
-  if (userComments.autres) {
-    html += '<h3>Autres Informations</h3>';
-    html += `<p><em>"${userComments.autres}"</em></p>`;
-  }
-
-  html += '<div class="page-break"></div>';
   return html;
 }
 
