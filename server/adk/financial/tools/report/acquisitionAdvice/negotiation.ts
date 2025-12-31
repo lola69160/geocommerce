@@ -159,7 +159,8 @@ export function generateSellerArguments(
   professionalData: ProfessionalReportData | null,
   sectorCode: string
 ): string {
-  const isTabac = sectorCode.includes('47.26');
+  // ✅ FIX (2025-12-31): Vérification stricte sur secteur du formulaire (pas de .includes())
+  const isTabac = sectorCode === '47.26' || sectorCode === '47.62';
 
   let html = '<div class="seller-arguments">';
   html += '<h4>Arguments Vendeur (maintien du prix)</h4>';

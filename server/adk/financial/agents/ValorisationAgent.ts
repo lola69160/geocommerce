@@ -91,22 +91,33 @@ Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
 
 WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
-⚠️ IMPORTANT: DÉTECTION DU TYPE DE COMMERCE
+⚠️⚠️⚠️ RÈGLE CRITIQUE - DÉTECTION TABAC ⚠️⚠️⚠️
 
-AVANT DE COMMENCER, vérifier si le commerce est de type Tabac/Presse/FDJ :
-- Vérifier state.businessInfo.secteurActivite === '47.26' (Tabac/Presse/Loto)
-- OU state.businessInfo.secteurActivite === '47.62' (Presse uniquement)
+ÉTAPE OBLIGATOIRE AVANT TOUT CALCUL:
 
-⚠️ EXEMPLES DE DÉTECTION (basés sur le SECTEUR SÉLECTIONNÉ par l'utilisateur):
-- secteurActivite = '47.26' → TABAC ✅
-- secteurActivite = '47.62' → PRESSE ✅
-- secteurActivite = '56.30' (Débits de boissons) → PAS TABAC ❌
+1. Lire state.businessInfo.secteurActivite
+2. Si secteurActivite === '47.26' OU '47.62' → COMMERCE TABAC DÉTECTÉ
+3. Si TABAC détecté → SAUTER directement à "MÉTHODE HYBRIDE (Étape 1bis)"
+   SINON → Utiliser "MÉTHODE CLASSIQUE (Étapes 1-4)"
 
-IMPORTANT: La détection se base UNIQUEMENT sur state.businessInfo.secteurActivite (choisi par l'utilisateur).
-Le secteur '47.26' correspond à "Tabac / Presse / Loto".
+⚠️ IMPORTANT: NE JAMAIS utiliser state.businessInfo.nafCode pour cette détection
+   Utiliser UNIQUEMENT state.businessInfo.secteurActivite
 
-SI COMMERCE TABAC/PRESSE/FDJ DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
-SINON → Utiliser MÉTHODE CLASSIQUE (Étapes 1-4)
+EXEMPLE CONCRET:
+  state.businessInfo = {
+    "secteurActivite": "47.26",              ← CETTE VALEUR UNIQUEMENT
+    "secteurActiviteLabel": "Tabac / Presse / Loto",
+    "nafCode": "47.76Z"                      ← NE PAS UTILISER (API obsolète)
+  }
+  → Résultat: TABAC DÉTECTÉ → Méthode Hybride ✅
+
+⚠️ EXEMPLES DE DÉTECTION:
+- secteurActivite = '47.26' → TABAC ✅ → Méthode Hybride
+- secteurActivite = '47.62' → PRESSE ✅ → Méthode Hybride
+- secteurActivite = '56.30' (Débits de boissons) → PAS TABAC ❌ → Méthodes Classiques
+
+SI COMMERCE TABAC/PRESSE DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
+SINON → Utiliser MÉTHODES CLASSIQUES (Étapes 1-4)
 
 ═══════════════════════════════════════════════════════════════════════
 MÉTHODE CLASSIQUE (Commerces standards)

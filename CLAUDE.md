@@ -289,6 +289,46 @@ Report Display → Uses secteurActiviteLabel (preserves exact user selection)
 
 See [docs/FINANCIAL_CHANGELOG.md](docs/FINANCIAL_CHANGELOG.md#sélection-manuelle-du-secteur-dactivité-2025-12-31) for complete implementation details.
 
+### ⚠️ RÈGLE CRITIQUE: Secteur vs NAF Code (2025-12-31)
+
+**INTERDICTION STRICTE**: Ne JAMAIS utiliser `businessInfo.nafCode` (de l'API) pour des décisions métier dans le pipeline financier.
+
+**Source unique de vérité**: `businessInfo.secteurActivite` (code sélectionné par l'utilisateur)
+
+#### Exemples de vérifications INTERDITES ❌:
+```typescript
+// ❌ INTERDIT - Utilise NAF de l'API
+if (businessInfo.nafCode === '47.26') { ... }
+
+// ❌ INTERDIT - Vérification faible
+if (sectorCode.includes('47.26')) { ... }
+
+// ❌ INTERDIT - Fallback sur NAF
+const code = secteurActivite || nafCode;
+```
+
+#### Vérifications CORRECTES ✅:
+```typescript
+// ✅ CORRECT - Égalité stricte sur secteur du formulaire
+if (businessInfo.secteurActivite === '47.26') { ... }
+
+// ✅ CORRECT - Appel de fonction dédiée
+if (isTabacCommerce(businessInfo.secteurActivite)) { ... }
+```
+
+#### Cas d'usage du nafCode (AUTORISÉS):
+- **Lookup de coefficients** dans tables de données (`valuationCoefficients.ts`)
+- **Audit trail** (afficher le NAF de l'API pour référence)
+- **Logs de debug** (comparer secteur vs NAF pour détecter incohérences)
+
+⚠️ Mais JAMAIS pour déclencher des comportements métier (méthodes de valorisation, calculs, etc.)
+
+**Fichiers critiques concernés**:
+- `tabacValuationCoefficients.ts:314` - `isTabacCommerce(sectorCode)` utilise égalité stricte
+- `ValorisationAgent.ts:98-120` - Instructions renforcées pour détection Tabac
+- `negotiation.ts:163` - Vérification stricte `===` au lieu de `.includes()`
+- `financing.ts:229` - Vérification stricte `===` au lieu de `.includes()`
+
 ### Tabac/Presse Specifics (NAF 47.26Z)
 
 Special handling for Tabac commerce:

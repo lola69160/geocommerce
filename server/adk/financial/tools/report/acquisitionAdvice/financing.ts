@@ -225,7 +225,8 @@ export function generateOpportunitiesSection(
   let html = '<h3>Opportunites de Creation de Valeur</h3>';
   html += '<table><thead><tr><th>Levier</th><th>Potentiel</th><th>Impact Estime</th><th>Investissement</th></tr></thead><tbody>';
 
-  const isTabac = sectorCode.includes('47.26');
+  // ✅ FIX (2025-12-31): Vérification stricte sur secteur du formulaire (pas de .includes())
+  const isTabac = sectorCode === '47.26' || sectorCode === '47.62';
 
   if (comptable?.ratios?.charges_personnel_ratio > 30) {
     html += `<tr>

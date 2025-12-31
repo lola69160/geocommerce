@@ -301,31 +301,33 @@ export const TABAC_NAF_CODES = [
 export const TABAC_ACTIVITY_KEYWORDS = ['tabac', 'presse', 'fdj', 'loto', 'pmu'];
 
 /**
- * Vérifie si un commerce est de type Tabac/Presse/FDJ
+ * Détecte si un commerce est de type Tabac/Presse/Loto
  *
- * @param nafCode - Code NAF (ex: "47.26Z")
- * @param activity - Description de l'activité ou secteur (ex: "Débits de boissons / Tabac")
- * @returns true si commerce Tabac/Presse/FDJ détecté
+ * ⚠️ RÈGLE STRICTE (2025-12-31):
+ * - Source unique: secteur sélectionné par l'utilisateur (businessInfo.secteurActivite)
+ * - Ne JAMAIS utiliser le code NAF de l'API
+ * - Vérification par égalité stricte (pas de .includes() ou .startsWith())
+ *
+ * @param sectorCode - Code secteur du formulaire (ex: '47.26', '47.62')
+ * @returns true si secteur Tabac/Presse détecté
  */
-export function isTabacCommerce(nafCode: string, activity?: string): boolean {
-  // Méthode 1: Vérifier le code NAF
-  if (nafCode) {
-    const normalized = nafCode.replace(/[A-Z\s]/gi, '').trim();
-    if (TABAC_NAF_CODES.some(code => normalized.startsWith(code))) {
-      return true;
-    }
+export function isTabacCommerce(sectorCode: string): boolean {
+  if (!sectorCode) {
+    console.warn('[isTabacCommerce] ⚠️ sectorCode vide - retour false');
+    return false;
   }
 
-  // Méthode 2: Vérifier l'activité/secteur pour mots-clés tabac
-  if (activity) {
-    const activityLower = activity.toLowerCase();
-    if (TABAC_ACTIVITY_KEYWORDS.some(kw => activityLower.includes(kw))) {
-      console.log(`[isTabacCommerce] ✅ Détecté via activité: "${activity}"`);
-      return true;
-    }
+  // Normaliser (retirer espaces et lettres pour gérer '47.26Z' comme '47.26')
+  const normalized = sectorCode.replace(/[A-Z\s]/gi, '').trim();
+
+  // Vérification stricte: égalité exacte avec les codes Tabac
+  const isTabac = normalized === '47.26' || normalized === '47.62';
+
+  if (isTabac) {
+    console.log(`[isTabacCommerce] ✅ TABAC détecté: secteur=${sectorCode}`);
   }
 
-  return false;
+  return isTabac;
 }
 
 /**
