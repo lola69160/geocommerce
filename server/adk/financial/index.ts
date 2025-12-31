@@ -79,6 +79,57 @@ export type FinancialInput = {
       commentaire?: string;
     };
     autres?: string;  // Commentaires libres
+
+    // ===== NOUVEAU (2025-12-31): Transaction Financing Data =====
+    transactionFinancing?: {
+      initial?: {
+        // Investment Data
+        prix_fonds?: number;
+        honoraires_ht?: number;
+        frais_acte_ht?: number;
+        tva_sur_honoraires?: number;
+        debours?: number;
+        stock_fonds_roulement?: number;
+        loyer_avance?: number;
+        total_investissement?: number;
+
+        // Financing Sources
+        apport_personnel?: number;
+        pret_relais_tva?: number;
+        credit_vendeur?: number;
+        pret_principal?: number;
+
+        // Loan Parameters
+        duree_annees?: number;
+        taux_interet?: number;
+        taux_assurance?: number;
+        estimation_annuelle?: number;
+      };
+
+      negocie?: {
+        // Investment Data
+        prix_fonds?: number;
+        honoraires_ht?: number;
+        frais_acte_ht?: number;
+        tva_sur_honoraires?: number;
+        debours?: number;
+        stock_fonds_roulement?: number;
+        loyer_avance?: number;
+        total_investissement?: number;
+
+        // Financing Sources
+        apport_personnel?: number;
+        pret_relais_tva?: number;
+        credit_vendeur?: number;
+        pret_principal?: number;
+
+        // Loan Parameters
+        duree_annees?: number;
+        taux_interet?: number;
+        taux_assurance?: number;
+        estimation_annuelle?: number;
+      };
+    };
   };
 };
 
@@ -126,6 +177,57 @@ export type FinancialState = {
       commentaire?: string;
     };
     autres?: string;
+
+    // ===== NOUVEAU (2025-12-31): Transaction Financing Data =====
+    transactionFinancing?: {
+      initial?: {
+        // Investment Data
+        prix_fonds?: number;
+        honoraires_ht?: number;
+        frais_acte_ht?: number;
+        tva_sur_honoraires?: number;
+        debours?: number;
+        stock_fonds_roulement?: number;
+        loyer_avance?: number;
+        total_investissement?: number;
+
+        // Financing Sources
+        apport_personnel?: number;
+        pret_relais_tva?: number;
+        credit_vendeur?: number;
+        pret_principal?: number;
+
+        // Loan Parameters
+        duree_annees?: number;
+        taux_interet?: number;
+        taux_assurance?: number;
+        estimation_annuelle?: number;
+      };
+
+      negocie?: {
+        // Investment Data
+        prix_fonds?: number;
+        honoraires_ht?: number;
+        frais_acte_ht?: number;
+        tva_sur_honoraires?: number;
+        debours?: number;
+        stock_fonds_roulement?: number;
+        loyer_avance?: number;
+        total_investissement?: number;
+
+        // Financing Sources
+        apport_personnel?: number;
+        pret_relais_tva?: number;
+        credit_vendeur?: number;
+        pret_principal?: number;
+
+        // Loan Parameters
+        duree_annees?: number;
+        taux_interet?: number;
+        taux_assurance?: number;
+        estimation_annuelle?: number;
+      };
+    };
   };
   transactionCosts?: {
     prix_fonds: number;

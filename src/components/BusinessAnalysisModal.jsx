@@ -47,6 +47,55 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
   const [documentsError, setDocumentsError] = useState('');
   const [extractionOnly, setExtractionOnly] = useState(false); // Stop after extraction for debugging
 
+  // ========================================
+  // FINANCING DATA: State Variables (44 total)
+  // ========================================
+
+  // Section 7: Investment Data (12 input variables)
+  const [prixFondsInitial, setPrixFondsInitial] = useState('');
+  const [honorairesHtInitial, setHonorairesHtInitial] = useState('');
+  const [fraisActeHtInitial, setFraisActeHtInitial] = useState('');
+  const [deboursInitial, setDeboursInitial] = useState('');
+  const [stockFondsRoulementInitial, setStockFondsRoulementInitial] = useState('');
+  const [loyerAvanceInitial, setLoyerAvanceInitial] = useState('');
+
+  const [prixFondsNegocie, setPrixFondsNegocie] = useState('');
+  const [honorairesHtNegocie, setHonorairesHtNegocie] = useState('');
+  const [fraisActeHtNegocie, setFraisActeHtNegocie] = useState('');
+  const [deboursNegocie, setDeboursNegocie] = useState('');
+  const [stockFondsRoulementNegocie, setStockFondsRoulementNegocie] = useState('');
+  const [loyerAvanceNegocie, setLoyerAvanceNegocie] = useState('');
+
+  // Section 8: Financing Sources (6 input variables)
+  const [apportInitial, setApportInitial] = useState('');
+  const [pretRelaisTvaInitial, setPretRelaisTvaInitial] = useState('');
+  const [creditVendeurInitial, setCreditVendeurInitial] = useState('');
+
+  const [apportNegocie, setApportNegocie] = useState('');
+  const [pretRelaisTvaNegocie, setPretRelaisTvaNegocie] = useState('');
+  const [creditVendeurNegocie, setCreditVendeurNegocie] = useState('');
+
+  // Section 9: Loan Parameters (6 input variables)
+  const [dureeInitial, setDureeInitial] = useState('');
+  const [tauxInteretInitial, setTauxInteretInitial] = useState('');
+  const [tauxAssuranceInitial, setTauxAssuranceInitial] = useState('');
+
+  const [dureeNegocie, setDureeNegocie] = useState('');
+  const [tauxInteretNegocie, setTauxInteretNegocie] = useState('');
+  const [tauxAssuranceNegocie, setTauxAssuranceNegocie] = useState('');
+
+  // Auto-calculated fields (8 total)
+  const [tvaSurHonorairesInitial, setTvaSurHonorairesInitial] = useState(0);
+  const [totalInvestissementInitial, setTotalInvestissementInitial] = useState(0);
+  const [tvaSurHonorairesNegocie, setTvaSurHonorairesNegocie] = useState(0);
+  const [totalInvestissementNegocie, setTotalInvestissementNegocie] = useState(0);
+
+  const [pretPrincipalInitial, setPretPrincipalInitial] = useState(0);
+  const [pretPrincipalNegocie, setPretPrincipalNegocie] = useState(0);
+
+  const [estimationAnnuelleInitial, setEstimationAnnuelleInitial] = useState(0);
+  const [estimationAnnuelleNegocie, setEstimationAnnuelleNegocie] = useState(0);
+
   // Référence pour nettoyer l'interval lors du démontage
   const progressIntervalRef = useRef(null);
 
@@ -81,6 +130,118 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
   useEffect(() => {
     setActiveReport(initialView);
   }, [initialView]);
+
+  // ========================================
+  // FINANCING DATA: Auto-Calculation Logic
+  // ========================================
+
+  // Helper function: Calculate loan annual payment
+  const calculateLoanPayment = (principal, tauxInteret, tauxAssurance, dureeAnnees) => {
+    if (principal <= 0 || dureeAnnees <= 0) return 0;
+
+    const tauxTotal = (parseFloat(tauxInteret) || 0) + (parseFloat(tauxAssurance) || 0);
+
+    if (tauxTotal === 0) {
+      // No interest - simple division
+      return (principal / (dureeAnnees * 12)) * 12;
+    }
+
+    const r = tauxTotal / 100 / 12; // Monthly rate
+    const n = dureeAnnees * 12; // Total months
+
+    const mensualite = principal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    return Math.round(mensualite * 12);
+  };
+
+  // Auto-calc 1: TVA sur honoraires - Initial
+  useEffect(() => {
+    const honoraires = parseFloat(honorairesHtInitial) || 0;
+    const fraisActe = parseFloat(fraisActeHtInitial) || 0;
+    const tva = (honoraires + fraisActe) * 0.206;
+    setTvaSurHonorairesInitial(Math.round(tva));
+  }, [honorairesHtInitial, fraisActeHtInitial]);
+
+  // Auto-calc 2: TVA sur honoraires - Négocié
+  useEffect(() => {
+    const honoraires = parseFloat(honorairesHtNegocie) || 0;
+    const fraisActe = parseFloat(fraisActeHtNegocie) || 0;
+    const tva = (honoraires + fraisActe) * 0.206;
+    setTvaSurHonorairesNegocie(Math.round(tva));
+  }, [honorairesHtNegocie, fraisActeHtNegocie]);
+
+  // Auto-calc 3: Total investissement - Initial
+  useEffect(() => {
+    const prixFonds = parseFloat(prixFondsInitial) || 0;
+    const honoraires = parseFloat(honorairesHtInitial) || 0;
+    const fraisActe = parseFloat(fraisActeHtInitial) || 0;
+    const tva = tvaSurHonorairesInitial;
+    const debours = parseFloat(deboursInitial) || 0;
+    const stock = parseFloat(stockFondsRoulementInitial) || 0;
+    const loyerAvance = parseFloat(loyerAvanceInitial) || 0;
+
+    const total = prixFonds + honoraires + fraisActe + tva + debours + stock + loyerAvance;
+    setTotalInvestissementInitial(Math.round(total));
+  }, [prixFondsInitial, honorairesHtInitial, fraisActeHtInitial, tvaSurHonorairesInitial,
+    deboursInitial, stockFondsRoulementInitial, loyerAvanceInitial]);
+
+  // Auto-calc 4: Total investissement - Négocié
+  useEffect(() => {
+    const prixFonds = parseFloat(prixFondsNegocie) || 0;
+    const honoraires = parseFloat(honorairesHtNegocie) || 0;
+    const fraisActe = parseFloat(fraisActeHtNegocie) || 0;
+    const tva = tvaSurHonorairesNegocie;
+    const debours = parseFloat(deboursNegocie) || 0;
+    const stock = parseFloat(stockFondsRoulementNegocie) || 0;
+    const loyerAvance = parseFloat(loyerAvanceNegocie) || 0;
+
+    const total = prixFonds + honoraires + fraisActe + tva + debours + stock + loyerAvance;
+    setTotalInvestissementNegocie(Math.round(total));
+  }, [prixFondsNegocie, honorairesHtNegocie, fraisActeHtNegocie, tvaSurHonorairesNegocie,
+    deboursNegocie, stockFondsRoulementNegocie, loyerAvanceNegocie]);
+
+  // Auto-calc 5: Prêt principal - Initial
+  useEffect(() => {
+    const total = totalInvestissementInitial;
+    const apport = parseFloat(apportInitial) || 0;
+    const pretRelais = parseFloat(pretRelaisTvaInitial) || 0;
+    const creditVendeur = parseFloat(creditVendeurInitial) || 0;
+
+    const pretPrincipal = total - apport - pretRelais - creditVendeur;
+    setPretPrincipalInitial(Math.max(0, Math.round(pretPrincipal))); // Never negative
+  }, [totalInvestissementInitial, apportInitial, pretRelaisTvaInitial, creditVendeurInitial]);
+
+  // Auto-calc 6: Prêt principal - Négocié
+  useEffect(() => {
+    const total = totalInvestissementNegocie;
+    const apport = parseFloat(apportNegocie) || 0;
+    const pretRelais = parseFloat(pretRelaisTvaNegocie) || 0;
+    const creditVendeur = parseFloat(creditVendeurNegocie) || 0;
+
+    const pretPrincipal = total - apport - pretRelais - creditVendeur;
+    setPretPrincipalNegocie(Math.max(0, Math.round(pretPrincipal))); // Never negative
+  }, [totalInvestissementNegocie, apportNegocie, pretRelaisTvaNegocie, creditVendeurNegocie]);
+
+  // Auto-calc 7: Estimation annuelle - Initial
+  useEffect(() => {
+    const estimation = calculateLoanPayment(
+      pretPrincipalInitial,
+      tauxInteretInitial,
+      tauxAssuranceInitial,
+      dureeInitial
+    );
+    setEstimationAnnuelleInitial(estimation);
+  }, [pretPrincipalInitial, tauxInteretInitial, tauxAssuranceInitial, dureeInitial]);
+
+  // Auto-calc 8: Estimation annuelle - Négocié
+  useEffect(() => {
+    const estimation = calculateLoanPayment(
+      pretPrincipalNegocie,
+      tauxInteretNegocie,
+      tauxAssuranceNegocie,
+      dureeNegocie
+    );
+    setEstimationAnnuelleNegocie(estimation);
+  }, [pretPrincipalNegocie, tauxInteretNegocie, tauxAssuranceNegocie, dureeNegocie]);
 
   const loadDocuments = async () => {
     setLoadingDocuments(true);
@@ -336,6 +497,79 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
       return;
     }
 
+    // ========================================
+    // FINANCING DATA: Validation Rules (6 total)
+    // ========================================
+
+    // Rule 1: Scénario incomplet (warning)
+    const hasFilledInitial = prixFondsInitial || honorairesHtInitial || apportInitial || dureeInitial;
+    const hasFilledNegocie = prixFondsNegocie || honorairesHtNegocie || apportNegocie || dureeNegocie;
+
+    if (hasFilledInitial && !hasFilledNegocie) {
+      const confirmProceed = window.confirm(
+        'Vous avez rempli le scénario Initial mais pas le scénario Négocié.\n\n' +
+        'Voulez-vous continuer sans scénario de comparaison ?'
+      );
+      if (!confirmProceed) return;
+    }
+
+    // Rule 2: Prix négocié > Prix initial (warning)
+    if (prixFondsNegocie && prixFondsInitial &&
+        parseFloat(prixFondsNegocie) > parseFloat(prixFondsInitial)) {
+      const confirmProceed = window.confirm(
+        'Le prix du fonds négocié est supérieur au prix initial.\n\nCela est inhabituel. Voulez-vous continuer ?'
+      );
+      if (!confirmProceed) return;
+    }
+
+    // Rule 3: Apport > Total investissement (error)
+    if (apportInitial && totalInvestissementInitial &&
+        parseFloat(apportInitial) > totalInvestissementInitial) {
+      alert('Erreur: L\'apport personnel initial ne peut pas dépasser le total de l\'investissement.');
+      return;
+    }
+
+    if (apportNegocie && totalInvestissementNegocie &&
+        parseFloat(apportNegocie) > totalInvestissementNegocie) {
+      alert('Erreur: L\'apport personnel négocié ne peut pas dépasser le total de l\'investissement.');
+      return;
+    }
+
+    // Rule 4: Durée = 0 mais prêt > 0 (error)
+    if (dureeInitial && parseFloat(dureeInitial) === 0 && pretPrincipalInitial > 0) {
+      alert('Erreur: La durée du prêt ne peut pas être de 0 année si un prêt est sollicité.');
+      return;
+    }
+
+    if (dureeNegocie && parseFloat(dureeNegocie) === 0 && pretPrincipalNegocie > 0) {
+      alert('Erreur: La durée du prêt négocié ne peut pas être de 0 année si un prêt est sollicité.');
+      return;
+    }
+
+    // Rule 5: Taux intérêt > 15% (warning)
+    if (tauxInteretInitial && parseFloat(tauxInteretInitial) > 15) {
+      const confirmProceed = window.confirm(
+        `Le taux d'intérêt initial (${tauxInteretInitial}%) est très élevé.\n\nÊtes-vous sûr de cette valeur ?`
+      );
+      if (!confirmProceed) return;
+    }
+
+    if (tauxInteretNegocie && parseFloat(tauxInteretNegocie) > 15) {
+      const confirmProceed = window.confirm(
+        `Le taux d'intérêt négocié (${tauxInteretNegocie}%) est très élevé.\n\nÊtes-vous sûr de cette valeur ?`
+      );
+      if (!confirmProceed) return;
+    }
+
+    // Rule 6: Prêt principal négatif (error - should not happen due to Math.max(0, ...) but check anyway)
+    if (pretPrincipalInitial < 0 || pretPrincipalNegocie < 0) {
+      alert(
+        'Erreur: Le montant du prêt principal est négatif.\n\n' +
+        'Vérifiez que la somme (Apport + Prêt Relais TVA + Crédit Vendeur) ne dépasse pas le Total de l\'Investissement.'
+      );
+      return;
+    }
+
     setFinancialStage('running');
     setFinancialError('');
     setFinancialReportHtml('');
@@ -383,7 +617,58 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
               loyer_actuel: loyerActuel ? parseFloat(loyerActuel) : undefined,
               loyer_negocie: loyerNegocie ? parseFloat(loyerNegocie) : undefined
             },
-            autres: additionalInfo
+            autres: additionalInfo,
+
+            // ===== NOUVEAU: Transaction Financing Data =====
+            transactionFinancing: {
+              initial: {
+                // Investment Data
+                prix_fonds: prixFondsInitial ? parseFloat(prixFondsInitial) : undefined,
+                honoraires_ht: honorairesHtInitial ? parseFloat(honorairesHtInitial) : undefined,
+                frais_acte_ht: fraisActeHtInitial ? parseFloat(fraisActeHtInitial) : undefined,
+                tva_sur_honoraires: tvaSurHonorairesInitial || undefined,
+                debours: deboursInitial ? parseFloat(deboursInitial) : undefined,
+                stock_fonds_roulement: stockFondsRoulementInitial ? parseFloat(stockFondsRoulementInitial) : undefined,
+                loyer_avance: loyerAvanceInitial ? parseFloat(loyerAvanceInitial) : undefined,
+                total_investissement: totalInvestissementInitial || undefined,
+
+                // Financing Sources
+                apport_personnel: apportInitial ? parseFloat(apportInitial) : undefined,
+                pret_relais_tva: pretRelaisTvaInitial ? parseFloat(pretRelaisTvaInitial) : undefined,
+                credit_vendeur: creditVendeurInitial ? parseFloat(creditVendeurInitial) : undefined,
+                pret_principal: pretPrincipalInitial || undefined,
+
+                // Loan Parameters
+                duree_annees: dureeInitial ? parseFloat(dureeInitial) : undefined,
+                taux_interet: tauxInteretInitial ? parseFloat(tauxInteretInitial) : undefined,
+                taux_assurance: tauxAssuranceInitial ? parseFloat(tauxAssuranceInitial) : undefined,
+                estimation_annuelle: estimationAnnuelleInitial || undefined
+              },
+
+              negocie: {
+                // Investment Data
+                prix_fonds: prixFondsNegocie ? parseFloat(prixFondsNegocie) : undefined,
+                honoraires_ht: honorairesHtNegocie ? parseFloat(honorairesHtNegocie) : undefined,
+                frais_acte_ht: fraisActeHtNegocie ? parseFloat(fraisActeHtNegocie) : undefined,
+                tva_sur_honoraires: tvaSurHonorairesNegocie || undefined,
+                debours: deboursNegocie ? parseFloat(deboursNegocie) : undefined,
+                stock_fonds_roulement: stockFondsRoulementNegocie ? parseFloat(stockFondsRoulementNegocie) : undefined,
+                loyer_avance: loyerAvanceNegocie ? parseFloat(loyerAvanceNegocie) : undefined,
+                total_investissement: totalInvestissementNegocie || undefined,
+
+                // Financing Sources
+                apport_personnel: apportNegocie ? parseFloat(apportNegocie) : undefined,
+                pret_relais_tva: pretRelaisTvaNegocie ? parseFloat(pretRelaisTvaNegocie) : undefined,
+                credit_vendeur: creditVendeurNegocie ? parseFloat(creditVendeurNegocie) : undefined,
+                pret_principal: pretPrincipalNegocie || undefined,
+
+                // Loan Parameters
+                duree_annees: dureeNegocie ? parseFloat(dureeNegocie) : undefined,
+                taux_interet: tauxInteretNegocie ? parseFloat(tauxInteretNegocie) : undefined,
+                taux_assurance: tauxAssuranceNegocie ? parseFloat(tauxAssuranceNegocie) : undefined,
+                estimation_annuelle: estimationAnnuelleNegocie || undefined
+              }
+            }
           },
           options: {
             includeImmobilier: true,
@@ -473,6 +758,49 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
     setLoyerNegocie('');
     setLoadingDocuments(false);
     setDocumentsError('');
+
+    // ========================================
+    // FINANCING DATA: Reset state variables
+    // ========================================
+    // Section 7: Investment Data
+    setPrixFondsInitial('');
+    setHonorairesHtInitial('');
+    setFraisActeHtInitial('');
+    setDeboursInitial('');
+    setStockFondsRoulementInitial('');
+    setLoyerAvanceInitial('');
+    setPrixFondsNegocie('');
+    setHonorairesHtNegocie('');
+    setFraisActeHtNegocie('');
+    setDeboursNegocie('');
+    setStockFondsRoulementNegocie('');
+    setLoyerAvanceNegocie('');
+
+    // Section 8: Financing Sources
+    setApportInitial('');
+    setPretRelaisTvaInitial('');
+    setCreditVendeurInitial('');
+    setApportNegocie('');
+    setPretRelaisTvaNegocie('');
+    setCreditVendeurNegocie('');
+
+    // Section 9: Loan Parameters
+    setDureeInitial('');
+    setTauxInteretInitial('');
+    setTauxAssuranceInitial('');
+    setDureeNegocie('');
+    setTauxInteretNegocie('');
+    setTauxAssuranceNegocie('');
+
+    // Auto-calculated fields
+    setTvaSurHonorairesInitial(0);
+    setTotalInvestissementInitial(0);
+    setTvaSurHonorairesNegocie(0);
+    setTotalInvestissementNegocie(0);
+    setPretPrincipalInitial(0);
+    setPretPrincipalNegocie(0);
+    setEstimationAnnuelleInitial(0);
+    setEstimationAnnuelleNegocie(0);
 
     // Reset financial report state
     setFinancialStage('idle');
@@ -698,6 +1026,584 @@ export default function BusinessAnalysisModal({ isOpen, onClose, business, initi
               <p className="text-xs text-text-tertiary leading-relaxed">
                 Sélectionnez le secteur pour obtenir des benchmarks sectoriels pertinents
               </p>
+            </div>
+
+            {/* ===== SECTION 7: DONNÉES DU PROJET ===== */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-cyan-500 text-white">
+                  💰
+                </span>
+                Données du Projet
+              </h3>
+
+              {/* Column headers */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="px-3 py-2 bg-surface-100 rounded-lg text-center">
+                  <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+                    Scénario Initial
+                  </span>
+                </div>
+                <div className="px-3 py-2 bg-surface-100 rounded-lg text-center">
+                  <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+                    Scénario Négocié
+                  </span>
+                </div>
+              </div>
+
+              {/* Row 1: Prix du fonds de commerce */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Prix du fonds de commerce
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={prixFondsInitial}
+                    onChange={(e) => setPrixFondsInitial(e.target.value)}
+                    placeholder="320 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={prixFondsNegocie}
+                    onChange={(e) => setPrixFondsNegocie(e.target.value)}
+                    placeholder="300 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Honoraires HT */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Honoraires HT
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={honorairesHtInitial}
+                    onChange={(e) => setHonorairesHtInitial(e.target.value)}
+                    placeholder="25 600"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={honorairesHtNegocie}
+                    onChange={(e) => setHonorairesHtNegocie(e.target.value)}
+                    placeholder="24 000"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Frais d'actes HT */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Frais d'actes HT
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={fraisActeHtInitial}
+                    onChange={(e) => setFraisActeHtInitial(e.target.value)}
+                    placeholder="2 000"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={fraisActeHtNegocie}
+                    onChange={(e) => setFraisActeHtNegocie(e.target.value)}
+                    placeholder="2 000"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: TVA sur honoraires (AUTO-CALCULATED) */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                  TVA sur honoraires
+                  <span className="px-2 py-0.5 bg-warning-100 text-warning-800 text-xs rounded-full font-semibold">
+                    Auto
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={tvaSurHonorairesInitial.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-surface-300 rounded-xl bg-surface-100 text-text-secondary font-medium text-sm cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      €
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={tvaSurHonorairesNegocie.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-surface-300 rounded-xl bg-surface-100 text-text-secondary font-medium text-sm cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      €
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Calcul auto: (Honoraires HT + Frais actes HT) × 20,6%
+                </p>
+              </div>
+
+              {/* Row 5: Droits d'enregistrement et débours */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Droits d'enregistrement et débours
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={deboursInitial}
+                    onChange={(e) => setDeboursInitial(e.target.value)}
+                    placeholder="1 500"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={deboursNegocie}
+                    onChange={(e) => setDeboursNegocie(e.target.value)}
+                    placeholder="1 500"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 6: Stock et Fonds de roulement */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Stock et Fonds de roulement
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={stockFondsRoulementInitial}
+                    onChange={(e) => setStockFondsRoulementInitial(e.target.value)}
+                    placeholder="15 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={stockFondsRoulementNegocie}
+                    onChange={(e) => setStockFondsRoulementNegocie(e.target.value)}
+                    placeholder="15 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 7: Loyer d'avance */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Loyer d'avance (caution/dépôt)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={loyerAvanceInitial}
+                    onChange={(e) => setLoyerAvanceInitial(e.target.value)}
+                    placeholder="5 200"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={loyerAvanceNegocie}
+                    onChange={(e) => setLoyerAvanceNegocie(e.target.value)}
+                    placeholder="3 600"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Garantie locative (généralement 2-3 mois de loyer)
+                </p>
+              </div>
+
+              {/* Row 8: TOTAL INVESTISSEMENT (AUTO-CALCULATED - HIGHLIGHTED) */}
+              <div className="space-y-2 pt-4 border-t-2 border-surface-300">
+                <label className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  TOTAL DE L'INVESTISSEMENT
+                  <span className="px-2 py-0.5 bg-success-100 text-success-800 text-xs rounded-full font-semibold">
+                    Auto
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={totalInvestissementInitial.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-success-500 rounded-xl bg-success-50 text-success-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-success-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={totalInvestissementNegocie.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-success-500 rounded-xl bg-success-50 text-success-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-success-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Somme de tous les coûts ci-dessus
+                </p>
+              </div>
+            </div>
+
+            {/* ===== SECTION 8: DONNÉES DU FINANCEMENT ===== */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-orange-500 text-white">
+                  🏦
+                </span>
+                Données du Financement
+              </h3>
+
+              {/* Row 1: Apport personnel */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Apport personnel
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={apportInitial}
+                    onChange={(e) => setApportInitial(e.target.value)}
+                    placeholder="100 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={apportNegocie}
+                    onChange={(e) => setApportNegocie(e.target.value)}
+                    placeholder="100 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Prêt Relais TVA */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Prêt Relais TVA
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={pretRelaisTvaInitial}
+                    onChange={(e) => setPretRelaisTvaInitial(e.target.value)}
+                    placeholder="5 690"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={pretRelaisTvaNegocie}
+                    onChange={(e) => setPretRelaisTvaNegocie(e.target.value)}
+                    placeholder="5 380"
+                    prefix="€"
+                    min="0"
+                    step="100"
+                    className="text-sm"
+                  />
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Prêt court-terme (taux ~4%) pour couvrir la TVA en attendant remboursement
+                </p>
+              </div>
+
+              {/* Row 3: Crédit Vendeur */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Crédit Vendeur
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={creditVendeurInitial}
+                    onChange={(e) => setCreditVendeurInitial(e.target.value)}
+                    placeholder="15 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={creditVendeurNegocie}
+                    onChange={(e) => setCreditVendeurNegocie(e.target.value)}
+                    placeholder="15 000"
+                    prefix="€"
+                    min="0"
+                    step="1000"
+                    className="text-sm"
+                  />
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Crédit vendeur pour stock/équipement (facilite négociation)
+                </p>
+              </div>
+
+              {/* Row 4: MONTANT DU PRÊT PRINCIPAL (AUTO-CALCULATED) */}
+              <div className="space-y-2 pt-4 border-t-2 border-surface-300">
+                <label className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  MONTANT DU PRÊT PRINCIPAL
+                  <span className="px-2 py-0.5 bg-primary-100 text-primary-800 text-xs rounded-full font-semibold">
+                    Auto
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={pretPrincipalInitial.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-primary-500 rounded-xl bg-primary-50 text-primary-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={pretPrincipalNegocie.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-primary-500 rounded-xl bg-primary-50 text-primary-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Calcul auto: Total investissement - Apport - Prêt relais TVA - Crédit vendeur
+                </p>
+              </div>
+            </div>
+
+            {/* ===== SECTION 9: PARAMÈTRES DE L'EMPRUNT ===== */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-violet-500 text-white">
+                  📊
+                </span>
+                Paramètres de l'Emprunt
+              </h3>
+
+              {/* Row 1: Durée du prêt */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Durée du prêt (années)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput
+                    type="number"
+                    value={dureeInitial}
+                    onChange={(e) => setDureeInitial(e.target.value)}
+                    placeholder="7"
+                    min="1"
+                    max="25"
+                    step="1"
+                    className="text-sm"
+                  />
+                  <FormInput
+                    type="number"
+                    value={dureeNegocie}
+                    onChange={(e) => setDureeNegocie(e.target.value)}
+                    placeholder="7"
+                    min="1"
+                    max="25"
+                    step="1"
+                    className="text-sm"
+                  />
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Durée typique: 5-10 ans pour fonds de commerce
+                </p>
+              </div>
+
+              {/* Row 2: Taux d'intérêt nominal */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Taux d'intérêt nominal
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={tauxInteretInitial}
+                      onChange={(e) => setTauxInteretInitial(e.target.value)}
+                      placeholder="3.20"
+                      min="0"
+                      max="15"
+                      step="0.1"
+                      className="w-full px-5 py-4 pr-12 border-2 border-surface-400 rounded-xl focus:ring-4 focus:outline-none focus:border-primary-500 focus:ring-primary-100 transition-all duration-200 text-sm"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      %
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={tauxInteretNegocie}
+                      onChange={(e) => setTauxInteretNegocie(e.target.value)}
+                      placeholder="3.00"
+                      min="0"
+                      max="15"
+                      step="0.1"
+                      className="w-full px-5 py-4 pr-12 border-2 border-surface-400 rounded-xl focus:ring-4 focus:outline-none focus:border-primary-500 focus:ring-primary-100 transition-all duration-200 text-sm"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Taux bancaire actuel (ex: 3,20%)
+                </p>
+              </div>
+
+              {/* Row 3: Taux d'assurance ADI */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">
+                  Taux d'assurance ADI (Décès-Invalidité)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={tauxAssuranceInitial}
+                      onChange={(e) => setTauxAssuranceInitial(e.target.value)}
+                      placeholder="0.40"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      className="w-full px-5 py-4 pr-12 border-2 border-surface-400 rounded-xl focus:ring-4 focus:outline-none focus:border-primary-500 focus:ring-primary-100 transition-all duration-200 text-sm"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      %
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={tauxAssuranceNegocie}
+                      onChange={(e) => setTauxAssuranceNegocie(e.target.value)}
+                      placeholder="0.35"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      className="w-full px-5 py-4 pr-12 border-2 border-surface-400 rounded-xl focus:ring-4 focus:outline-none focus:border-primary-500 focus:ring-primary-100 transition-all duration-200 text-sm"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary font-medium">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Assurance emprunteur (typique: 0,35-0,50%)
+                </p>
+              </div>
+
+              {/* Row 4: ESTIMATION ANNUELLE (AUTO-CALCULATED) */}
+              <div className="space-y-2 pt-4 border-t-2 border-surface-300">
+                <label className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  ESTIMATION ANNUELLE (remboursement)
+                  <span className="px-2 py-0.5 bg-violet-100 text-violet-800 text-xs rounded-full font-semibold">
+                    Auto
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={estimationAnnuelleInitial.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-violet-500 rounded-xl bg-violet-50 text-violet-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-violet-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={estimationAnnuelleNegocie.toLocaleString('fr-FR')}
+                      readOnly
+                      className="w-full px-5 py-4 pl-12 border-2 border-violet-500 rounded-xl bg-violet-50 text-violet-800 font-bold text-base cursor-not-allowed"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-violet-700 font-bold">
+                      €
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  Calcul auto: Formule d'annuité (capital + intérêts + assurance) × 12 mois
+                </p>
+              </div>
             </div>
 
             {/* Extraction Only Checkbox */}

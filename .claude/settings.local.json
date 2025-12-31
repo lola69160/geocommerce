@@ -70,7 +70,9 @@
       "Bash(timeout 3 bash -c \"while ! netstat -ano | grep :5176 > /dev/null 2>&1; do sleep 0.5; done; echo ''Server started''\")",
       "Bash(timeout 5 bash:*)",
       "Bash(timeout 3 tail:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(tail:*)",
+      "Bash(git mv:*)"
     ]
   }
 }

@@ -1104,8 +1104,34 @@ app.post('/api/analyze-financial', async (req, res) => {
             return result;
         }
 
+        // ========================================
+        // PARSE TRANSACTION FINANCING DATA
+        // Priority: Manual form > PDF extraction > NLP fallback
+        // ========================================
+        function parseTransactionFinancing(userComments) {
+            // PRIORITY 0: Manual form input (structured data from frontend)
+            if (userComments?.transactionFinancing?.initial) {
+                console.log('[parseFinancing] ✅ Manual form data detected - using structured input');
+                return userComments.transactionFinancing;
+            }
+
+            // PRIORITY 1: PDF extraction would be handled here (future)
+            // if (extractedTransactionCosts) { ... }
+
+            // PRIORITY 2: NLP fallback (future extension if needed)
+            console.log('[parseFinancing] ⚠️ No structured financing data - skipping');
+            return null;
+        }
+
         // Appliquer le parsing NLP aux commentaires utilisateur
         const enrichedUserComments = parseNaturalLanguageUserComments(userComments || {});
+
+        // Intégrer les données de financement si disponibles
+        const transactionFinancing = parseTransactionFinancing(userComments || {});
+        if (transactionFinancing) {
+            enrichedUserComments.transactionFinancing = transactionFinancing;
+            console.log('[parseFinancing] ✅ Transaction financing data integrated into state');
+        }
 
         // 3. État initial
         const initialState = {
