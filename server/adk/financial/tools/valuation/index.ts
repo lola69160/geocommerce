@@ -4,6 +4,7 @@
  * Outils de valorisation de fonds de commerce (3 méthodes + synthèse)
  */
 
+export { validateSectorTypeTool } from './validateSectorTypeTool';
 export { calculateEbeValuationTool } from './calculateEbeValuationTool';
 export { calculateCaValuationTool } from './calculateCaValuationTool';
 export { calculatePatrimonialTool } from './calculatePatrimonialTool';

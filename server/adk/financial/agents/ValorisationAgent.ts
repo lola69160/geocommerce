@@ -4,7 +4,8 @@ import {
   calculateCaValuationTool,
   calculatePatrimonialTool,
   synthesizeValuationTool,
-  calculateTabacValuationTool
+  calculateTabacValuationTool,
+  validateSectorTypeTool
 } from '../tools/valuation';
 import type { FinancialState } from '../index';
 
@@ -54,6 +55,7 @@ export class ValorisationAgent extends LlmAgent {
 
       // Tools disponibles pour l'agent
       tools: [
+        validateSectorTypeTool,
         calculateEbeValuationTool,
         calculateCaValuationTool,
         calculatePatrimonialTool,
@@ -93,31 +95,46 @@ WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
 
 ⚠️⚠️⚠️ RÈGLE CRITIQUE - DÉTECTION TABAC ⚠️⚠️⚠️
 
-ÉTAPE OBLIGATOIRE AVANT TOUT CALCUL:
+🔴 ÉTAPE 0 (OBLIGATOIRE) - APPELER EN PREMIER:
 
-1. Lire state.businessInfo.secteurActivite
-2. Si secteurActivite === '47.26' OU '47.62' → COMMERCE TABAC DÉTECTÉ
-3. Si TABAC détecté → SAUTER directement à "MÉTHODE HYBRIDE (Étape 1bis)"
-   SINON → Utiliser "MÉTHODE CLASSIQUE (Étapes 1-4)"
+validateSectorType()
+→ Retourne: { isTabac: true/false, sectorCode: "47.26", recommendedMethod: "HYBRIDE"/"CLASSIQUE" }
 
-⚠️ IMPORTANT: NE JAMAIS utiliser state.businessInfo.nafCode pour cette détection
-   Utiliser UNIQUEMENT state.businessInfo.secteurActivite
+⚠️ TU DOIS APPELER CE TOOL EN TOUT PREMIER - AVANT TOUT AUTRE CALCUL
+   Ce tool lit state.businessInfo.secteurActivite (choix utilisateur) et détermine la méthode à utiliser.
 
-EXEMPLE CONCRET:
-  state.businessInfo = {
-    "secteurActivite": "47.26",              ← CETTE VALEUR UNIQUEMENT
-    "secteurActiviteLabel": "Tabac / Presse / Loto",
-    "nafCode": "47.76Z"                      ← NE PAS UTILISER (API obsolète)
+ENSUITE, SELON LE RÉSULTAT:
+
+- SI validateSectorType retourne isTabac=true ET recommendedMethod="HYBRIDE":
+  → SAUTER directement à "MÉTHODE HYBRIDE (Étape 1bis)"
+  → NE PAS UTILISER les méthodes classiques (EBE/CA/Patrimoniale)
+
+- SI validateSectorType retourne isTabac=false ET recommendedMethod="CLASSIQUE":
+  → Utiliser "MÉTHODES CLASSIQUES (Étapes 1-4)"
+
+⚠️ IMPORTANT: NE JAMAIS essayer de déterminer toi-même si c'est un Tabac
+   Utiliser UNIQUEMENT le résultat de validateSectorType()
+
+EXEMPLE CONCRET (Tabac):
+  validateSectorType() retourne:
+  {
+    "isTabac": true,
+    "sectorCode": "47.26",
+    "sectorLabel": "Tabac / Presse / Loto",
+    "recommendedMethod": "HYBRIDE",
+    "reason": "Secteur Tabac/Presse détecté (47.26). Méthode Hybride OBLIGATOIRE."
   }
-  → Résultat: TABAC DÉTECTÉ → Méthode Hybride ✅
+  → Action: Appeler calculateTabacValuation() (Étape 1bis)
+  → Ne PAS appeler calculateEbeValuation/calculateCaValuation/calculatePatrimonial
 
-⚠️ EXEMPLES DE DÉTECTION:
-- secteurActivite = '47.26' → TABAC ✅ → Méthode Hybride
-- secteurActivite = '47.62' → PRESSE ✅ → Méthode Hybride
-- secteurActivite = '56.30' (Débits de boissons) → PAS TABAC ❌ → Méthodes Classiques
-
-SI COMMERCE TABAC/PRESSE DÉTECTÉ → Utiliser MÉTHODE HYBRIDE (Étape 1bis)
-SINON → Utiliser MÉTHODES CLASSIQUES (Étapes 1-4)
+EXEMPLE CONCRET (Non-Tabac):
+  validateSectorType() retourne:
+  {
+    "isTabac": false,
+    "sectorCode": "56.30",
+    "recommendedMethod": "CLASSIQUE"
+  }
+  → Action: Appeler calculateEbeValuation + calculateCaValuation + calculatePatrimonial (Étapes 1-4)
 
 ═══════════════════════════════════════════════════════════════════════
 MÉTHODE CLASSIQUE (Commerces standards)
