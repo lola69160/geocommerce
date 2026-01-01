@@ -618,30 +618,52 @@ export const ALERT_RULES: AlertRule[] = [
     category: 'donnees',
     severity: 'critical',
     condition: (ctx) => {
-      if (!ctx.documentExtraction?.documents) return true;
-      return !ctx.documentExtraction.documents.some(d => d.documentType === 'bilan');
+      // Vérifier que les SIG contiennent des données exploitables
+      if (!ctx.comptable?.sig) return true;
+      const sigData = ctx.comptable.sig;  // Store to avoid TS narrowing issues
+      const years = Object.keys(sigData);
+      if (years.length === 0) return true;
+
+      // Vérifier qu'au moins une année a au moins UN champ non nul
+      // (accepte n'importe quel champ SIG, pas seulement bilan)
+      return !years.some(year => {
+        const sig = sigData[year];
+        if (!sig) return false;
+        // Vérifier si au moins un champ numérique est défini et non nul
+        return Object.values(sig).some((val: any) =>
+          typeof val === 'number' && val !== 0
+        );
+      });
     },
     extractValues: () => ({}),
-    titleTemplate: 'Bilan comptable non fourni',
-    messageTemplate: () => 'Aucun bilan comptable n\'a ete fourni',
-    impactTemplate: 'Analyse de structure financiere impossible',
-    recommendationTemplate: 'Demander les bilans des 3 dernieres annees'
+    titleTemplate: 'Donnees comptables non extraites',
+    messageTemplate: () => 'Aucune donnee comptable exploitable n\'a ete extraite des documents',
+    impactTemplate: 'Analyse financiere impossible',
+    recommendationTemplate: 'Fournir des documents comptables lisibles (COMPTA, bilans, CR) des 3 dernieres annees'
   },
   {
     id: 'DATA_002',
     category: 'donnees',
     severity: 'critical',
     condition: (ctx) => {
-      if (!ctx.documentExtraction?.documents) return true;
-      return !ctx.documentExtraction.documents.some(d =>
-        d.documentType === 'compte_resultat' || d.documentType === 'compta'
-      );
+      // Vérifier que les SIG contiennent des données de compte de résultat exploitables
+      if (!ctx.comptable?.sig) return true;
+      const sigData = ctx.comptable.sig;  // Store to avoid TS narrowing issues
+      const years = Object.keys(sigData);
+      if (years.length === 0) return true;
+
+      // Vérifier qu'au moins une année a un CA > 0 (donnée fondamentale du CR)
+      return !years.some(year => {
+        const sig = sigData[year];
+        if (!sig) return false;  // Sécurité : ignorer années sans données
+        return sig.chiffre_affaires && sig.chiffre_affaires > 0;
+      });
     },
     extractValues: () => ({}),
     titleTemplate: 'Compte de resultat non fourni',
-    messageTemplate: () => 'Aucun compte de resultat n\'a ete fourni',
+    messageTemplate: () => 'Aucune donnee de rentabilite (CA, charges) n\'a ete extraite des documents',
     impactTemplate: 'Analyse de rentabilite impossible',
-    recommendationTemplate: 'Demander les comptes de resultat des 3 dernieres annees'
+    recommendationTemplate: 'Fournir des documents COMPTA lisibles ou comptes de resultat des 3 dernieres annees'
   },
   {
     id: 'DATA_003',

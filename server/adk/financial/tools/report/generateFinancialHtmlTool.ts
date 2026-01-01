@@ -25,7 +25,7 @@ import {
   generateCoverPage,
   generateAccountingSection,
   generateValuationSection,
-  generateRealEstateSection,
+  // generateRealEstateSection,  // ⚠️ MASQUÉ TEMPORAIREMENT (2026-01-01)
   generateBusinessPlanSection,
   generateOpportunitySection,
   generateFinancingPlanSection
@@ -149,10 +149,11 @@ export const generateFinancialHtmlTool = new FunctionTool({
       sections_included.push('valuation');
 
       // 5. Analyse immobilière
-      if (immobilier) {
-        html += generateRealEstateSection(immobilier);
-        sections_included.push('real_estate');
-      }
+      // ⚠️ MASQUÉ TEMPORAIREMENT (2026-01-01) - Peut être réactivé si besoin
+      // if (immobilier) {
+      //   html += generateRealEstateSection(immobilier);
+      //   sections_included.push('real_estate');
+      // }
 
       // 6. Business Plan Dynamique
       if (businessPlan && businessPlan.projections && businessPlan.projections.length > 0) {
@@ -443,8 +444,22 @@ function generateExecutiveSummary(comptable: any, valorisation: any, financialVa
   const evolutionEbeAnnee1 = ebeComptable > 0 ? ((ebeAnnee1 - ebeComptable) / ebeComptable * 100) : 0;
 
   // Capacité remboursement = EBE - Annuité emprunt
+  // Priorité 1: Formulaire Transaction Financing (Sections 7-9)
+  // Priorité 2: Business Plan financement
+  // Priorité 3: Transaction Costs mensualités
   const annuiteActuelle = transactionCosts?.mensualites ? transactionCosts.mensualites * 12 : 0;
-  const annuitePrevue = businessPlan?.financement?.annuite || annuiteActuelle;
+
+  const annuitePrevue = userComments?.transactionFinancing?.negocie?.estimation_annuelle  // Scénario négocié prioritaire
+    || userComments?.transactionFinancing?.initial?.estimation_annuelle
+    || businessPlan?.financement?.annuite
+    || annuiteActuelle;
+
+  console.log(`[generateFinancialHtml] 💰 Annuité prévue: ${annuitePrevue.toLocaleString('fr-FR')} € (source: ${
+    userComments?.transactionFinancing?.negocie?.estimation_annuelle ? 'Formulaire (négocié)' :
+    userComments?.transactionFinancing?.initial?.estimation_annuelle ? 'Formulaire (initial)' :
+    businessPlan?.financement?.annuite ? 'Business Plan' : 'Transaction Costs'
+  })`);
+
   const capaciteActuelle = ebeComptable - annuiteActuelle;
   const capacitePotentielle = ebeAnnee1 > 0 ? ebeAnnee1 - annuitePrevue : ebeNormatif - annuitePrevue;
   const evolutionCapacite = capaciteActuelle !== 0 ? ((capacitePotentielle - capaciteActuelle) / Math.abs(capaciteActuelle) * 100) : 0;

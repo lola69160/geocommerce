@@ -551,9 +551,23 @@ export const businessPlanDynamiqueTool = new FunctionTool({
       const tauxPrelevements = 0.15;
       const capaciteAutofinancement = Math.round(ebeAnnee1 * (1 - tauxImposition - tauxPrelevements));
 
-      // 3. Point mort (CA minimum pour équilibre)
-      const margeVariable = ebeAnnee1 / projections[1].ca; // Taux de marge sur CA
-      const pointMort = margeVariable > 0 ? Math.round(projections[1].charges_fixes / margeVariable) : 0;
+      // 3. Point mort (CA minimum pour équilibre) - Formule bancaire
+      // Formule: (Charges fixes + Remboursement annuel) / Taux de marge brute
+      const margeBrute = projections[1].marge_brute_globale || 0;
+      const ca = projections[1].ca || 1; // Éviter division par zéro
+      const tauxMargeBrute = margeBrute / ca;  // Ex: 187,181 / 277,943 = 0.675 (67.5%)
+
+      const chargesFixesTotales = (projections[1].charges_fixes || 0) + annuiteEmprunt;
+      const pointMort = tauxMargeBrute > 0
+        ? Math.round(chargesFixesTotales / tauxMargeBrute)
+        : 0;
+
+      console.log(`[businessPlanDynamique] 📊 Point Mort calculé:`);
+      console.log(`   - Charges fixes: ${projections[1].charges_fixes?.toLocaleString('fr-FR')} €`);
+      console.log(`   - Annuité emprunt: ${annuiteEmprunt.toLocaleString('fr-FR')} €`);
+      console.log(`   - Total: ${chargesFixesTotales.toLocaleString('fr-FR')} €`);
+      console.log(`   - Taux marge brute: ${(tauxMargeBrute * 100).toFixed(1)}%`);
+      console.log(`   - Point Mort: ${pointMort.toLocaleString('fr-FR')} € CA annuel`);
 
       // 4. Délai de retour sur investissement
       const moyenneResteApresDetteAnnees2a5 = (projections[2].reste_apres_dette + projections[3].reste_apres_dette + projections[4].reste_apres_dette + projections[5].reste_apres_dette) / 4;
@@ -580,6 +594,7 @@ export const businessPlanDynamiqueTool = new FunctionTool({
         ratioCouvertureDette,
         capaciteAutofinancement,
         pointMort,
+        tauxMargeBrute,              // Ajouté pour affichage dans rapport
         delaiRetourInvestissement,
         rentabiliteCapitauxInvestis,
         investissementTotal,

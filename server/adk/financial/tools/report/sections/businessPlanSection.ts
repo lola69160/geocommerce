@@ -467,9 +467,12 @@ function generateBankingIndicators(ind: any): string {
   </div>`;
 
   html += `<div class="score-card">
-    <div class="score-value">${ind.pointMort.toLocaleString('fr-FR')} €</div>
-    <div class="score-label">Point Mort</div>
-    <p style="font-size:0.85em; margin-top:5px">CA minimum équilibre</p>
+    <div class="score-value">${ind.pointMort?.toLocaleString('fr-FR') || 'N/A'} €</div>
+    <div class="score-label">Point Mort (Année 1)</div>
+    <p style="font-size:0.85em; margin-top:5px">
+      CA minimum pour couvrir charges + dette
+      ${ind.tauxMargeBrute ? `<br>Marge brute: ${(ind.tauxMargeBrute * 100).toFixed(1)}%` : ''}
+    </p>
   </div>`;
 
   html += '</div>';
