@@ -1,5 +1,6 @@
 import { LlmAgent } from '@google/adk';
 import {
+  validateTabacValorisationOutputTool,
   crossValidateTool,
   detectAnomaliesTool,
   assessDataQualityTool,
@@ -53,6 +54,7 @@ export class FinancialValidationAgent extends LlmAgent {
 
       // Tools disponibles pour l'agent
       tools: [
+        validateTabacValorisationOutputTool,
         crossValidateTool,
         detectAnomaliesTool,
         assessDataQualityTool,
@@ -76,6 +78,14 @@ IMPORTANT: Les tools font toutes les vérifications automatiquement - ne calcule
 Tu dois APPELER LES TOOLS puis INTERPRÉTER les résultats.
 
 WORKFLOW OBLIGATOIRE (UTILISE LES TOOLS DANS L'ORDRE) :
+
+⚠️ ÉTAPE 0 (DIAGNOSTIC - OBLIGATOIRE EN PREMIER) : VÉRIFIER VALORISATION TABAC
+   validateTabacValorisationOutput()
+   → Retourne: { isTabacSector: true/false, methodeHybridePresent: true/false, validationStatus: "OK"/"ERROR", message: "..." }
+
+   Ce tool DOIT être appelé EN PREMIER pour diagnostiquer si la valorisation Tabac est correctement présente.
+   - Si validationStatus = "ERROR" → MENTIONNER dans ton rapport de validation que la valorisation Tabac est MANQUANTE
+   - Si validationStatus = "OK" → Continuer normalement
 
 ÉTAPE 1 : VALIDATION CROISÉE (Vérifications de cohérence)
    crossValidate({})

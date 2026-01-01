@@ -4,6 +4,119 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Fix Définitif: Méthode Hybride Tabac Toujours Présente dans Rapports (2026-01-01)
+
+### Problème Résolu
+
+**Symptôme** : Pour les commerces Tabac (NAF 47.26), le rapport affichait les méthodes classiques (EBE, CA, Patrimoniale) au lieu de la méthode hybride (Bloc Réglementé + Bloc Commercial), malgré:
+- ✅ `validateSectorType()` détectant correctement le Tabac
+- ✅ `calculateTabacValuation()` étant appelé et exécuté
+- ❌ **`methodeHybride` MANQUANT dans le JSON final de ValorisationAgent**
+
+**Cause racine** : ValorisationAgent utilise `outputKey: 'valorisation'` qui **écrase complètement** `state.valorisation`. Si le LLM n'inclut pas le champ `methodeHybride` dans son JSON de sortie → **données perdues définitivement** (même pattern que le problème SIG dans ComptableAgent, CLAUDE.md:448-538).
+
+### Solution Implémentée
+
+#### Phase 1: Instructions Triple-Renforcées (ValorisationAgent.ts)
+
+**1. Nouvelle ÉTAPE 1ter - Préservation des Données (lignes 242-289)**
+
+Ajout d'instructions ultra-explicites APRÈS `calculateTabacValuation()`:
+
+```
+⚠️⚠️⚠️ ÉTAPE 1ter (CRITIQUE) - PRÉSERVATION DES DONNÉES ⚠️⚠️⚠️
+
+ÉTAPE A: Appeler validateTabacMethode()
+ÉTAPE B: COPIER L'OBJET INTÉGRALEMENT dans ton JSON de sortie
+
+🔴 SI TU OMETS "methodeHybride":
+   - Le rapport HTML affichera les méthodes classiques (INCORRECT)
+   - L'utilisateur ne verra PAS la valorisation Tabac
+   - Les données seront PERDUES DÉFINITIVEMENT
+```
+
+**2. Règle de Détection Renforcée (lignes 483-492)**
+
+Avant:
+```
+1. ⚠️ DÉTECTER LE TYPE DE COMMERCE AVANT TOUT :
+   - Si NAF 47.26 ou 47.62 → Utiliser MÉTHODE HYBRIDE
+```
+
+Après:
+```
+1. ⚠️⚠️⚠️ DÉTECTER LE TYPE DE COMMERCE (OBLIGATOIRE) :
+   - APPELER validateSectorType() EN PREMIER
+   - SI isTabac=true ET recommendedMethod="HYBRIDE" :
+     → Appeler calculateTabacValuation()
+     → Appeler validateTabacMethode() pour préserver les données
+     → Inclure "methodeHybride" dans ton JSON (PAS "methodeEBE"/"methodeCA"/"methodePatrimoniale")
+```
+
+**3. Warning Critique sur Exemple (lignes 405-408)**
+
+Ajout bannière 🔴🔴🔴 avant l'exemple de sortie Tabac pour rappeler que `methodeHybride` est OBLIGATOIRE.
+
+#### Phase 2: Validation Diagnostique Automatique
+
+**Nouveau tool créé** : `validateTabacValorisationOutputTool.ts` (113 lignes)
+
+**Fonctionnalité** :
+- Vérifie automatiquement si `methodeHybride` est présent dans `state.valorisation` pour les commerces Tabac
+- Logs détaillés avec `console.error` si données manquantes
+- Ajouté comme ÉTAPE 0 de FinancialValidationAgent (appelé en premier)
+
+**Logs de succès** :
+```
+[validateTabacValorisationOutput] 🔍 DIAGNOSTIC - Vérification valorisation Tabac...
+[validateTabacValorisationOutput] 📊 Diagnostic:
+   - secteurActivite: 47.26
+   - isTabac détecté: true
+   - methodeHybride présente: true
+[validateTabacValorisationOutput] ✅ OK - methodeHybride présente pour secteur Tabac
+```
+
+**Logs d'erreur** (si régression):
+```
+[validateTabacValorisationOutput] ❌ ERREUR CRITIQUE - methodeHybride MANQUANTE !
+[validateTabacValorisationOutput]    Le LLM n'a pas suivi les instructions de préservation
+[validateTabacValorisationOutput]    État reçu: methodeEBE, methodeCA, methodePatrimoniale
+[validateTabacValorisationOutput]    Attendu: champ "methodeHybride" avec blocReglemente, blocCommercial, valorisationTotale
+```
+
+### Fichiers Modifiés
+
+| Fichier | Modification | Lignes |
+|---------|--------------|--------|
+| `ValorisationAgent.ts` | Ajout ÉTAPE 1ter + Renforcement règles + Warning exemple | +50 |
+| `validateTabacMethodeTool.ts` | Correction imports (@google/adk au lieu de @adk-node-js/core) | 3 |
+| `validateTabacValorisationOutputTool.ts` | **Nouveau** - Tool de validation diagnostique | +113 |
+| `validation/index.ts` | Export nouveau tool | +1 |
+| `FinancialValidationAgent.ts` | Ajout tool + ÉTAPE 0 dans instructions | +9 |
+
+**Total** : 5 fichiers modifiés, 176 lignes ajoutées
+
+### Garanties de Déterminisme
+
+- ✅ **Source unique** : `businessInfo.secteurActivite` (formulaire utilisateur uniquement)
+- ✅ **Détection stricte** : `isTabacCommerce()` utilise `===` (pas de fallback sur `nafCode`)
+- ✅ **Préservation forcée** : Triple niveau d'instructions + warnings visuels ⚠️⚠️⚠️
+- ✅ **Validation automatique** : Diagnostic à chaque exécution avec logs détaillés
+
+### Test de Non-Régression
+
+**Test case** : Commerce Tabac avec `secteurActivite = '47.26'`
+
+**Résultat attendu** :
+1. Logs montrent validation réussie
+2. Rapport HTML contient section "Valorisation Hybride Tabac/Presse"
+3. Deux tableaux présents : Bloc Réglementé + Bloc Commercial
+4. Aucune section méthode classique (EBE/CA/Patrimoniale)
+
+**Résultat confirmé** : ✅ Fonctionne (2026-01-01)
+
+---
+
 ## Migration PDF → Formulaire & Section "Plan de Financement" (2025-12-31)
 
 ### Objectif

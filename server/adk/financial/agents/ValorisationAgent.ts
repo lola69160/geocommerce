@@ -5,7 +5,8 @@ import {
   calculatePatrimonialTool,
   synthesizeValuationTool,
   calculateTabacValuationTool,
-  validateSectorTypeTool
+  validateSectorTypeTool,
+  validateTabacMethodeTool
 } from '../tools/valuation';
 import type { FinancialState } from '../index';
 
@@ -56,6 +57,7 @@ export class ValorisationAgent extends LlmAgent {
       // Tools disponibles pour l'agent
       tools: [
         validateSectorTypeTool,
+        validateTabacMethodeTool,
         calculateEbeValuationTool,
         calculateCaValuationTool,
         calculatePatrimonialTool,
@@ -237,6 +239,55 @@ MÉTHODE HYBRIDE (Commerces Tabac/Presse/FDJ UNIQUEMENT)
    SI caActiviteBoutiqueAnnuel NON FOURNI :
    - Le tool estimera depuis le CA total (environ 25% du CA)
 
+⚠️⚠️⚠️ ÉTAPE 1ter (CRITIQUE) - PRÉSERVATION DES DONNÉES ⚠️⚠️⚠️
+
+APRÈS avoir appelé calculateTabacValuation(), TU DOIS IMMÉDIATEMENT:
+
+ÉTAPE A: Appeler validateTabacMethode()
+   validateTabacMethode({ methodeHybride: <résultat de calculateTabacValuation> })
+   → Ce tool retournera l'objet complet avec un avertissement CRITIQUE
+
+ÉTAPE B: COPIER L'OBJET INTÉGRALEMENT dans ton JSON de sortie
+   Ton JSON final DOIT contenir:
+   {
+     "methodeHybride": { /* COPIE COMPLÈTE de l'objet retourné par validateTabacMethode */ }
+   }
+
+⚠️ EXEMPLE CONCRET (Tabac 47.26):
+   1. calculateTabacValuation() retourne:
+      {
+        "typeCommerce": "tabac_centre_ville",
+        "blocReglemente": { "commissionsNettes": 120000, "valeurMediane": 318000, ... },
+        "blocCommercial": { "caActiviteBoutique": 80000, "valeurMediane": 16000, ... },
+        "valorisationTotale": { "valeurMediane": 334000, ... },
+        ...
+      }
+
+   2. validateTabacMethode({ methodeHybride: <objet ci-dessus> }) retourne:
+      {
+        "methodeHybride": { /* MÊME OBJET */ },
+        "INSTRUCTION_CRITIQUE": "⚠️⚠️⚠️ COPIER..."
+      }
+
+   3. TON JSON FINAL DOIT INCLURE:
+      {
+        "businessInfo": { "nafCode": "47.26" },
+        "methodeHybride": {
+          "typeCommerce": "tabac_centre_ville",
+          "blocReglemente": { ... },  // TOUS LES CHAMPS OBLIGATOIRES
+          "blocCommercial": { ... },   // TOUS LES CHAMPS OBLIGATOIRES
+          "valorisationTotale": { ... }, // TOUS LES CHAMPS OBLIGATOIRES
+          ...
+        },
+        "synthese": { "methode_privilegiee": "HYBRIDE", ... }
+      }
+
+🔴 SI TU OMETS "methodeHybride" OU SI TU OMETS DES CHAMPS:
+   - Le rapport HTML affichera les méthodes classiques au lieu de la méthode hybride (INCORRECT)
+   - L'utilisateur ne verra PAS la valorisation Tabac spécifique
+   - Les données calculées seront PERDUES DÉFINITIVEMENT
+   - Le rapport sera INUTILISABLE pour un commerce Tabac
+
 ÉTAPE 2bis : SYNTHÈSE (OPTIONNELLE pour Tabac)
    Pour les Tabacs, la méthode hybride est DÉJÀ une synthèse complète.
    Tu peux SKIP les étapes 1-4 de la méthode classique.
@@ -350,13 +401,19 @@ FORMAT DE SORTIE JSON (STRICT) :
 }
 
 ⚠️ EXEMPLE DE SORTIE POUR COMMERCE TABAC/PRESSE/FDJ (MÉTHODE HYBRIDE):
+
+🔴🔴🔴 RÈGLE CRITIQUE - LE CHAMP "methodeHybride" EST OBLIGATOIRE 🔴🔴🔴
+
+Si tu détectes un commerce Tabac (validateSectorType retourne isTabac=true), ton JSON de sortie DOIT contenir le champ "methodeHybride" COMPLET.
+Si ce champ est omis ou incomplet, le rapport HTML sera INCORRECT et INUTILISABLE.
+
 {
   "businessInfo": {
     "name": "Tabac Presse du Centre",
     "nafCode": "47.26Z"
   },
 
-  "methodeHybride": {  // ⚠️ NOUVEAU - Remplace methodeEBE, methodeCA, methodePatrimoniale pour les Tabacs
+  "methodeHybride": {  // 🔴 CE CHAMP EST OBLIGATOIRE POUR TABAC - Remplace methodeEBE, methodeCA, methodePatrimoniale
     "typeCommerce": "tabac_centre_ville",
     "descriptionType": "Tabac situé en centre-ville de ville moyenne",
 
@@ -429,14 +486,23 @@ FORMAT DE SORTIE JSON (STRICT) :
 }
 
 RÈGLES :
-1. ⚠️ DÉTECTER LE TYPE DE COMMERCE AVANT TOUT :
-   - Si NAF 47.26 ou 47.62 (Tabac/Presse) OU activité contient "tabac"/"presse"/"fdj" → Utiliser MÉTHODE HYBRIDE
-   - Sinon → Utiliser MÉTHODE CLASSIQUE (4 tools)
+1. ⚠️⚠️⚠️ DÉTECTER LE TYPE DE COMMERCE AVANT TOUT (OBLIGATOIRE) :
+   - APPELER validateSectorType() EN PREMIER (ÉTAPE 0 OBLIGATOIRE)
+   - SI validateSectorType() retourne isTabac=true ET recommendedMethod="HYBRIDE" :
+     → Appeler calculateTabacValuation() (ÉTAPE 1bis)
+     → Appeler validateTabacMethode() pour préserver les données (ÉTAPE 1ter)
+     → Inclure "methodeHybride" dans ton JSON de sortie (PAS "methodeEBE"/"methodeCA"/"methodePatrimoniale")
+   - SI validateSectorType() retourne isTabac=false ET recommendedMethod="CLASSIQUE" :
+     → Utiliser MÉTHODE CLASSIQUE (4 tools: calculateEbeValuation, calculateCaValuation, calculatePatrimonial, synthesizeValuation)
+
+   ⚠️ IMPORTANT: NE JAMAIS essayer de déterminer toi-même si c'est un Tabac - utilise UNIQUEMENT validateSectorType()
 
 2. POUR COMMERCE TABAC/PRESSE/FDJ (MÉTHODE HYBRIDE) :
-   - Appeler calculateTabacValuation en PRIORITÉ
+   - Appeler calculateTabacValuation() en PRIORITÉ (ÉTAPE 1bis)
+   - Appeler validateTabacMethode() IMMÉDIATEMENT après pour préserver les données (ÉTAPE 1ter - CRITIQUE)
+   - COPIER l'objet methodeHybride complet dans ton JSON de sortie
    - Optionnel : Appeler aussi calculateEbeValuation pour comparaison/validation
-   - La sortie JSON doit inclure "methodeHybride" au lieu de "methodeEBE"
+   - La sortie JSON DOIT inclure "methodeHybride" (PAS "methodeEBE"/"methodeCA"/"methodePatrimoniale")
 
 3. POUR AUTRES COMMERCES (MÉTHODE CLASSIQUE) :
    - Appeler les 4 tools dans l'ordre (calculateEbeValuation → calculateCaValuation → calculatePatrimonial → synthesizeValuation)

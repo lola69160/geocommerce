@@ -5,6 +5,7 @@
  */
 
 export { validateSectorTypeTool } from './validateSectorTypeTool';
+export { validateTabacMethodeTool } from './validateTabacMethodeTool';
 export { calculateEbeValuationTool } from './calculateEbeValuationTool';
 export { calculateCaValuationTool } from './calculateCaValuationTool';
 export { calculatePatrimonialTool } from './calculatePatrimonialTool';
