@@ -282,15 +282,55 @@ export function generateOpportunitiesSection(
 }
 
 /**
+ * Extract the latest fiscal year from comptable data
+ */
+function getLatestFiscalYear(comptable: any): number {
+  if (!comptable?.yearsAnalyzed || comptable.yearsAnalyzed.length === 0) {
+    return 0;
+  }
+  // Extract the most recent year
+  const years = comptable.yearsAnalyzed.map((y: any) => {
+    if (typeof y === 'number') return y;
+    if (typeof y === 'string') return parseInt(y, 10);
+    return 0;
+  }).filter((y: number) => y > 2000 && y < 2030);
+
+  return years.length > 0 ? Math.max(...years) : 0;
+}
+
+/**
  * Generate due diligence checklist
  */
 export function generateChecklistSection(comptable: any, immobilier: any): string {
   let html = '<h3>Checklist Due Diligence</h3>';
   html += '<table><thead><tr><th>Point de Controle</th><th>Statut</th><th>Action Requise</th></tr></thead><tbody>';
 
+  // Validation fiscale stricte
+  const latestYear = getLatestFiscalYear(comptable);
+  const currentYear = new Date().getFullYear();
+  const yearGap = currentYear - latestYear;
+
+  let liassesStatus: string;
+  let liassesAction: string;
+
+  if (latestYear === 0) {
+    liassesStatus = 'missing';
+    liassesAction = 'Aucune liasse fiscale fournie - CRITIQUE';
+  } else if (yearGap > 1) {
+    // Alert if gap > 1 year (strict)
+    liassesStatus = 'partial';
+    liassesAction = `⚠️ Données obsolètes : dernière liasse ${latestYear} (écart ${yearGap} ans) - CRITIQUE pour évaluation fiable`;
+  } else if (comptable?.yearsAnalyzed?.length < 3) {
+    liassesStatus = 'partial';
+    liassesAction = `Seulement ${comptable.yearsAnalyzed.length} année(s) fournie(s) - 3 ans minimum recommandé`;
+  } else {
+    liassesStatus = 'ok';
+    liassesAction = `${comptable.yearsAnalyzed.length} années complètes (${latestYear} à jour)`;
+  }
+
   const checklist = [
     { item: 'Bail commercial (3-6-9 ans minimum)', status: immobilier?.bail ? 'ok' : 'missing', action: 'Demander bail original + avenants' },
-    { item: 'Liasse fiscale 3 dernieres annees', status: comptable?.yearsAnalyzed?.length >= 3 ? 'ok' : 'partial', action: 'Obtenir liasses completes certifiees' },
+    { item: 'Liasse fiscale 3 dernieres annees', status: liassesStatus, action: liassesAction },
     { item: 'Carte debitant tabac (si applicable)', status: 'unknown', action: 'Verifier validite + procedure transfert prefecture' },
     { item: 'Contrats fournisseurs (FDJ, PMU, etc.)', status: 'unknown', action: 'Lister + verifier clauses transfert' },
     { item: 'Conformite ERP & accessibilite', status: 'unknown', action: 'Audit securite incendie + handicap' },

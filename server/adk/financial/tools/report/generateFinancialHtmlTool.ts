@@ -121,7 +121,8 @@ export const generateFinancialHtmlTool = new FunctionTool({
         comptable,
         valorisation,
         businessPlan,
-        userComments
+        userComments,
+        immobilier
       );
       html += opportunityHtml;
       sections_included.push('opportunity_section');
@@ -194,7 +195,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       sections_included.push('acquisition_advice');
 
       // 7. Validation & fiabilité
-      html += generateValidationSection(financialValidation, params.charts.confidenceRadar);
+      html += generateValidationSection(financialValidation, params.charts.confidenceRadar, comptable, immobilier, documentExtraction);
       sections_included.push('validation');
 
       // 8. Annexes
@@ -669,9 +670,31 @@ function generateDataCompletenessSection(dataCompleteness: any): string {
 }
 
 /**
+ * Helper: Extract latest fiscal year from comptable data
+ */
+function getLatestFiscalYear(comptable: any): number {
+  if (!comptable?.yearsAnalyzed || comptable.yearsAnalyzed.length === 0) {
+    return 0;
+  }
+  const years = comptable.yearsAnalyzed.map((y: any) => {
+    if (typeof y === 'number') return y;
+    if (typeof y === 'string') return parseInt(y, 10);
+    return 0;
+  }).filter((y: number) => y > 2000 && y < 2030);
+
+  return years.length > 0 ? Math.max(...years) : 0;
+}
+
+/**
  * Génère la section validation
  */
-function generateValidationSection(financialValidation: any, confidenceRadar: any): string {
+function generateValidationSection(
+  financialValidation: any,
+  confidenceRadar: any,
+  comptable?: any,
+  immobilier?: any,
+  documentExtraction?: any
+): string {
   let html = '<h2>✅ Validation & Fiabilité</h2>';
 
   if (!financialValidation) {
@@ -730,35 +753,67 @@ function generateValidationSection(financialValidation: any, confidenceRadar: an
     html += generateDataCompletenessSection(financialValidation.dataCompleteness);
   }
 
-  // Anomalies
-  if (financialValidation.anomalies && financialValidation.anomalies.length > 0) {
-    html += '<h3>Anomalies Détectées</h3>';
+  // ========== ANOMALIES & VÉRIFICATIONS SUPPRIMÉS ==========
+  // (Blocs désactivés sur demande utilisateur 2026-01-02)
 
-    financialValidation.anomalies.forEach((anomaly: any) => {
-      const alertClass = anomaly.severity === 'critical' ? 'critical' : 'warning';
-      html += `<div class="alert-box ${alertClass}">`;
-      html += `<strong>${anomaly.description}</strong>`;
-      html += `<p><em>Recommandation : ${anomaly.recommendation}</em></p>`;
-      html += '</div>';
+  // ========== NOUVELLES SECTIONS ==========
+
+  // Sources de Données
+  html += '<h3>📚 Sources de Données</h3>';
+  html += '<div class="info-grid">';
+
+  // Lister les documents analysés
+  const documents = documentExtraction?.documents || [];
+  if (documents.length > 0) {
+    html += '<div class="info-label">Documents Analysés</div>';
+    html += '<div class="info-value"><ul>';
+    documents.forEach((doc: any) => {
+      const year = doc.year || 'N/A';
+      const type = doc.type || 'Inconnu';
+      const confidence = doc.confidence || 0;
+      html += `<li>${type} ${year} (confiance: ${confidence}%)</li>`;
     });
+    html += '</ul></div>';
   }
 
-  // Vérifications recommandées
-  if (financialValidation.verificationsRequises && financialValidation.verificationsRequises.length > 0) {
-    html += '<h3>Vérifications Recommandées</h3>';
-    html += '<table><thead><tr><th>Priorité</th><th>Action</th><th>Raison</th></tr></thead><tbody>';
-
-    financialValidation.verificationsRequises.forEach((verif: any) => {
-      const priority = verif.priority === 1 ? '🔴 Urgent' : (verif.priority === 2 ? '🟠 Important' : '🟡 Souhaitable');
-      html += `<tr>
-        <td>${priority}</td>
-        <td>${verif.action}</td>
-        <td>${verif.raison}</td>
-      </tr>`;
-    });
-
-    html += '</tbody></table>';
+  // APIs utilisées
+  html += '<div class="info-label">APIs Externes</div>';
+  html += '<div class="info-value"><ul>';
+  html += '<li>BODACC (annonces légales)</li>';
+  html += '<li>OpenData Entreprises (registre)</li>';
+  if (immobilier?.location) {
+    html += '<li>Google Places API (localisation)</li>';
   }
+  html += '</ul></div>';
+
+  html += '</div>'; // Ferme info-grid
+
+  // Limitations de l'Analyse
+  html += '<h3>⚠️ Limitations de l\'Analyse</h3>';
+  html += '<div class="warning-box"><ul>';
+
+  // Limitations standards
+  html += '<li>Les données comptables sont basées sur les liasses fiscales fournies et n\'ont pas été auditées par un expert-comptable indépendant.</li>';
+
+  // Limitation spécifique si données anciennes
+  const latestYear = getLatestFiscalYear(comptable);
+  const yearGap = new Date().getFullYear() - latestYear;
+  if (yearGap > 1) {
+    html += `<li><strong>⚠️ Données obsolètes :</strong> Dernière liasse fiscale de ${latestYear} (${yearGap} ans d'écart). L'analyse ne reflète pas la situation actuelle de l'entreprise.</li>`;
+  }
+
+  // Limitation si documents manquants
+  if (!immobilier?.bail) {
+    html += '<li>Bail commercial non fourni - analyse du loyer basée sur déclarations uniquement.</li>';
+  }
+
+  if (comptable?.yearsAnalyzed?.length < 3) {
+    html += `<li>Seulement ${comptable.yearsAnalyzed.length} année(s) fiscale(s) analysée(s) - tendances moins fiables.</li>`;
+  }
+
+  html += '<li>Les projections de business plan sont basées sur des hypothèses de marché et ne constituent pas une garantie de résultats futurs.</li>';
+  html += '<li>La valorisation est indicative et doit être complétée par une due diligence approfondie.</li>';
+  html += '</ul></div>';
 
   html += '<div class="page-break"></div>';
   return html;

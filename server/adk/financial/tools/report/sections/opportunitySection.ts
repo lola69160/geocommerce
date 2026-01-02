@@ -105,33 +105,112 @@ IMPORTANT: Mets en evidence les points a restructurer (loyer, masse salariale, c
 }
 
 /**
- * Generate "Le Projet" text based on userComments
+ * Generate "Le Projet" text based on ALL userComments fields
+ * Comprehensive synthesis including strategic vision, rent, personnel, investments, financing
  */
-async function generateLeProjetText(userComments: any): Promise<string> {
-  const commentaires = userComments?.autres || '';
+async function generateLeProjetText(
+  userComments: any,
+  comptable?: any,
+  immobilier?: any
+): Promise<string> {
+  // Collect ALL project elements
+  const projectElements: string[] = [];
 
-  if (!commentaires || commentaires.trim().length < 10) {
+  // 1. Free text from user (priority)
+  if (userComments?.autres && userComments.autres.length >= 10) {
+    projectElements.push(`**Vision stratégique** : ${userComments.autres}`);
+  }
+
+  // 2. Rent and real estate
+  if (userComments?.loyer?.futur_loyer_commercial && userComments?.loyer?.loyer_actuel) {
+    const actuel = userComments.loyer.loyer_actuel;
+    const negocie = userComments.loyer.futur_loyer_commercial;
+    const economie = actuel - negocie;
+    const pct = ((economie / actuel) * 100).toFixed(0);
+    projectElements.push(`**Loyer commercial** : Renégociation réussie de ${actuel}€ à ${negocie}€/mois (économie annuelle de ${economie * 12}€, soit -${pct}%)`);
+
+    if (userComments.loyer.commentaire) {
+      projectElements.push(`  ↳ ${userComments.loyer.commentaire}`);
+    }
+  }
+
+  // 3. Personnel takeover
+  if (userComments?.reprise_salaries === false) {
+    projectElements.push(`**Personnel** : Aucune reprise du personnel actuel`);
+    if (userComments?.salaries_non_repris?.motif) {
+      projectElements.push(`  ↳ Motif : ${userComments.salaries_non_repris.motif}`);
+    }
+  } else if (userComments?.reprise_salaries === true) {
+    projectElements.push(`**Personnel** : Reprise de l'équipe en place`);
+  }
+
+  // 4. Manager compensation
+  if (userComments?.salaire_dirigeant && userComments.salaire_dirigeant > 0) {
+    const mensuel = (userComments.salaire_dirigeant / 12).toFixed(0);
+    projectElements.push(`**Rémunération gérant** : ${userComments.salaire_dirigeant}€/an (${mensuel}€/mois net TNS)`);
+  }
+
+  // 5. Renovation budget
+  if (userComments?.budget_travaux && userComments.budget_travaux > 0) {
+    projectElements.push(`**Investissement travaux** : ${userComments.budget_travaux}€ pour modernisation/mise aux normes`);
+  }
+
+  // 6. Financing (if provided)
+  if (userComments?.transactionFinancing?.negocie) {
+    const fin = userComments.transactionFinancing.negocie;
+    if (fin.apport_personnel > 0) {
+      const pctApport = fin.total_investissement > 0
+        ? ((fin.apport_personnel / fin.total_investissement) * 100).toFixed(0)
+        : 0;
+      projectElements.push(`**Apport personnel** : ${fin.apport_personnel}€ (${pctApport}% de l'investissement total)`);
+    }
+    if (fin.pret_principal > 0 && fin.duree_annees > 0) {
+      projectElements.push(`**Financement bancaire** : ${fin.pret_principal}€ sur ${fin.duree_annees} ans à ${fin.taux_interet}%`);
+    }
+  }
+
+  // If no project data at all, return empty
+  if (projectElements.length === 0) {
     return '';
   }
 
-  const prompt = `Tu es un conseiller en transmission d'entreprises. Reformule ce commentaire de l'acheteur potentiel de facon professionnelle et persuasive.
+  // 7. Generate final text with Gemini (structured synthesis)
+  const prompt = `Tu es un analyste financier rédigeant la section "LE PROJET" d'un rapport d'acquisition de fonds de commerce.
 
-COMMENTAIRE BRUT DE L'ACHETEUR:
-"${commentaires}"
+Éléments du projet fournis par l'acquéreur :
+${projectElements.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
-TON: Professionnel, ambitieux, oriente transformation et creation de valeur.
-FORMAT: Paragraphe structure presentant le projet de reprise.
-LONGUEUR: 3-4 phrases maximum.
-IMPORTANT: Mets en avant la vision strategique et les leviers de croissance envisages.`;
+CONSIGNES STRICTES :
+1. Rédige une synthèse structurée en 4-6 paragraphes clairs
+2. INCLUS TOUS les détails fournis (chiffres exacts, horaires, équipe, etc.)
+3. Structure : Introduction → Immobilier/Loyer → Équipe → Investissements → Financement → Conclusion
+4. Ton professionnel, factuel, sans exagération
+5. NE PAS inventer de détails non fournis
+6. Si un élément manque, ne pas le mentionner (ne pas dire "non renseigné")
 
-  const text = await generateStrategicText(prompt);
+Génère UNIQUEMENT le texte de la section "LE PROJET", sans titre.`;
 
-  // Fallback: just clean up the original text
-  if (!text) {
-    return commentaires;
+  try {
+    const text = await generateStrategicText(prompt);
+
+    if (text && text.length > 50) {
+      return text;
+    }
+  } catch (error) {
+    console.error('[generateLeProjetText] Gemini error:', error);
   }
 
-  return text;
+  // Fallback: bullet list if Gemini fails
+  if (projectElements.length > 0) {
+    let fallbackHtml = '<ul>';
+    projectElements.forEach(el => {
+      fallbackHtml += `<li>${el}</li>`;
+    });
+    fallbackHtml += '</ul>';
+    return fallbackHtml;
+  }
+
+  return '';
 }
 
 /**
@@ -291,15 +370,16 @@ export async function generateOpportunitySection(
   comptable: any,
   valorisation: any,
   businessPlan: any,
-  userComments: any
+  userComments: any,
+  immobilier?: any
 ): Promise<string> {
   console.log('[opportunitySection] Generating opportunity section...');
 
   // Generate La Cible text (async Gemini call)
   const laCibleText = await generateLaCibleText(comptable, userComments);
 
-  // Generate Le Projet text (async Gemini call) - only if userComments.autres exists
-  const leProjetText = await generateLeProjetText(userComments);
+  // Generate Le Projet text (async Gemini call) - enriched with ALL userComments fields
+  const leProjetText = await generateLeProjetText(userComments, comptable, immobilier);
 
   // Extract transactionFinancing from userComments
   const transactionFinancing = userComments?.transactionFinancing;
