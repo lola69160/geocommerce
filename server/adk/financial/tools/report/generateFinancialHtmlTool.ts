@@ -122,7 +122,9 @@ export const generateFinancialHtmlTool = new FunctionTool({
         valorisation,
         businessPlan,
         userComments,
-        immobilier
+        immobilier,
+        professionalData,
+        businessInfo
       );
       html += opportunityHtml;
       sections_included.push('opportunity_section');

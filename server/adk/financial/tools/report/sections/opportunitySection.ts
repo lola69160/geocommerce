@@ -6,6 +6,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { detectHorairesExtension } from '../acquisitionAdvice/financing';
 
 /**
  * Call Gemini to generate strategic text
@@ -364,6 +365,127 @@ function generateKeyFigures(comptable: any, businessPlan: any, transactionFinanc
 }
 
 /**
+ * Generate geographic context section (MOVED from acquisitionAdvice/index.ts)
+ */
+function generateContextSection(professionalData: any): string {
+  if (!professionalData || !professionalData.commune) {
+    return '';
+  }
+
+  let html = '<div class="context-box">';
+  html += `<h4>Contexte Local : ${professionalData.commune.nom || 'Commune'}</h4>`;
+  html += '<div class="context-grid">';
+
+  html += `<div class="context-item">
+    <span class="icon">👥</span>
+    <div><span class="label">Population</span><br/><span class="value">${professionalData.commune.population?.toLocaleString('fr-FR') || 'N/A'} habitants</span></div>
+  </div>`;
+
+  html += `<div class="context-item">
+    <span class="icon">🏘️</span>
+    <div><span class="label">Densite</span><br/><span class="value">${professionalData.commune.densite || 'Non renseignee'}</span></div>
+  </div>`;
+
+  html += `<div class="context-item">
+    <span class="icon">💼</span>
+    <div><span class="label">Profil clientele</span><br/><span class="value">${professionalData.commune.csp || 'Mixte'}</span></div>
+  </div>`;
+
+  html += `<div class="context-item">
+    <span class="icon">📈</span>
+    <div><span class="label">Dynamisme economique</span><br/><span class="value">${professionalData.dynamisme ? professionalData.dynamisme.charAt(0).toUpperCase() + professionalData.dynamisme.slice(1) : 'N/A'}</span></div>
+  </div>`;
+
+  if (professionalData.saisonnalite?.touristique) {
+    html += `<div class="context-item">
+      <span class="icon">🏖️</span>
+      <div><span class="label">Saisonnalite</span><br/><span class="value">Zone touristique - Forte variation</span></div>
+    </div>`;
+  }
+
+  if (professionalData.scores?.location !== undefined) {
+    html += `<div class="context-item">
+      <span class="icon">📊</span>
+      <div><span class="label">Score Emplacement</span><br/><span class="value">${professionalData.scores.location}/100</span></div>
+    </div>`;
+  }
+
+  html += '</div>';
+  html += '</div>';
+
+  return html;
+}
+
+/**
+ * Generate opportunities section (MOVED from acquisitionAdvice/financing.ts)
+ */
+function generateOpportunitiesSection(
+  comptable: any,
+  immobilier: any,
+  userComments: any,
+  professionalData: any,
+  sectorCode: string
+): string {
+  let html = '<h4>Opportunites de Creation de Valeur</h4>';
+  html += '<table><thead><tr><th>Levier</th><th>Potentiel</th><th>Impact Estime</th><th>Investissement</th></tr></thead><tbody>';
+
+  const isTabac = sectorCode === '47.26' || sectorCode === '47.62';
+
+  if (comptable?.ratios?.charges_personnel_ratio > 30) {
+    html += `<tr>
+      <td><strong>Optimisation masse salariale</strong><br/><small>Ratio actuel : ${comptable.ratios.charges_personnel_ratio.toFixed(0)}% CA</small></td>
+      <td><span class="badge warning">Eleve</span></td>
+      <td>+5-10% EBE</td>
+      <td>Reorganisation interne</td>
+    </tr>`;
+  }
+
+  const horairesExtension = detectHorairesExtension(userComments);
+  if (horairesExtension.detected || professionalData?.saisonnalite?.touristique) {
+    const contexte = professionalData?.saisonnalite?.touristique
+      ? 'Zone touristique = forte demande saisonniere'
+      : 'Flux matin/soir a capter';
+    html += `<tr>
+      <td><strong>Extension horaires</strong><br/><small>${horairesExtension.detected ? horairesExtension.description : contexte}</small></td>
+      <td><span class="badge success">Fort</span></td>
+      <td>+15-25% CA</td>
+      <td>Cout personnel</td>
+    </tr>`;
+  }
+
+  if (immobilier?.simulationLoyer?.simulation?.economieAnnuelle > 0) {
+    const economie = immobilier.simulationLoyer.simulation.economieAnnuelle;
+    html += `<tr>
+      <td><strong>Renegociation loyer</strong><br/><small>Economie validee par l'utilisateur</small></td>
+      <td><span class="badge success">Fort</span></td>
+      <td>+${economie.toLocaleString('fr-FR')} €/an</td>
+      <td>Negociation uniquement</td>
+    </tr>`;
+  }
+
+  if (professionalData && professionalData.scores?.market < 60 && professionalData.scores?.location >= 60) {
+    html += `<tr>
+      <td><strong>Redressement reputation</strong><br/><small>Bon emplacement (${professionalData.scores.location}/100), reputation faible (${professionalData.scores.market}/100)</small></td>
+      <td><span class="badge warning">Tres eleve</span></td>
+      <td>+20-40% CA</td>
+      <td>5-15k (rebranding)</td>
+    </tr>`;
+  }
+
+  if (isTabac) {
+    html += `<tr>
+      <td><strong>Diversification revenus</strong><br/><small>Reduire dependance au tabac reglemente</small></td>
+      <td><span class="badge warning">Eleve</span></td>
+      <td>+10-15% CA</td>
+      <td>5-10k (amenagement)</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+/**
  * Generate the complete Opportunity Section
  */
 export async function generateOpportunitySection(
@@ -371,7 +493,9 @@ export async function generateOpportunitySection(
   valorisation: any,
   businessPlan: any,
   userComments: any,
-  immobilier?: any
+  immobilier?: any,
+  professionalData?: any,
+  businessInfo?: any
 ): Promise<string> {
   console.log('[opportunitySection] Generating opportunity section...');
 
@@ -388,6 +512,16 @@ export async function generateOpportunitySection(
   const projetVendeurTable = generateProjetVendeurTable(transactionFinancing);
   const keyFiguresHtml = generateKeyFigures(comptable, businessPlan, transactionFinancing, userComments);
 
+  // Generate new sections (moved from acquisitionAdvice)
+  const contextHtml = generateContextSection(professionalData);
+  const opportunitiesHtml = generateOpportunitiesSection(
+    comptable,
+    immobilier,
+    userComments,
+    professionalData,
+    businessInfo?.secteurActivite || ''
+  );
+
   console.log('[opportunitySection] Section generated successfully');
 
   return `
@@ -400,21 +534,35 @@ export async function generateOpportunitySection(
     <p>${laCibleText}</p>
   </div>
 
+  ${contextHtml ? `
+  <!-- 2. Contexte Local (NOUVEAU - déplacé depuis Conseils pour le Rachat) -->
+  <div class="opportunity-subsection">
+    ${contextHtml}
+  </div>
+  ` : ''}
+
   ${leProjetText ? `
-  <!-- 2. Le Projet -->
+  <!-- 3. Le Projet -->
   <div class="opportunity-subsection">
     <h4>LE PROJET</h4>
     <p>${leProjetText}</p>
   </div>
   ` : ''}
 
-  <!-- 3. Projet Vendeur -->
+  ${opportunitiesHtml ? `
+  <!-- 4. Opportunités de Création de Valeur (NOUVEAU - déplacé depuis Conseils pour le Rachat) -->
+  <div class="opportunity-subsection">
+    ${opportunitiesHtml}
+  </div>
+  ` : ''}
+
+  <!-- 5. Projet Vendeur -->
   <div class="opportunity-subsection">
     <h4>PROJET VENDEUR</h4>
     ${projetVendeurTable}
   </div>
 
-  <!-- 4. Chiffres Cles Projetes -->
+  <!-- 6. Chiffres Cles Projetes -->
   <div class="opportunity-subsection">
     <h4>CHIFFRES CLES PROJETES</h4>
     ${keyFiguresHtml}

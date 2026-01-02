@@ -57,9 +57,11 @@ export function generateAcquisitionAdviceSection(params: AcquisitionAdviceParams
   const valeurHaute = valorisation?.synthese?.valeur_haute || valeurRecommandee * 1.15;
 
   // Section 0: Contexte Geographique
-  if (professionalData) {
-    html += generateContextSection(professionalData);
-  }
+  // ⚠️ DÉPLACÉ vers opportunitySection.ts (2026-01-02)
+  // La section "Contexte Local" est maintenant dans "OPPORTUNITE DE REPRISE & RESTRUCTURATION"
+  // if (professionalData) {
+  //   html += generateContextSection(professionalData);
+  // }
 
   // Section 1: Projections Financement
   html += generateFinancingSection(businessPlan, comptable, valeurRecommandee);
@@ -68,7 +70,9 @@ export function generateAcquisitionAdviceSection(params: AcquisitionAdviceParams
   html += generateRisksSection(comptable, immobilier, businessPlan, professionalData);
 
   // Section 3: Opportunites
-  html += generateOpportunitiesSection(comptable, immobilier, userComments, professionalData, sectorCode);
+  // ⚠️ DÉPLACÉ vers opportunitySection.ts (2026-01-02)
+  // La section "Opportunités de Création de Valeur" est maintenant dans "OPPORTUNITE DE REPRISE & RESTRUCTURATION"
+  // html += generateOpportunitiesSection(comptable, immobilier, userComments, professionalData, sectorCode);
 
   // Section 4: Checklist Due Diligence
   html += generateChecklistSection(comptable, immobilier);
