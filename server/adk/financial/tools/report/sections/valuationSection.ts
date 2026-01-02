@@ -127,135 +127,95 @@ function generateTabacValuationSection(
   </div>`;
 
   // === Tableau 1: Valorisation Théorique du Fonds ===
-  html += `<table class="tabac-valuation-table">
+  html += `<table>
     <thead>
       <tr>
         <th>Composante</th>
         <th>Base</th>
-        <th>Min</th>
-        <th>Médian</th>
-        <th>Max</th>
+        <th class="text-right">Min</th>
+        <th class="text-right">Médian</th>
+        <th class="text-right">Max</th>
       </tr>
     </thead>
     <tbody>`;
 
   // Ligne 1: Commissions (Bloc Réglementé)
   html += `<tr>
-    <td>
-      <span class="component-name">📋 Commissions 2023</span>
-      <span class="component-detail">(Tabac + Loto + Presse + FDJ)</span>
-    </td>
-    <td>
-      <span class="base-value">${fmt(commissionsNettes)} €</span>
-      <span class="base-label">Commissions nettes annuelles</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valReglMin)} €</span>
-      <span class="coef">× ${coefMin}</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valReglMedian)} €</span>
-      <span class="coef">× ${coefMedian}</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valReglMax)} €</span>
-      <span class="coef">× ${coefMax}</span>
-    </td>
+    <td>📋 Commissions 2023<br><em style="font-size:0.9em;color:#666">(Tabac + Loto + Presse + FDJ)</em></td>
+    <td>${fmt(commissionsNettes)} €<br><em style="font-size:0.9em;color:#666">Commissions nettes annuelles</em></td>
+    <td class="text-right">${fmt(valReglMin)} €<br><em style="font-size:0.9em;color:#666">× ${coefMin}</em></td>
+    <td class="text-right">${fmt(valReglMedian)} €<br><em style="font-size:0.9em;color:#666">× ${coefMedian}</em></td>
+    <td class="text-right">${fmt(valReglMax)} €<br><em style="font-size:0.9em;color:#666">× ${coefMax}</em></td>
   </tr>`;
 
   // Ligne 2: Marchandises (Bloc Commercial)
   html += `<tr>
-    <td>
-      <span class="component-name">🛒 Marchandises 2023</span>
-      <span class="component-detail">(Souvenirs + Confiserie + Vape + Téléphonie)</span>
-    </td>
-    <td>
-      <span class="base-value">${fmt(caBoutique)} €</span>
-      <span class="base-label">CA boutique annuel</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valCommMin)} €</span>
-      <span class="coef">${pctMin}%</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valCommMedian)} €</span>
-      <span class="coef">${pctMedian}%</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(valCommMax)} €</span>
-      <span class="coef">${pctMax}%</span>
-    </td>
+    <td>🛒 Marchandises 2023<br><em style="font-size:0.9em;color:#666">(Souvenirs + Confiserie + Vape + Téléphonie)</em></td>
+    <td>${fmt(caBoutique)} €<br><em style="font-size:0.9em;color:#666">CA boutique annuel</em></td>
+    <td class="text-right">${fmt(valCommMin)} €<br><em style="font-size:0.9em;color:#666">${pctMin}%</em></td>
+    <td class="text-right">${fmt(valCommMedian)} €<br><em style="font-size:0.9em;color:#666">${pctMedian}%</em></td>
+    <td class="text-right">${fmt(valCommMax)} €<br><em style="font-size:0.9em;color:#666">${pctMax}%</em></td>
   </tr>`;
 
   // Ligne Total
-  html += `<tr class="total-row">
-    <td colspan="2">
-      <span class="total-label">🎯 TOTAL VALEUR INTRINSÈQUE</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(totalMin)} €</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(totalMedian)} €</span>
-    </td>
-    <td>
-      <span class="amount">${fmt(totalMax)} €</span>
-    </td>
+  html += `<tr style="background:#f0f9ff">
+    <td colspan="2"><strong>🎯 TOTAL VALEUR INTRINSÈQUE</strong></td>
+    <td class="text-right"><strong>${fmt(totalMin)} €</strong></td>
+    <td class="text-right"><strong>${fmt(totalMedian)} €</strong></td>
+    <td class="text-right"><strong>${fmt(totalMax)} €</strong></td>
   </tr>`;
 
   html += '</tbody></table>';
 
   // === Tableau 2: Plan de Financement Total (Besoin) ===
   if (prixNegocie > 0) {
-    html += `<div class="financing-section">
-      <h3>💼 Plan de Financement Total (Besoin)</h3>
-      <table class="financing-table">
+    html += `<h3>💼 Plan de Financement Total (Besoin)</h3>
+      <table>
         <thead>
           <tr>
             <th>Élément</th>
-            <th>Min</th>
-            <th>Médian</th>
-            <th>Max</th>
+            <th class="text-right">Min</th>
+            <th class="text-right">Médian</th>
+            <th class="text-right">Max</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>Prix de cession négocié</td>
-            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
-            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
-            <td><span class="amount">${fmt(prixNegocie)} €</span></td>
+            <td class="text-right">${fmt(prixNegocie)} €</td>
+            <td class="text-right">${fmt(prixNegocie)} €</td>
+            <td class="text-right">${fmt(prixNegocie)} €</td>
           </tr>`;
 
     if (budgetTravaux > 0) {
       html += `<tr>
             <td>Travaux de Modernisation</td>
-            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
-            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
-            <td><span class="amount">${fmt(budgetTravaux)} €</span></td>
+            <td class="text-right">${fmt(budgetTravaux)} €</td>
+            <td class="text-right">${fmt(budgetTravaux)} €</td>
+            <td class="text-right">${fmt(budgetTravaux)} €</td>
           </tr>`;
     }
 
     html += `<tr>
             <td>(-) Subvention Douanes</td>
-            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
-            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
-            <td><span class="amount negative">-${fmt(SUBVENTION_DOUANES)} €</span></td>
+            <td class="text-right" style="color:#dc2626">-${fmt(SUBVENTION_DOUANES)} €</td>
+            <td class="text-right" style="color:#dc2626">-${fmt(SUBVENTION_DOUANES)} €</td>
+            <td class="text-right" style="color:#dc2626">-${fmt(SUBVENTION_DOUANES)} €</td>
           </tr>
           <tr>
             <td>Frais & Stock</td>
-            <td><span class="amount">${fmt(FRAIS_MIN)} €</span></td>
-            <td><span class="amount">${fmt(FRAIS_MED)} €</span></td>
-            <td><span class="amount">${fmt(FRAIS_MAX)} €</span></td>
+            <td class="text-right">${fmt(FRAIS_MIN)} €</td>
+            <td class="text-right">${fmt(FRAIS_MED)} €</td>
+            <td class="text-right">${fmt(FRAIS_MAX)} €</td>
           </tr>
-          <tr class="total-row">
+          <tr style="background:#f0f9ff">
             <td><strong>TOTAL INVESTISSEMENT</strong></td>
-            <td><span class="amount">${fmt(investMin)} €</span></td>
-            <td><span class="amount">${fmt(investMedian)} €</span></td>
-            <td><span class="amount">${fmt(investMax)} €</span></td>
+            <td class="text-right"><strong>${fmt(investMin)} €</strong></td>
+            <td class="text-right"><strong>${fmt(investMedian)} €</strong></td>
+            <td class="text-right"><strong>${fmt(investMax)} €</strong></td>
           </tr>
         </tbody>
-      </table>
-    </div>`;
+      </table>`;
   }
 
   // === Indicateur Apport Personnel ===

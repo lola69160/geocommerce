@@ -52,10 +52,9 @@ export function generateFinancingSection(
   const hasBusinessPlan = projections.length >= 4;
 
   if (hasBusinessPlan) {
-    html += '<div class="annuity-projection">';
     html += '<h4>Capacite de Remboursement (basee sur le Business Plan)</h4>';
-    html += '<table class="annuity-table">';
-    html += '<thead><tr><th>Indicateur</th><th>Annee 1</th><th>Annee 2</th><th>Annee 3</th></tr></thead>';
+    html += '<table>';
+    html += '<thead><tr><th>Indicateur</th><th class="text-center">Annee 1</th><th class="text-center">Annee 2</th><th class="text-center">Annee 3</th></tr></thead>';
     html += '<tbody>';
 
     const ebe1 = projections[1]?.ebe_normatif || 0;
@@ -64,9 +63,9 @@ export function generateFinancingSection(
 
     html += `<tr>
       <td>EBE Normatif projete</td>
-      <td>${ebe1.toLocaleString('fr-FR')} €</td>
-      <td>${ebe2.toLocaleString('fr-FR')} €</td>
-      <td>${ebe3.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${ebe1.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${ebe2.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${ebe3.toLocaleString('fr-FR')} €</td>
     </tr>`;
 
     const annuite1 = projections[1]?.annuite_emprunt || 0;
@@ -75,33 +74,33 @@ export function generateFinancingSection(
 
     html += `<tr>
       <td>Annuite emprunt prevue</td>
-      <td>${annuite1.toLocaleString('fr-FR')} €</td>
-      <td>${annuite2.toLocaleString('fr-FR')} €</td>
-      <td>${annuite3.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${annuite1.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${annuite2.toLocaleString('fr-FR')} €</td>
+      <td class="text-right">${annuite3.toLocaleString('fr-FR')} €</td>
     </tr>`;
 
     const ratio1 = ebe1 > 0 ? (annuite1 / ebe1 * 100) : 0;
     const ratio2 = ebe2 > 0 ? (annuite2 / ebe2 * 100) : 0;
     const ratio3 = ebe3 > 0 ? (annuite3 / ebe3 * 100) : 0;
 
-    const getRatioClass = (ratio: number) => ratio > 70 ? 'ratio-danger' : ratio > 50 ? 'ratio-warning' : 'ratio-ok';
+    const getRatioColor = (ratio: number) => ratio > 70 ? '#dc2626' : ratio > 50 ? '#ea580c' : '#059669';
 
     html += `<tr>
       <td>Ratio endettement (Annuite/EBE)</td>
-      <td class="${getRatioClass(ratio1)}">${ratio1.toFixed(0)}%</td>
-      <td class="${getRatioClass(ratio2)}">${ratio2.toFixed(0)}%</td>
-      <td class="${getRatioClass(ratio3)}">${ratio3.toFixed(0)}%</td>
+      <td class="text-right" style="color:${getRatioColor(ratio1)};font-weight:600">${ratio1.toFixed(0)}%</td>
+      <td class="text-right" style="color:${getRatioColor(ratio2)};font-weight:600">${ratio2.toFixed(0)}%</td>
+      <td class="text-right" style="color:${getRatioColor(ratio3)};font-weight:600">${ratio3.toFixed(0)}%</td>
     </tr>`;
 
     const reste1 = projections[1]?.reste_apres_dette || (ebe1 - annuite1);
     const reste2 = projections[2]?.reste_apres_dette || (ebe2 - annuite2);
     const reste3 = projections[3]?.reste_apres_dette || (ebe3 - annuite3);
 
-    html += `<tr style="font-weight:bold;background:rgba(234,88,12,0.1)">
-      <td>Reste disponible apres dette</td>
-      <td>${reste1.toLocaleString('fr-FR')} €</td>
-      <td>${reste2.toLocaleString('fr-FR')} €</td>
-      <td>${reste3.toLocaleString('fr-FR')} €</td>
+    html += `<tr style="background:#f0f9ff">
+      <td><strong>Reste disponible apres dette</strong></td>
+      <td class="text-right"><strong>${reste1.toLocaleString('fr-FR')} €</strong></td>
+      <td class="text-right"><strong>${reste2.toLocaleString('fr-FR')} €</strong></td>
+      <td class="text-right"><strong>${reste3.toLocaleString('fr-FR')} €</strong></td>
     </tr>`;
 
     html += '</tbody></table>';

@@ -525,38 +525,6 @@ export function generateCSS(): string {
     color: #c2410c;
     margin: 0 0 15px 0;
   }
-  .annuity-table {
-    width: 100%;
-  }
-  .annuity-table th {
-    background: rgba(234, 88, 12, 0.1);
-    padding: 10px;
-    text-align: right;
-    color: #c2410c;
-  }
-  .annuity-table th:first-child {
-    text-align: left;
-  }
-  .annuity-table td {
-    padding: 10px;
-    text-align: right;
-    border-bottom: 1px solid rgba(234, 88, 12, 0.2);
-  }
-  .annuity-table td:first-child {
-    text-align: left;
-  }
-  .annuity-table .ratio-ok {
-    color: #059669;
-    font-weight: bold;
-  }
-  .annuity-table .ratio-warning {
-    color: #f59e0b;
-    font-weight: bold;
-  }
-  .annuity-table .ratio-danger {
-    color: #dc2626;
-    font-weight: bold;
-  }
 
   /* ========================================
      OPPORTUNITE DE REPRISE - Section strategique
@@ -841,174 +809,6 @@ export function generateCSS(): string {
     opacity: 0.9;
   }
 
-  /* Tableau Valorisation Theorique */
-  .tabac-valuation-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0;
-  }
-
-  .tabac-valuation-table th {
-    background: #1e3a8a;
-    color: white;
-    padding: 14px 18px;
-    font-weight: 600;
-    text-align: right;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  .tabac-valuation-table th:first-child {
-    text-align: left;
-  }
-
-  .tabac-valuation-table td {
-    padding: 18px;
-    border-bottom: 1px solid #e2e8f0;
-    vertical-align: top;
-    background: white;
-  }
-
-  .tabac-valuation-table tr:nth-child(odd) td {
-    background: #f8fafc;
-  }
-
-  /* Montants en euros - GRAS + COULEUR FONCEE */
-  .tabac-valuation-table .amount {
-    font-weight: 700;
-    font-size: 1.15em;
-    color: #1e3a8a;
-    display: block;
-  }
-
-  .tabac-valuation-table .coef {
-    font-size: 0.85em;
-    color: #64748b;
-    margin-top: 5px;
-    display: block;
-  }
-
-  .tabac-valuation-table .component-name {
-    font-weight: 600;
-    color: #0f172a;
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .tabac-valuation-table .component-detail {
-    font-size: 0.88em;
-    color: #64748b;
-  }
-
-  .tabac-valuation-table .base-value {
-    font-weight: 600;
-    color: #1e3a8a;
-    display: block;
-  }
-
-  .tabac-valuation-table .base-label {
-    font-size: 0.85em;
-    color: #64748b;
-    display: block;
-    margin-top: 4px;
-  }
-
-  /* Ligne Total Valorisation */
-  .tabac-valuation-table .total-row {
-    background: #1e3a8a !important;
-  }
-
-  .tabac-valuation-table .total-row td {
-    color: white;
-    font-weight: 700;
-    border: none;
-    background: #1e3a8a;
-    padding: 18px;
-  }
-
-  .tabac-valuation-table .total-row .amount {
-    color: white;
-    font-size: 1.25em;
-  }
-
-  .tabac-valuation-table .total-row .total-label {
-    font-size: 1.1em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  /* Tableau Plan Financement */
-  .financing-section {
-    margin-top: 30px;
-  }
-
-  .financing-section h3 {
-    color: #78350f;
-    font-size: 1.2em;
-    margin: 0 0 15px 0;
-    padding: 0 25px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .financing-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .financing-table th {
-    background: #78350f;
-    color: white;
-    padding: 12px 18px;
-    text-align: right;
-    font-weight: 600;
-    font-size: 0.9em;
-    text-transform: uppercase;
-  }
-
-  .financing-table th:first-child {
-    text-align: left;
-  }
-
-  .financing-table td {
-    padding: 14px 18px;
-    border-bottom: 1px solid #e2e8f0;
-    text-align: right;
-    background: white;
-  }
-
-  .financing-table td:first-child {
-    text-align: left;
-    color: #0f172a;
-  }
-
-  .financing-table tr:nth-child(even) td {
-    background: #fffbeb;
-  }
-
-  .financing-table .amount {
-    font-weight: 700;
-    color: #1e3a8a;
-  }
-
-  .financing-table .amount.negative {
-    color: #16a34a;
-  }
-
-  .financing-table .total-row td {
-    background: #78350f !important;
-    color: white;
-    font-weight: 700;
-    border: none;
-    font-size: 1.05em;
-  }
-
-  .financing-table .total-row .amount {
-    color: white;
-  }
 
   /* Indicateur Apport Personnel */
   .apport-indicator {
@@ -1117,15 +917,6 @@ export function generateCSS(): string {
       box-shadow: none;
     }
 
-    .tabac-header,
-    .tabac-valuation-table th,
-    .tabac-valuation-table .total-row td,
-    .financing-table th,
-    .financing-table .total-row td {
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
     .apport-card {
       background: #059669 !important;
       -webkit-print-color-adjust: exact;
@@ -1154,78 +945,6 @@ export function generateCSS(): string {
   }
 
   /* Financing table styles */
-  .financing-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 20px 0;
-    background: white;
-    border: 1px solid var(--color-table-border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-
-  .financing-table thead th {
-    background: #0369a1;
-    color: white;
-    padding: 14px 16px;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 2px solid #0284c7;
-  }
-
-  .financing-table thead th.text-right {
-    text-align: right;
-  }
-
-  .financing-table tbody td {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-table-border);
-    color: var(--color-text-primary);
-  }
-
-  .financing-table tbody td.text-right {
-    text-align: right;
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-weight: 500;
-  }
-
-  /* Section headers in table */
-  .financing-table .section-header td {
-    background: var(--color-table-header);
-    font-weight: 700;
-    color: var(--color-text-primary);
-    padding: 14px 16px;
-    border-top: 2px solid var(--color-table-border);
-    border-bottom: 1px solid var(--color-table-border);
-  }
-
-  /* Total rows */
-  .financing-table .total-row td {
-    background: #f0f9ff;
-    font-weight: 700;
-    color: #0369a1;
-    border-top: 2px solid #0284c7;
-    border-bottom: 2px solid #0284c7;
-    padding: 14px 16px;
-  }
-
-  /* N/A values */
-  .financing-table .na {
-    color: var(--color-text-muted);
-    font-style: italic;
-    font-weight: 400;
-  }
-
-  /* Difference colors */
-  .financing-table .positive {
-    color: var(--color-success-text);
-    font-weight: 600;
-  }
-
-  .financing-table .negative {
-    color: var(--color-error-text);
-    font-weight: 600;
-  }
 
   /* Key Indicators Grid */
   .key-indicators-grid {
@@ -1336,15 +1055,8 @@ export function generateCSS(): string {
 
   /* Print styles for financing section */
   @media print {
-    .financing-table,
     .indicator-card {
       break-inside: avoid;
-    }
-
-    .financing-table thead th,
-    .financing-table .total-row td {
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
     }
 
     .indicator-card:hover {

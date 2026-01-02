@@ -27,10 +27,10 @@ function generateComparativeTable(initial: any, negocie: any): string {
     `;
   };
 
-  let html = '<table class="financing-table">';
+  let html = '<table>';
   html += '<thead>';
   html += '<tr>';
-  html += '<th class="text-left">Élément</th>';
+  html += '<th>Élément</th>';
   html += '<th class="text-right">Scénario Initial</th>';
   if (hasNegocie) {
     html += '<th class="text-right">Scénario Négocié</th>';
@@ -41,8 +41,8 @@ function generateComparativeTable(initial: any, negocie: any): string {
   html += '<tbody>';
 
   // Section 1: DONNÉES D'INVESTISSEMENT
-  html += '<tr class="section-header">';
-  html += `<td colspan="${showDifference ? '4' : '2'}">💰 DONNÉES D\'INVESTISSEMENT</td>`;
+  html += '<tr style="background:#f0f9ff">';
+  html += `<td colspan="${showDifference ? '4' : '2'}"><strong>💰 DONNÉES D\'INVESTISSEMENT</strong></td>`;
   html += '</tr>';
 
   const investmentRows = [
@@ -72,7 +72,7 @@ function generateComparativeTable(initial: any, negocie: any): string {
   // Total investissement (ligne totale)
   const totalInitial = initial?.total_investissement || 0;
   const totalNegocie = negocie?.total_investissement || 0;
-  html += '<tr class="total-row">';
+  html += '<tr style="background:#f0f9ff">';
   html += '<td><strong>TOTAL INVESTISSEMENT</strong></td>';
   html += `<td class="text-right"><strong>${totalInitial.toLocaleString('fr-FR')} €</strong></td>`;
   if (hasNegocie) {
@@ -82,8 +82,8 @@ function generateComparativeTable(initial: any, negocie: any): string {
   html += '</tr>';
 
   // Section 2: SOURCES DE FINANCEMENT
-  html += '<tr class="section-header">';
-  html += `<td colspan="${showDifference ? '4' : '2'}">🏦 SOURCES DE FINANCEMENT</td>`;
+  html += '<tr style="background:#f0f9ff">';
+  html += `<td colspan="${showDifference ? '4' : '2'}"><strong>🏦 SOURCES DE FINANCEMENT</strong></td>`;
   html += '</tr>';
 
   const financingRows = [
@@ -109,7 +109,7 @@ function generateComparativeTable(initial: any, negocie: any): string {
   // Prêt principal (ligne totale)
   const pretInitial = initial?.pret_principal || 0;
   const pretNegocie = negocie?.pret_principal || 0;
-  html += '<tr class="total-row">';
+  html += '<tr style="background:#f0f9ff">';
   html += '<td><strong>MONTANT PRÊT PRINCIPAL</strong></td>';
   html += `<td class="text-right"><strong>${pretInitial.toLocaleString('fr-FR')} €</strong></td>`;
   if (hasNegocie) {
@@ -119,8 +119,8 @@ function generateComparativeTable(initial: any, negocie: any): string {
   html += '</tr>';
 
   // Section 3: PARAMÈTRES DE L'EMPRUNT
-  html += '<tr class="section-header">';
-  html += `<td colspan="${showDifference ? '4' : '2'}">📊 PARAMÈTRES DE L\'EMPRUNT</td>`;
+  html += '<tr style="background:#f0f9ff">';
+  html += `<td colspan="${showDifference ? '4' : '2'}"><strong>📊 PARAMÈTRES DE L\'EMPRUNT</strong></td>`;
   html += '</tr>';
 
   const loanRows = [
@@ -152,7 +152,7 @@ function generateComparativeTable(initial: any, negocie: any): string {
   // Estimation annuelle (ligne totale)
   const estInitial = initial?.estimation_annuelle || 0;
   const estNegocie = negocie?.estimation_annuelle || 0;
-  html += '<tr class="total-row">';
+  html += '<tr style="background:#f0f9ff">';
   html += '<td><strong>ESTIMATION ANNUELLE</strong></td>';
   html += `<td class="text-right"><strong>${estInitial.toLocaleString('fr-FR')} €</strong></td>`;
   if (hasNegocie) {
