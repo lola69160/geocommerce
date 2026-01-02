@@ -116,6 +116,22 @@ export const generateFinancialHtmlTool = new FunctionTool({
       // 2. Synthèse exécutive (avec userComments pour afficher budget travaux et documentExtraction pour prix demandé)
       let userComments = parseState(toolContext?.state.get('userComments'));
 
+      // 2.0. Charger le rapport professionnel pour enrichissement (nécessaire pour opportunitySection)
+      const siret = businessInfo?.siret || '';
+      const siren = siret.substring(0, 9);
+      let professionalData: ProfessionalReportData | null = null;
+
+      if (siren.length === 9) {
+        try {
+          professionalData = await parseProfessionalReport(siren);
+          if (professionalData) {
+            console.log('[generateFinancialHtml] ✅ Rapport professionnel chargé pour enrichissement');
+          }
+        } catch (e) {
+          console.log('[generateFinancialHtml] ⚠️ Rapport professionnel non disponible');
+        }
+      }
+
       // 2a. Section Opportunité de Reprise (nouvelle section stratégique avec Gemini)
       const opportunityHtml = await generateOpportunitySection(
         comptable,
@@ -168,23 +184,7 @@ export const generateFinancialHtmlTool = new FunctionTool({
       html += generateFinancingPlanSection(userComments, comptable);
       sections_included.push('financing_plan');
 
-      // 7. Conseils pour le Rachat (enrichi avec rapport professionnel)
-      // Extraire le SIREN depuis businessInfo
-      const siret = businessInfo?.siret || '';
-      const siren = siret.substring(0, 9);
-      let professionalData: ProfessionalReportData | null = null;
-
-      if (siren.length === 9) {
-        try {
-          professionalData = await parseProfessionalReport(siren);
-          if (professionalData) {
-            console.log('[generateFinancialHtml] ✅ Rapport professionnel chargé pour enrichissement');
-          }
-        } catch (e) {
-          console.log('[generateFinancialHtml] ⚠️ Rapport professionnel non disponible');
-        }
-      }
-
+      // 7. Conseils pour le Rachat (enrichi avec rapport professionnel - déjà chargé plus haut)
       html += generateAcquisitionAdviceSection({
         comptable,
         valorisation,
