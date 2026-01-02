@@ -44,8 +44,8 @@ export function generateValuationSection(
     html += generateStandardValuationTable(valorisation);
   }
 
-  // Synthèse valorisation
-  html += generateValuationSynthesis(valorisation, prixDemande);
+  // Synthèse valorisation (désactivée - supprimée sur demande utilisateur)
+  // html += generateValuationSynthesis(valorisation, prixDemande);
 
   // Arguments de négociation
   if (valorisation.argumentsNegociation) {
@@ -105,13 +105,8 @@ function generateTabacValuationSection(
   const investMedian = prixNegocie + budgetTravaux - SUBVENTION_DOUANES + FRAIS_MED;
   const investMax = prixNegocie + budgetTravaux - SUBVENTION_DOUANES + FRAIS_MAX;
 
-  // Apport personnel
-  const apportPersonnel = userComments?.apport_personnel || 0;
-  const apportPct = investMedian > 0 ? ((apportPersonnel / investMedian) * 100).toFixed(0) : 0;
-
   // Metadata
   const descriptionType = tabac.descriptionType || 'Tabac/Presse';
-  const facteursValorisants = tabac.facteursValorisants || [];
   const justification = tabac.justification || '';
 
   // Format helper
@@ -218,32 +213,6 @@ function generateTabacValuationSection(
       </table>`;
   }
 
-  // === Indicateur Apport Personnel ===
-  if (apportPersonnel > 0) {
-    html += `<div class="apport-indicator">
-      <div class="apport-card">
-        <span class="label">Apport Personnel</span>
-        <span class="value">${fmt(apportPersonnel)} €</span>
-        <span class="pct">(${apportPct}%)</span>
-      </div>
-    </div>`;
-  } else {
-    html += `<div class="apport-missing">
-      ⚠️ Apport personnel non renseigné. Précisez-le dans les commentaires utilisateur pour évaluer la solvabilité.
-    </div>`;
-  }
-
-  // === Facteurs Valorisants ===
-  if (facteursValorisants.length > 0) {
-    html += `<div class="facteurs-valorisants">
-      <h4>✅ Facteurs Valorisants</h4>
-      <ul>`;
-    facteursValorisants.forEach((facteur: string) => {
-      html += `<li>${facteur}</li>`;
-    });
-    html += '</ul></div>';
-  }
-
   // === Encadré Méthode ===
   if (justification) {
     html += `<div class="method-box">
@@ -334,6 +303,11 @@ function generateStandardValuationTable(valorisation: any): string {
 
 /**
  * Generate valuation synthesis box
+ *
+ * NOTE: This function is DISABLED (not called in generateValuationSection).
+ * The "Valorisation Retenue" block (fourchette, méthode privilégiée, valeur recommandée)
+ * has been removed from the report on user request.
+ * This function is kept for potential future re-activation.
  */
 function generateValuationSynthesis(valorisation: any, prixDemande: number): string {
   const valoRecommandee = valorisation?.synthese?.valeur_recommandee ||

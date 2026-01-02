@@ -333,11 +333,9 @@ export const calculateTabacValuationTool = new FunctionTool({
       // ========================================
       // ÉTAPE 7: Justification
       // ========================================
-      let justification = `Valorisation par MÉTHODE HYBRIDE Tabac/Presse/FDJ. `;
-      justification += `Type de commerce détecté: ${typeBareme.description}. `;
-      justification += `Bloc Réglementé: Commissions nettes (${commissionsNettes.toLocaleString('fr-FR')} €) × Coefficient (${typeBareme.blocReglemente.coefficientMin}-${typeBareme.blocReglemente.coefficientMax}) = ${blocReglemente.valeurMin.toLocaleString('fr-FR')} - ${blocReglemente.valeurMax.toLocaleString('fr-FR')} €. `;
-      justification += `Bloc Commercial: CA Boutique (${caActiviteBoutique.toLocaleString('fr-FR')} €) × ${typeBareme.blocCommercial.pourcentageMin}-${typeBareme.blocCommercial.pourcentageMax}% = ${blocCommercial.valeurMin.toLocaleString('fr-FR')} - ${blocCommercial.valeurMax.toLocaleString('fr-FR')} €. `;
-      justification += `Valorisation totale recommandée: ${valorisationTotale.valeurMediane.toLocaleString('fr-FR')} €.`;
+      let justification = `Valorisation par MÉTHODE HYBRIDE Tabac/Presse/FDJ, spécifique aux commerces multi-services réglementés. `;
+      justification += `Cette méthode combine deux composantes : le Bloc Réglementé (valorisation des commissions sur tabac, presse, loto, FDJ) et le Bloc Commercial (valorisation de l'activité boutique libre). `;
+      justification += `Chaque bloc est évalué selon des coefficients de marché propres au type de commerce (${typeBareme.description}).`;
 
       return {
         typeCommerce: typeBareme.type,
