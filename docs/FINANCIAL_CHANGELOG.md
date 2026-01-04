@@ -4,6 +4,248 @@ Ce document contient l'historique des améliorations du Financial Pipeline.
 
 ---
 
+## Restructuration Majeure du Rapport Financier (2026-01-02)
+
+### Résumé
+
+Refonte structurelle du rapport financier en **5 modifications majeures** pour améliorer la cohérence, l'exhaustivité et la pertinence des informations présentées.
+
+**Objectifs** :
+- Regrouper les sections stratégiques tôt dans le rapport
+- Ajouter validation stricte de la fraîcheur des données
+- Simplifier la section "Validation & Fiabilité"
+- Rendre "LE PROJET" exhaustif (tous les champs du formulaire)
+- Améliorer la lisibilité globale
+
+### Modifications Détaillées
+
+#### **1. Validation Stricte Années Fiscales (Checklist Due Diligence)**
+
+**Fichier** : `acquisitionAdvice/financing.ts`
+
+**Problème** : L'ancienne logique vérifiait uniquement si ≥ 3 années étaient analysées, sans vérifier la fraîcheur des données.
+
+**Solution** :
+- Nouvelle fonction `getLatestFiscalYear(comptable)` (lignes 287-298)
+- Alerte CRITIQUE si écart > 1 an (ex: données 2023 en 2026 = 3 ans d'écart)
+- Messages contextuels :
+  - `missing` : Aucune liasse fiscale fournie
+  - `partial` : Données obsolètes OU < 3 années
+  - `ok` : ≥ 3 années ET données à jour (écart ≤ 1 an)
+
+**Exemple d'alerte** :
+```
+⚠️ Données obsolètes : dernière liasse 2023 (écart 3 ans) - CRITIQUE pour évaluation fiable
+```
+
+**Impact** : +42 lignes
+
+---
+
+#### **2. Simplification "Validation & Fiabilité"**
+
+**Fichier** : `generateFinancialHtmlTool.ts`
+
+**Suppressions** :
+- ❌ Bloc "Anomalies Détectées" (anciennes lignes 734-744)
+- ❌ Bloc "Vérifications Recommandées" (anciennes lignes 747-761)
+
+**Ajouts** :
+- ✅ **Section "📚 Sources de Données"** (lignes 763-790)
+  - Documents analysés (type, année, confiance %)
+  - APIs externes : BODACC, OpenData Entreprises, Google Places
+
+- ✅ **Section "⚠️ Limitations de l'Analyse"** (lignes 793-820)
+  - 5 limitations contextuelles :
+    1. Données non auditées par expert-comptable
+    2. Alerte si données fiscales > 1 an
+    3. Bail commercial non fourni
+    4. < 3 années fiscales → tendances moins fiables
+    5. Projections/valorisation indicatives
+
+**Nouvelle signature** :
+```typescript
+function generateValidationSection(
+  validation: any,
+  radar: any,
+  comptable?: any,        // NOUVEAU
+  immobilier?: any,       // NOUVEAU
+  documentExtraction?: any // NOUVEAU
+): string
+```
+
+**Impact** : +107/-46 lignes (net: +61 lignes)
+
+---
+
+#### **3. Enrichissement Exhaustif "LE PROJET"**
+
+**Fichier** : `opportunitySection.ts`
+
+**Problème** : Utilisait UNIQUEMENT `userComments.autres` (texte libre), omettant des détails critiques (horaires, équipe, loyer négocié, etc.).
+
+**Solution** : Collecte **TOUS** les champs du formulaire :
+1. `userComments.autres` (vision stratégique)
+2. `userComments.loyer` (renégociation avec calcul économie annuelle)
+3. `userComments.reprise_salaries` (reprise personnel)
+4. `userComments.salaire_dirigeant` (rémunération TNS mensuelle)
+5. `userComments.budget_travaux` (investissement travaux)
+6. `userComments.transactionFinancing` (apport, prêt, durée, taux)
+
+**Génération** :
+- Synthèse Gemini **4-6 paragraphes** (vs 3-4 phrases avant)
+- Prompt détaillé : "INCLUS TOUS les détails fournis (chiffres exacts, horaires, équipe, etc.)"
+- Fallback : Liste à puces structurée si Gemini échoue
+- Fonction **async** (température 0.3, max 1500 tokens)
+
+**Nouvelle signature** :
+```typescript
+async function generateLeProjetText(
+  userComments: any,
+  comptable?: any,    // NOUVEAU - pour contexte
+  immobilier?: any    // NOUVEAU - pour contexte
+): Promise<string>
+```
+
+**Impact** : +118/-4 lignes (net: +114 lignes)
+
+---
+
+#### **4. Déplacement Sections vers "OPPORTUNITE DE REPRISE & RESTRUCTURATION"**
+
+**Fichiers modifiés** : 3 fichiers
+
+**Sections déplacées** :
+- "Contexte Local" (depuis `acquisitionAdvice/index.ts`)
+- "Opportunités de Création de Valeur" (depuis `acquisitionAdvice/financing.ts`)
+
+**Nouvelle structure (6 sous-sections)** :
+```
+💼 OPPORTUNITE DE REPRISE & RESTRUCTURATION
+  1. LA CIBLE (existant)
+  2. CONTEXTE LOCAL (NOUVEAU - déplacé)
+     ↳ Commune, population, densité, CSP, dynamisme, saisonnalité
+  3. LE PROJET (existant - enrichi, voir modification #3)
+  4. OPPORTUNITÉS DE CRÉATION DE VALEUR (NOUVEAU - déplacé)
+     ↳ 5 leviers : masse salariale, horaires, loyer, réputation, diversification
+  5. PROJET VENDEUR (existant)
+  6. CHIFFRES CLÉS PROJETÉS (existant)
+```
+
+**opportunitySection.ts** (+156 lignes) :
+- Copie de `generateContextSection()` (lignes 370-420)
+- Copie de `generateOpportunitiesSection()` (lignes 422-489)
+- Nouvelle signature `generateOpportunitySection()` :
+  ```typescript
+  export async function generateOpportunitySection(
+    comptable: any,
+    valorisation: any,
+    businessPlan: any,
+    userComments: any,
+    immobilier?: any,
+    professionalData?: any,  // NOUVEAU
+    businessInfo?: any       // NOUVEAU
+  ): Promise<string>
+  ```
+
+**generateFinancialHtmlTool.ts** (+17 lignes) :
+- Chargement `professionalData` déplacé **AVANT** l'appel (lignes 119-133)
+  - Fix hotfix e65e27c : évite erreur "Cannot access 'professionalData' before initialization"
+- Appel mis à jour :
+  ```typescript
+  const opportunityHtml = await generateOpportunitySection(
+    comptable, valorisation, businessPlan, userComments, immobilier,
+    professionalData, businessInfo  // 2 nouveaux paramètres
+  );
+  ```
+
+**acquisitionAdvice/index.ts** (-6 lignes commentées) :
+- Ligne 60-64 : Appel `generateContextSection()` désactivé
+- Ligne 73-75 : Appel `generateOpportunitiesSection()` désactivé
+
+**Impact total** : 3 fichiers, +163/-9 lignes (net: +154 lignes)
+
+---
+
+#### **5. Nouvelle Structure Globale du Rapport**
+
+**Avant** (9 sous-sections dans "Conseils pour le Rachat") :
+```
+10. Conseils pour le Rachat
+    1. Contexte Local
+    2. Projections Financement
+    3. Risques & Mitigation
+    4. Opportunités
+    5. Checklist Due Diligence
+    6. Benchmark Sectoriel
+    7. Stratégie ZOPA
+    8. Grille de Négociation
+    9. Nibbles
+```
+
+**Après** (7 sous-sections) :
+```
+3. OPPORTUNITE DE REPRISE & RESTRUCTURATION (6 sous-sections - NOUVEAU)
+   1. LA CIBLE
+   2. CONTEXTE LOCAL ← déplacé depuis #10
+   3. LE PROJET ← enrichi
+   4. OPPORTUNITÉS ← déplacé depuis #10
+   5. PROJET VENDEUR
+   6. CHIFFRES CLÉS
+
+10. Conseils pour le Rachat (7 sous-sections - allégé)
+    1. Projections Financement
+    2. Risques & Mitigation
+    3. Checklist Due Diligence ← validation années renforcée
+    4. Benchmark Sectoriel
+    5. Stratégie ZOPA
+    6. Grille de Négociation
+    7. Nibbles
+
+11. Validation & Fiabilité (3 sous-sections - simplifié)
+    1. Score de Confiance
+    2. Sources de Données ← NOUVEAU
+    3. Limitations de l'Analyse ← NOUVEAU
+```
+
+---
+
+### Bénéfices
+
+1. **Cohérence structurelle** : Sections stratégiques (contexte, opportunités) regroupées tôt dans le rapport (section 3 vs section 10)
+2. **Exhaustivité** : "LE PROJET" reflète TOUS les détails du formulaire utilisateur (44 champs disponibles)
+3. **Fiabilité** : Alerte claire si données fiscales trop anciennes (> 1 an)
+4. **Simplicité** : "Validation & Fiabilité" épurée (3 sections essentielles vs 5 avant)
+5. **Lisibilité** : Rapport mieux structuré, moins répétitif
+
+---
+
+### Commits Associés
+
+| Commit | Description | Fichiers | Lignes |
+|--------|-------------|----------|--------|
+| `10f4585` | Étapes 1-3 (validation + simplification + enrichissement) | 3 | +221/-46 |
+| `167b6a2` | Étape 4 (déplacement sections) | 3 | +163/-9 |
+| `e65e27c` | **HOTFIX** - Corriger erreur "professionalData before initialization" | 1 | +17/-17 |
+
+**Total** : 3 commits, 4 fichiers uniques, +401/-72 lignes (net: +329 lignes)
+
+---
+
+### Tests de Validation
+
+**SIRET de test** : `53840462500013` (Tabac/Presse/Loto)
+
+**Vérifications** :
+- ✅ Section "OPPORTUNITE DE REPRISE" contient 6 sous-sections
+- ✅ "CONTEXTE LOCAL" affiche commune + profil économique
+- ✅ "LE PROJET" contient ≥ 200 mots avec TOUS les détails userComments
+- ✅ "OPPORTUNITÉS" liste 3-5 leviers de croissance
+- ✅ Checklist affiche alerte si liasse < 2025
+- ✅ "Validation & Fiabilité" a uniquement 3 sections
+
+---
+
 ## Fix Définitif: Méthode Hybride Tabac Toujours Présente dans Rapports (2026-01-01)
 
 ### Problème Résolu
