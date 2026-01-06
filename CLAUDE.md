@@ -20,6 +20,39 @@ npm install                    # Install dependencies
 npm run dev:all                # Run frontend + backend
 ```
 
+## Report Organization
+
+Reports are organized by SIRET (14 digits) for precise business tracking:
+
+**Directory Structure:**
+```
+data/
+├── professional-reports/
+│   └── {SIRET}/                     # 14-digit SIRET folder
+│       └── {timestamp}_professional-report.html
+├── financial-reports/
+│   └── {SIRET}/                     # 14-digit SIRET folder
+│       └── {timestamp}_financial-report.html
+└── documents/
+    └── {SIREN}/                     # Note: Documents use 9-digit SIREN
+        ├── {timestamp}_{filename}.pdf
+        └── A_ANALYSER/
+```
+
+**Filename Pattern:**
+- Professional: `YYYYMMDD_HHMMSS_professional-report.html`
+- Financial: `YYYYMMDD_HHMMSS_financial-report.html`
+- SIRET is in folder path (not filename) to avoid redundancy
+
+**SIRET Sources:**
+- Professional reports: Read from `state.business.siret`
+- Financial reports: Read from `state.businessInfo.siret` (primary) or `params.businessId` (fallback)
+- Documents: Use SIREN (first 9 digits of SIRET)
+
+**Folder Creation:**
+- Folders are created automatically with `fs.mkdir(siretDir, { recursive: true })`
+- If SIRET is invalid or missing, an error is thrown (strict validation)
+
 ## Documentation
 
 All detailed documentation is in the `docs/` directory:

@@ -25,47 +25,57 @@ const SaveReportInputSchema = z.object({
 
 export const saveReportTool = new FunctionTool({
   name: 'saveReport',
-  description: 'Sauvegarde rapport HTML sur disque. Lit SIRET depuis state.business. Retourne { filepath, size_bytes, saved_at }',
+  description: 'Sauvegarde rapport HTML dans data/professional-reports/{SIRET}/. Lit SIRET depuis state.business. Crée dossier SIRET si nécessaire. Retourne { filepath, filename, siret, siretFolder, size_bytes, saved_at }',
   parameters: zToGen(SaveReportInputSchema),
 
   execute: async ({ html, outputDir }: z.infer<typeof SaveReportInputSchema>, toolContext?: ToolContext) => {
-    // Lire business depuis state pour obtenir SIRET
+    // 1. Extraire SIRET du state
     const business = toolContext?.state.get('business') as BusinessInput | undefined;
     const siret = business?.siret || business?.siren || 'UNKNOWN';
 
     try {
-      // Créer répertoire si nécessaire
-      await fs.mkdir(outputDir, { recursive: true });
+      // 2. Valider SIRET
+      if (siret === 'UNKNOWN' || siret.length < 9) {
+        throw new Error('Cannot save report: Valid SIRET is required for folder organization');
+      }
 
-      // Générer nom de fichier: YYYYMMDD_HHMMSS_SIRET.html
+      // 3. Créer structure de dossier par SIRET: data/professional-reports/{SIRET}/
+      const baseDir = outputDir || 'data/professional-reports';
+      const siretDir = path.join(baseDir, siret);
+      await fs.mkdir(siretDir, { recursive: true });
+
+      // 4. Générer nom de fichier SANS SIRET (redondant)
       const timestamp = new Date()
         .toISOString()
         .replace(/[:\-]/g, '')
         .replace(/\..+/, '')
         .replace('T', '_');
 
-      const filename = `${timestamp}_${siret}.html`;
-      const filepath = path.join(outputDir, filename);
+      const filename = `${timestamp}_professional-report.html`;
+      const filepath = path.join(siretDir, filename);
 
-      // Sauvegarder fichier
+      // 5. Sauvegarder fichier
       await fs.writeFile(filepath, html, 'utf8');
 
-      // Vérifier taille fichier
+      // 6. Retourner métadonnées
       const stats = await fs.stat(filepath);
-
       return {
         filepath: path.resolve(filepath),
         filename,
+        siret,
+        siretFolder: siretDir,
         size_bytes: stats.size,
         saved_at: new Date().toISOString(),
         success: true
       };
 
     } catch (error: any) {
-      console.error('Report save failed:', error.message);
+      console.error('[saveReport] ❌ Error:', error.message);
       return {
         filepath: null,
         filename: null,
+        siret,
+        siretFolder: null,
         size_bytes: 0,
         saved_at: null,
         success: false,
