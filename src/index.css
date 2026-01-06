@@ -19,6 +19,15 @@
    LEAFLET MAP OVERRIDES (Light Mode)
    ============================================ */
 
+/* Map Legend Override - Force visibility */
+.legend-map-overlay {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  animation: none !important;
+  z-index: 1000 !important;
+}
+
 /* Map container */
 .leaflet-container {
   background: var(--surface-100) !important; /* Beige clair #faf8f5 */
