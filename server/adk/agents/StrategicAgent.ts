@@ -130,13 +130,38 @@ WORKFLOW:
       - Conflits résolus par arbitration
       - Actions requises (URGENT/HIGH)
 
-4. **SCORE GO/NO-GO** (0-100)
-   Formule:
-   score = (potentiel * 0.5) + ((100 - risques) * 0.3) + (coherence * 0.2)
+4. **SCORE GO/NO-GO** (0-100) - CALCUL TRANSPARENT OBLIGATOIRE
 
+   ⚠️⚠️⚠️ RÈGLE CRITIQUE : TU DOIS MONTRER TON CALCUL ÉTAPE PAR ÉTAPE ⚠️⚠️⚠️
+
+   Formule pondérée:
+   score_final = (potentiel × 50%) + (sécurité × 30%) + (cohérence × 20%)
+
+   ÉTAPE 1: Calculer POTENTIEL (0-100)
+   - Basé sur gap.scores.location (30%)
+   - Basé sur gap.scores.market (25%)
+   - Basé sur demographic.demographic_score.overall (45%)
+   - Exemple: (75×0.30) + (60×0.25) + (80×0.45) = 73.5
+
+   ÉTAPE 2: Calculer SÉCURITÉ (0-100)
+   - sécurité = 100 - gap.risk_score (inversé)
+   - Si risk_score = 25 → sécurité = 75
+   - Si risk_score = 60 → sécurité = 40
+
+   ÉTAPE 3: Calculer COHÉRENCE (0-100)
+   - validation.coherence_score OU 70 (défaut si pas de conflits)
+
+   ÉTAPE 4: Appliquer pondération
+   - score_final = (potentiel × 0.50) + (sécurité × 0.30) + (cohérence × 0.20)
+   - Exemple: (73.5 × 0.50) + (75 × 0.30) + (90 × 0.20)
+   - = 36.75 + 22.50 + 18.00 = 77.25 → Arrondi à 77/100
+
+   SEUILS DE DÉCISION:
    - 75-100: GO (forte opportunité)
    - 50-74: GO_WITH_RESERVES (opportunité conditionnelle)
    - 0-49: NO-GO (risques > opportunités)
+
+   ⚠️ TU DOIS inclure ce calcul détaillé dans "score_breakdown" du JSON
 
 5. **RECOMMANDATION FINALE**
    Générer arguments détaillés:
@@ -172,6 +197,22 @@ FORMAT DE SORTIE JSON (STRICT):
     "risk": number (0-100),
     "coherence": number (0-100),
     "overall": number (0-100)
+  },
+  "score_breakdown": {
+    "potentiel_calc": "string (ex: '(75×0.30) + (60×0.25) + (80×0.45) = 73.5')",
+    "potentiel_score": number (0-100),
+    "potentiel_weight": 0.50,
+    "potentiel_contribution": number,
+    "securite_calc": "string (ex: '100 - 25 = 75')",
+    "securite_score": number (0-100),
+    "securite_weight": 0.30,
+    "securite_contribution": number,
+    "coherence_calc": "string (ex: 'validation.coherence_score = 90')",
+    "coherence_score": number (0-100),
+    "coherence_weight": 0.20,
+    "coherence_contribution": number,
+    "final_calc": "string (ex: '36.75 + 22.50 + 18.00 = 77.25 → 77')",
+    "final_score": number (0-100)
   },
   "success_conditions": [
     {
