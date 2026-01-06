@@ -14,6 +14,108 @@ import {
 } from '../../config/nafPlacesMapping.js';
 import axios from 'axios';
 
+/**
+ * OpenStreetMap Nominatim Fallback
+ * API gratuite sans quota, utilisée si Google Places échoue
+ */
+async function osmNominatimFallback(params: {
+  businessName: string;
+  address: string;
+  city: string;
+  zipCode: string;
+}): Promise<any | null> {
+  const { businessName, address, city, zipCode } = params;
+
+  const query = `${businessName}, ${address}, ${zipCode} ${city}, France`;
+
+  console.log('[OSM] 🔍 Nominatim search:', query);
+
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: query,
+        format: 'json',
+        addressdetails: 1,
+        limit: 5
+      },
+      headers: {
+        'User-Agent': 'SearchCommerce/1.0 (contact@searchcommerce.fr)'  // Obligatoire pour Nominatim
+      },
+      timeout: 5000
+    });
+
+    if (response.data && response.data.length > 0) {
+      const result = response.data[0];
+      console.log('[OSM] ✅ Found:', result.display_name);
+
+      // Mapper au format Google Places pour compatibilité
+      return {
+        found: true,
+        placeId: `osm_${result.osm_type}_${result.osm_id}`,
+        name: businessName,
+        formattedAddress: result.display_name,
+        location: {
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon)
+        },
+        rating: null,
+        userRatingsTotal: 0,
+        priceLevel: null,
+        businessStatus: 'OPERATIONAL',
+        types: [result.type || 'establishment'],
+        openingHours: null,
+        photos: [],
+        reviews: [],
+        matchScore: 0,
+        matchDetails: {},
+        source: 'openstreetmap'  // Identifier la source
+      };
+    }
+
+    console.log('[OSM] ❌ No results');
+    return null;
+
+  } catch (error: any) {
+    console.error('[OSM] ❌ Error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * INSEE Fallback - Dernier recours
+ * Crée un objet minimal depuis les données INSEE existantes
+ */
+function inseeFallback(params: {
+  business: any;
+  preparation: any;
+}): any {
+  const { business, preparation } = params;
+
+  console.log('[INSEE] 🔄 Using INSEE fallback (no external API data)');
+
+  return {
+    found: true,
+    placeId: `insee_${business.siret}`,
+    name: business.nom_complet || business.nom_raison_sociale || business.enseigne,
+    formattedAddress: business.siege?.adresse || preparation.normalizedAddress?.full || '',
+    location: {
+      lat: preparation.coordinates?.lat || parseFloat(business.siege?.latitude || '0'),
+      lon: preparation.coordinates?.lon || parseFloat(business.siege?.longitude || '0')
+    },
+    rating: null,
+    userRatingsTotal: 0,
+    priceLevel: null,
+    businessStatus: business.siege?.etat_administratif === 'A' ? 'OPERATIONAL' : 'CLOSED_TEMPORARILY',
+    types: ['establishment'],
+    openingHours: null,
+    photos: [],
+    reviews: [],
+    matchScore: 0,
+    matchDetails: {},
+    source: 'insee_fallback'  // Identifier la source
+  };
+}
+
 // Scoring thresholds
 const SCORE_THRESHOLD_WITH_NAF = 90;      // Seuil avec NAF code (90/150)
 const SCORE_THRESHOLD_WITHOUT_NAF = 85;   // Seuil sans NAF (85/150)
@@ -292,6 +394,9 @@ export const searchPlacesTool = new FunctionTool({
     const businessName = business.enseigne || business.nom_complet || business.nom_raison_sociale || '';
     const address = preparation.normalizedAddress.full;
     const coordinates = preparation.coordinates;
+    const city = business.siege?.libelle_commune || '';
+    const zipCode = business.siege?.code_postal || '';
+    const nafCode = business.activite_principale || business.code_naf || null;
 
     const PLACE_API_KEY = process.env.PLACE_API_KEY;
 
@@ -300,7 +405,24 @@ export const searchPlacesTool = new FunctionTool({
       return { found: false, reason: 'API key not configured' };
     }
 
-    const textQuery = `${businessName} ${address}`;
+    // ✅ STRATÉGIE MULTI-REQUÊTES - Variantes enrichies
+    const textQueries: string[] = [
+      // Variante 1: Nom + Adresse complète (stratégie actuelle)
+      `${businessName} ${address}`,
+
+      // Variante 2: Nom + Ville + Code postal
+      city && zipCode ? `${businessName} ${city} ${zipCode}` : null,
+
+      // Variante 3: Adresse seule (si le nom est générique)
+      address,
+
+      // Variante 4: Nom + Code postal seulement
+      zipCode ? `${businessName} ${zipCode}` : null,
+
+      // Variante 5: SIRET (Google indexe parfois les numéros)
+      business.siret ? `SIRET ${business.siret}` : null
+
+    ].filter((q): q is string => q !== null && q.trim().length > 0);
 
     const fields = [
       'places.id',
@@ -317,29 +439,51 @@ export const searchPlacesTool = new FunctionTool({
       'places.types'
     ];
 
+    console.log(`[searchPlaces] 📋 Prepared ${textQueries.length} query variants`);
+
+    // ✅ TENTATIVES SÉQUENTIELLES - Essayer chaque variante
+    let places: any[] = [];
+    let successfulQuery: string | null = null;
+
     try {
-      const response = await axios.post(
-        'https://places.googleapis.com/v1/places:searchText',
-        {
-          textQuery,
-          languageCode: 'fr',
-          maxResultCount: 5  // Request 5 results for scoring
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': PLACE_API_KEY,
-            'X-Goog-FieldMask': fields.join(',')
-          },
-          timeout: 5000
+      for (let i = 0; i < textQueries.length; i++) {
+        const textQuery = textQueries[i];
+        console.log(`[searchPlaces] 🔍 Text Search attempt ${i + 1}/${textQueries.length}: "${textQuery}"`);
+
+        try {
+          const response = await axios.post(
+            'https://places.googleapis.com/v1/places:searchText',
+            {
+              textQuery,
+              languageCode: 'fr',
+              maxResultCount: 5  // Request 5 results for scoring
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': PLACE_API_KEY,
+                'X-Goog-FieldMask': fields.join(',')
+              },
+              timeout: 5000
+            }
+          );
+
+          if (response.data.places && response.data.places.length > 0) {
+            places = response.data.places;
+            successfulQuery = textQuery;
+            console.log(`[searchPlaces] ✅ Text Search SUCCESS: Found ${places.length} results with query "${textQuery}"`);
+            break; // Arrêter dès qu'on a des résultats
+          } else {
+            console.log(`[searchPlaces] ⚠️ Text Search: No results for query "${textQuery}"`);
+          }
+        } catch (apiError: any) {
+          console.error(`[searchPlaces] ❌ Text Search API error for query "${textQuery}":`, apiError.message);
+          // Continue avec la prochaine variante
         }
-      );
+      }
 
-      if (response.data.places && response.data.places.length > 0) {
-        const places = response.data.places;
-
-        // Extract NAF code for type matching
-        const nafCode = business.activite_principale || business.code_naf || null;
+      if (places.length > 0 && successfulQuery) {
+        console.log(`[searchPlaces] 📊 Scoring ${places.length} results...`);
 
         // Score all results with multi-dimensional scoring (address + identity)
         const scoredPlaces: ScoredPlace[] = places.map((place: any) => {
@@ -418,7 +562,30 @@ export const searchPlacesTool = new FunctionTool({
         };
       }
 
-      return { found: false, reason: 'No results from Places API' };
+      // ✅ FALLBACK 1: Toutes les requêtes Google Places ont échoué → OSM
+      console.log('[searchPlaces] ⚠️ All Google Places Text Search queries failed');
+      console.log('[searchPlaces] 🔄 Attempting OpenStreetMap fallback...');
+
+      const osmResult = await osmNominatimFallback({
+        businessName,
+        address,
+        city,
+        zipCode
+      });
+
+      if (osmResult) {
+        console.log('[searchPlaces] ✅ OSM fallback SUCCESS');
+        return osmResult;
+      }
+
+      // ✅ FALLBACK 2: OSM a aussi échoué → INSEE (dernier recours)
+      console.log('[searchPlaces] ⚠️ OSM fallback failed');
+      console.log('[searchPlaces] 🔄 Using INSEE fallback (last resort)...');
+
+      const inseeResult = inseeFallback({ business, preparation });
+      console.log('[searchPlaces] ⚠️ Returning INSEE fallback data (limited information)');
+
+      return inseeResult;
 
     } catch (error: any) {
       console.error('Places API error:', error.message);

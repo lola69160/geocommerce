@@ -69,6 +69,65 @@ export const categorizeRiskTool = new FunctionTool({
   parameters: zToGen(CategorizeRiskInputSchema),
 
   execute: async (data: z.infer<typeof CategorizeRiskInputSchema>) => {
+    // ✅ VALIDATION ROBUSTE - Vérifier que scores existe et est complet
+    if (!data || !data.scores || typeof data.scores !== 'object') {
+      console.error('[categorizeRisk] ❌ Invalid input: scores object missing or malformed', {
+        hasData: !!data,
+        hasScores: !!(data && data.scores),
+        scoresType: data && data.scores ? typeof data.scores : 'undefined'
+      });
+
+      return {
+        risks: [],
+        summary: {
+          total_risks: 0,
+          by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+          by_category: { location: 0, market: 0, operational: 0, financial: 0 }
+        },
+        risk_score: 0,
+        overall_risk_level: 'critical' as const,
+        blocking: true,
+        recommendation: 'ERROR: Invalid input data - cannot assess risks',
+        error: 'Invalid input: scores object missing or malformed'
+      };
+    }
+
+    // ✅ Vérifier que toutes les propriétés scores sont des nombres
+    const requiredScores = ['location', 'market', 'operational', 'financial', 'overall'];
+    const missingScores = requiredScores.filter(key =>
+      typeof data.scores[key as keyof typeof data.scores] !== 'number'
+    );
+
+    if (missingScores.length > 0) {
+      console.error('[categorizeRisk] ❌ Incomplete scores object', {
+        missing: missingScores,
+        received: data.scores
+      });
+
+      return {
+        risks: [],
+        summary: {
+          total_risks: 0,
+          by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+          by_category: { location: 0, market: 0, operational: 0, financial: 0 }
+        },
+        risk_score: 0,
+        overall_risk_level: 'critical' as const,
+        blocking: true,
+        recommendation: `ERROR: Incomplete scores - missing: ${missingScores.join(', ')}`,
+        error: `Incomplete scores object - missing: ${missingScores.join(', ')}`
+      };
+    }
+
+    console.log('[categorizeRisk] ✅ Input validation passed', {
+      scores: data.scores,
+      hasDemo: !!data.demographic,
+      hasPlaces: !!data.places,
+      hasPhoto: !!data.photo,
+      hasCompetitor: !!data.competitor,
+      hasValidation: !!data.validation
+    });
+
     const risks: Risk[] = [];
 
     // === LOCATION RISKS ===

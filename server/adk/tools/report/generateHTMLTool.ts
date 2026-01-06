@@ -3,7 +3,45 @@ import { FunctionTool } from '@google/adk';
 import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../utils/schemaHelper.js';
 import type { BusinessInput } from '../../schemas';
+import { formatActivity } from '../../config/nafCodes.js';
 import axios from 'axios';
+
+/**
+ * Tronque intelligemment un texte à la dernière phrase complète
+ * @param text Texte à tronquer
+ * @param maxLength Longueur maximale (défaut: 500)
+ * @returns Texte tronqué à la dernière phrase ou au dernier espace
+ */
+function smartTruncate(text: string, maxLength: number = 500): string {
+  if (!text || text.length <= maxLength) {
+    return text;
+  }
+
+  // Couper à maxLength
+  const truncated = text.substring(0, maxLength);
+
+  // Chercher la dernière phrase complète (. ! ?)
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastExclamation = truncated.lastIndexOf('!');
+  const lastQuestion = truncated.lastIndexOf('?');
+
+  const lastSentenceEnd = Math.max(lastPeriod, lastExclamation, lastQuestion);
+
+  // Si on trouve une fin de phrase et qu'elle utilise au moins 70% de la longueur max
+  if (lastSentenceEnd > maxLength * 0.7) {
+    return text.substring(0, lastSentenceEnd + 1);
+  }
+
+  // Sinon, couper au dernier espace pour éviter de couper un mot
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > maxLength * 0.7) {
+    return text.substring(0, lastSpace) + '...';
+  }
+
+  // Dernier recours: couper brut
+  return truncated + '...';
+}
+
 
 /**
  * Generate HTML Tool
@@ -138,7 +176,7 @@ function generateBusinessInfo(business: any, preparation: any): string {
       <div class="info-label">SIRET:</div>
       <div class="info-value">${business.siret || 'N/A'}</div>
       <div class="info-label">Activité:</div>
-      <div class="info-value">${business.activite_principale_libelle || 'N/A'}</div>
+      <div class="info-value">${formatActivity(business.activite_principale || business.code_naf)}</div>
       <div class="info-label">Adresse:</div>
       <div class="info-value">${preparation?.normalizedAddress?.full || 'N/A'}</div>
       <div class="info-label">Coordonnées GPS:</div>
@@ -549,7 +587,14 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
   const population = demographic?.commune?.population || 'N/A';
   const densityCategory = demographic?.profile?.density_category || 'N/A';
   const cspCategory = demographic?.profile?.estimated_csp?.dominant || 'N/A';
-  const tradeAreaPop = demographic?.profile?.trade_area_potential?.['1km'] || 0;
+
+  // ✅ FALLBACK MULTI-SOURCES pour zone de chalandise (fix "0 habitants")
+  const tradeAreaPop =
+    demographic?.profile?.trade_area_potential?.['1km'] ||
+    demographic?.profile?.trade_area_potential?.walking_500m ||
+    demographic?.catchmentArea?.population ||
+    demographic?.population ||
+    (typeof population === 'number' ? Math.round(population * 0.15) : 0); // Estimation 15% de la commune
 
   if (typeof population === 'number' && population > 0) {
     const cspTranslated = translateCategory('csp', cspCategory);
@@ -595,7 +640,7 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
   // 4. DYNAMISME ÉCONOMIQUE (2-3 lignes)
   if (localContext?.economic_activity && Array.isArray(localContext.economic_activity) && localContext.economic_activity.length > 0) {
     const economic = localContext.economic_activity[0];
-    const economicText = economic.content ? economic.content.substring(0, 200) : '';
+    const economicText = economic.content ? smartTruncate(economic.content, 500) : '';  // ✅ 500 au lieu de 200
     const dynamismLevel = localContext.economic_dynamism ? translateCategory('dynamism', localContext.economic_dynamism) : '';
 
     if (economicText) {
