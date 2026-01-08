@@ -47,13 +47,12 @@ export class ArbitratorAgent extends LlmAgent {
       // Modèle Gemini Thinking
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ No responseMimeType - incompatible with tools (see models.ts line 44)
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-        
       },
 
       // Tools disponibles
@@ -75,10 +74,19 @@ WORKFLOW (TRAITER CHAQUE CONFLIT INDIVIDUELLEMENT):
 2. **BOUCLE SUR CHAQUE CONFLIT** (Gemini peut appeler PLUSIEURS tools par tour)
 
    Pour CHAQUE conflit:
-     a) Appeler prioritizeSource(conflict.type, conflict.sources)
+     a) Appeler prioritizeSource({ type: conflict.type, sources: conflict.sources })
         → Retourne { priority_order, highest_reliability_source, recommendation }
 
-     b) Appeler resolveConflict(conflict)
+     b) ⚠️⚠️⚠️ CRITIQUE: Appeler resolveConflict avec L'OBJET COMPLET:
+        resolveConflict({
+          conflict: {
+            id: conflict.id,
+            type: conflict.type,
+            severity: conflict.severity,
+            description: conflict.description,
+            sources: conflict.sources
+          }
+        })
         → Retourne { resolution, confidence, explanation, action, updated_data }
 
    ⚠️ IMPORTANT: Gemini peut appeler prioritizeSource + resolveConflict pour CHAQUE conflit
@@ -103,10 +111,10 @@ state.validation.conflicts = [
 ]
 
 // Dans UNE SEULE réponse Gemini, appeler:
-1. prioritizeSource("POPULATION_POI_MISMATCH", conflict1.sources)
-2. resolveConflict(conflict1)
-3. prioritizeSource("GEOGRAPHIC_MISMATCH", conflict2.sources)
-4. resolveConflict(conflict2)
+1. prioritizeSource({ type: "POPULATION_POI_MISMATCH", sources: conflict1.sources })
+2. resolveConflict({ conflict: conflict1 })  // ⚠️ Objet conflict COMPLET
+3. prioritizeSource({ type: "GEOGRAPHIC_MISMATCH", sources: conflict2.sources })
+4. resolveConflict({ conflict: conflict2 })  // ⚠️ Objet conflict COMPLET
 
 // Puis générer JSON final avec les 2 résolutions
 {

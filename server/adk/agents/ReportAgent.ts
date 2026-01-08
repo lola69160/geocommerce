@@ -1,5 +1,5 @@
 import { LlmAgent } from '@google/adk';
-import { generateHTMLTool, saveReportTool } from '../tools/report/index.js';
+import { generateHTMLTool } from '../tools/report/index.js';
 import { getModelConfig } from '../config/models.js';
 import { getSystemPrompt } from '../config/prompts.js';
 import type { AgentState } from '../types/index.js';
@@ -14,7 +14,7 @@ import type { AgentState } from '../types/index.js';
  * - Compiler outputs de tous les agents (preparation → strategic)
  * - Générer rapport HTML avec CSS professionnel
  * - Sauvegarder rapport dans data/professional-reports/
- * - Nommer fichier: YYYYMMDD_HHMMSS_SIRET.html
+ * - Nommer fichier: YYYYMMDD_HHMMSS_<siret>.html
  *
  * Sections du rapport:
  * 1. Executive Summary (GO/NO-GO, scores clés)
@@ -39,120 +39,110 @@ export class ReportAgent extends LlmAgent {
       // Modèle Gemini
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ CRITICAL: Do NOT add responseMimeType or responseSchema
+      // These are incompatible with tools (Function Calling) - see models.ts line 44
+      // JSON output is achieved via explicit instructions below
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-
       },
 
       // Tools disponibles
-      tools: [generateHTMLTool, saveReportTool],
+      tools: [generateHTMLTool],
 
       // Instruction système
       instruction: `${getSystemPrompt('report')}
 
 Tu dois générer un rapport HTML professionnel compilant tous les résultats.
 
-WORKFLOW:
+WORKFLOW SIMPLIFIÉ (1 SEUL TOOL):
 
-1. **COMPILATION DONNÉES**
-   Récupérer tous les outputs disponibles depuis le state:
-   - business (données initiales)
-   - preparation (adresse normalisée, coordonnées)
-   - demographic (population, CSP, scores)
-   - places (réputation, avis, photos)
-   - photo (état physique, travaux)
-   - competitor (concurrence, densité)
-   - validation (conflits, cohérence)
-   - gap (scores multi-dimensionnels, risques)
-   - arbitration (résolutions conflits)
-   - strategic (recommandation GO/NO-GO, rationale)
+1. **GÉNÉRATION ET SAUVEGARDE AUTOMATIQUE**
+   Appeler generateHTML() sans paramètres
 
-2. **GÉNÉRATION HTML**
-   Appeler generateHTML() sans paramètres (lit tout depuis state)
-   - Retourne objet: { html, size_bytes, sections_included, generated_at }
-   - HTML complet avec CSS intégré
-   - Sections structurées et professionnelles
+   ⚠️⚠️⚠️ IMPORTANT: Ce tool génère ET sauvegarde automatiquement le fichier HTML
 
-3. **SAUVEGARDE FICHIER**
-   Extraire le champ 'html' du résultat de generateHTML
-   Appeler saveReport avec SEULEMENT le HTML: saveReport({ html: "...", outputDir: "data/professional-reports" })
-   - Le SIRET est lu automatiquement depuis state.business (ne PAS le passer en paramètre)
-   - Crée répertoire si nécessaire
-   - Retourne: { filepath, filename, size_bytes, saved_at, success }
+   Le tool fait AUTOMATIQUEMENT:
+   - Lit tous les outputs depuis state (business, preparation, demographic, places, photo, competitor, validation, gap, arbitration, strategic)
+   - Génère HTML complet avec CSS intégré
+   - Sauvegarde fichier dans data/professional-reports/<SIRET>/
+   - Retourne métadonnées SEULEMENT (pas le HTML complet)
 
-4. **RÉSULTAT FINAL**
+   Résultat du tool:
+   {
+     "html": "[HTML saved to file: YYYYMMDD_HHMMSS_professional-report.html]",
+     "saved": true,
+     "filepath": "/absolute/path/...",
+     "filename": "YYYYMMDD_HHMMSS_professional-report.html",
+     "siret": "88364007000024",
+     "size_bytes": 127456,
+     "sections_included": ["preparation", "demographic", ...],
+     "generated_at": "2026-01-08T16:23:24.123Z"
+   }
+
+2. **RÉSULTAT FINAL**
    Retourner métadonnées du rapport:
-   - Chemin fichier
-   - Taille en bytes
-   - Sections incluses
-   - Timestamp génération
 
 FORMAT DE SORTIE JSON (STRICT):
 
 {
   "generated": boolean,
-  "filepath": "string (chemin absolu)",
-  "filename": "string",
-  "size_bytes": number,
-  "size_kb": number,
-  "sections_included": ["preparation", "demographic", ...],
-  "generated_at": "ISO datetime",
-  "business_info": {
+  "saved": boolean,
+  "report_metadata": {
+    /* COPIE INTÉGRALE du résultat de saveReport */
+    "filepath": "string",
+    "filename": "string",
     "siret": "string",
-    "name": "string",
-    "address": "string"
+    "size_bytes": number,
+    "saved_at": "ISO datetime"
   },
-  "summary": {
-    "recommendation": "GO" | "NO-GO" | "GO_WITH_RESERVES",
-    "overall_score": number,
-    "total_risks": number,
-    "critical_risks": number
-  }
+  "interpretation": "string (2-3 phrases: succès génération, taille fichier, sections incluses, recommandation finale)"
+}
+
+Exemple:
+{
+  "generated": true,
+  "saved": true,
+  "report_metadata": {
+    "filepath": "/absolute/path/to/data/professional-reports/88364007000024/20260108_162324_professional-report.html",
+    "filename": "20260108_162324_professional-report.html",
+    "siret": "88364007000024",
+    "size_bytes": 123456,
+    "saved_at": "2026-01-08T16:23:24.123Z"
+  },
+  "interpretation": "Rapport professionnel généré avec succès. Fichier de 120 KB sauvegardé dans le dossier SIRET 88364007000024. Le rapport contient 8 sections d'analyse complètes. Recommandation finale: GO_WITH_RESERVES avec un score global de 72/100."
 }
 
 Si erreur:
 {
   "generated": false,
+  "saved": false,
   "error": true,
   "message": "string (explication erreur)"
 }
 
 RÈGLES IMPORTANTES:
 
-1. **DONNÉES MINIMALES REQUISES:**
-   - business (obligatoire)
-   - strategic (obligatoire pour recommendation)
-   - gap (obligatoire pour scores)
-   Si manquantes: générer rapport partiel avec avertissement
+1. **UN SEUL TOOL CALL:**
+   generateHTML() fait TOUT (génération + sauvegarde automatique)
+   NE PAS appeler de deuxième tool
 
-2. **NOMMAGE FICHIER:**
-   Format: YYYYMMDD_HHMMSS_SIRET.html
-   Exemple: 20250115_143025_12345678900001.html
+2. **COPIE INTÉGRALE DU RÉSULTAT:**
+   ⚠️⚠️⚠️ CRITIQUE: COPIE INTÉGRALEMENT le résultat de generateHTML dans report_metadata
+   Ne calcule RIEN manuellement
+   Le HTML est déjà sauvegardé sur disque (pas dans le JSON retourné)
 
-3. **RÉPERTOIRE DESTINATION:**
-   - Default: data/professional-reports/
-   - Créé automatiquement si inexistant
-   - Permissions lecture/écriture requises
+3. **INTERPRÉTATION:**
+   Mentionner taille en KB (conversion mentale de size_bytes)
+   Mentionner recommandation finale si disponible dans state.strategic
+   Exemple: "Fichier de 124 KB créé avec recommandation GO (score 82/100)"
 
-4. **TAILLE FICHIER:**
-   - Typiquement 50-150 KB
-   - Si > 500 KB: vérifier contenu excessif
-   - Calculer size_kb = Math.round(size_bytes / 1024)
-
-5. **SECTIONS CONDITIONNELLES:**
-   - Inclure uniquement sections avec données disponibles
-   - Afficher message "Données non disponibles" si section vide
-   - Toujours inclure: Header, Executive Summary, Footer
-
-6. **FORMATTING HTML:**
-   - CSS intégré (pas de fichier externe)
-   - Responsive design
-   - Compatible tous navigateurs modernes
-   - Imprimable (media queries print)
+4. **DONNÉES MINIMALES:**
+   - Si business manquant: erreur retournée par le tool
+   - Si strategic manquant: mentionner dans interpretation
+   - Le tool gère tous les cas limites automatiquement
 
 RETOURNE UNIQUEMENT LE JSON VALIDE.`,
 

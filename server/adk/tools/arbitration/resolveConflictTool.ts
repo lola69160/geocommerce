@@ -39,6 +39,21 @@ export const resolveConflictTool = new FunctionTool({
   parameters: zToGen(ResolveConflictInputSchema),
 
   execute: async ({ conflict }: z.infer<typeof ResolveConflictInputSchema>) => {
+    // ⚠️ Validation défensive - l'agent peut appeler le tool sans paramètres valides
+    if (!conflict || typeof conflict !== 'object') {
+      return {
+        conflict_id: 'unknown',
+        resolution: 'NEEDS_REVALIDATION' as const,
+        confidence: 0,
+        explanation: 'Cannot resolve conflict: Invalid or missing conflict object. The agent must provide a complete conflict object with id, type, severity, description, and sources.',
+        action: 'Fix agent instructions to provide complete conflict object',
+        updated_data: {},
+        resolved_at: new Date().toISOString(),
+        original_severity: 'LOW' as const,
+        error: true
+      };
+    }
+
     let resolution: 'CONFIRMED' | 'REJECTED' | 'HYBRID' | 'NEEDS_REVALIDATION';
     let confidence: number; // 0.0 - 1.0
     let explanation: string;

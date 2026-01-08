@@ -4,44 +4,15 @@ import type { ToolContext } from '@google/adk';
 import { zToGen } from '../../utils/schemaHelper.js';
 import type { BusinessInput } from '../../schemas';
 import { formatActivity } from '../../config/nafCodes.js';
+import { promises as fs } from 'fs';
+import path from 'path';
 import axios from 'axios';
-
-/**
- * Tronque intelligemment un texte à la dernière phrase complète
- * @param text Texte à tronquer
- * @param maxLength Longueur maximale (défaut: 500)
- * @returns Texte tronqué à la dernière phrase ou au dernier espace
- */
-function smartTruncate(text: string, maxLength: number = 500): string {
-  if (!text || text.length <= maxLength) {
-    return text;
-  }
-
-  // Couper à maxLength
-  const truncated = text.substring(0, maxLength);
-
-  // Chercher la dernière phrase complète (. ! ?)
-  const lastPeriod = truncated.lastIndexOf('.');
-  const lastExclamation = truncated.lastIndexOf('!');
-  const lastQuestion = truncated.lastIndexOf('?');
-
-  const lastSentenceEnd = Math.max(lastPeriod, lastExclamation, lastQuestion);
-
-  // Si on trouve une fin de phrase et qu'elle utilise au moins 70% de la longueur max
-  if (lastSentenceEnd > maxLength * 0.7) {
-    return text.substring(0, lastSentenceEnd + 1);
-  }
-
-  // Sinon, couper au dernier espace pour éviter de couper un mot
-  const lastSpace = truncated.lastIndexOf(' ');
-  if (lastSpace > maxLength * 0.7) {
-    return text.substring(0, lastSpace) + '...';
-  }
-
-  // Dernier recours: couper brut
-  return truncated + '...';
-}
-
+import { smartTruncate } from './utils/textUtils.js';
+import { generateReputationSection } from './sections/reputationSection.js';
+import { generateZoneChalandiseSection } from './sections/zoneChalandiseSection.js';
+import { generatePhotoAnalysisSection } from './sections/photoAnalysisSection.js';
+import { generatePoiCompetitorsSection } from './sections/poiCompetitorsSection.js';
+import { validateGlobalConsistency } from './utils/dataValidation.js';
 
 /**
  * Generate HTML Tool
@@ -61,8 +32,9 @@ function smartTruncate(text: string, maxLength: number = 500): string {
  */
 
 const GenerateHTMLInputSchema = z.object({
-  // Aucun paramètre - lit tous les outputs agents depuis state
-});
+  // Gemini requires explicit empty object schema
+  // Tool reads all data from ToolContext state, no parameters needed
+}).strict().describe('No parameters required - reads all agent outputs from state');
 
 /**
  * Génère le CSS du rapport
@@ -120,9 +92,128 @@ function generateCSS(): string {
       .commune-grid img { width: 100%; border-radius: 8px; max-height: 300px; object-fit: cover; }
       .no-data { color: #666; font-style: italic; padding: 15px; background: #f8fafc; border-radius: 4px; margin: 10px 0; }
       .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #666; font-size: 0.9em; }
+
+      /* Amélioration 2: Réputation Section */
+      .reputation-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+      .stat-card { background: #f8fafc; padding: 20px; border-radius: 8px; text-align: center; }
+      .stat-card.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+      .stat-card.secondary { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+      .stat-value { font-size: 2em; font-weight: bold; }
+      .stat-label { font-size: 0.9em; margin-top: 5px; }
+      .stat-stars { font-size: 1.2em; margin-top: 5px; }
+      .rating-distribution { margin: 20px 0; }
+      .rating-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+      .rating-label { width: 50px; font-weight: bold; }
+      .rating-bar-container { flex: 1; height: 20px; background: #e5e7eb; border-radius: 10px; overflow: hidden; }
+      .rating-bar { height: 100%; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); }
+      .rating-count { width: 50px; text-align: right; font-weight: bold; }
+      .top-reviews-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+      .top-reviews-column { background: #f8fafc; padding: 20px; border-radius: 8px; }
+      .review-card { background: white; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 10px 0; }
+      .review-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+      .review-author { font-weight: bold; }
+      .review-stars { font-size: 0.9em; }
+      .review-stars.positive { color: #10b981; }
+      .review-stars.negative { color: #ef4444; }
+      .review-stars.neutral { color: #f59e0b; }
+      .review-text { color: #666; font-size: 0.9em; margin: 10px 0; }
+      .review-date { color: #999; font-size: 0.8em; }
+
+      /* Amélioration 6: Zone de Chalandise */
+      .flux-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+      .flux-card { background: #f8fafc; padding: 20px; border-radius: 8px; text-align: center; }
+      .flux-card.workers { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+      .flux-icon { font-size: 2em; margin-bottom: 10px; }
+      .flux-value { font-size: 2em; font-weight: bold; }
+      .flux-label { font-size: 0.9em; margin-top: 5px; }
+      .total-potential { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 25px; font-size: 1.8em; text-align: center; border-radius: 12px; margin: 20px 0; font-weight: bold; }
+      .flux-table { width: 100%; margin: 20px 0; }
+      .potential-analysis { background: #d1fae5; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 4px; }
+      .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }
+      .metric { background: white; padding: 15px; border-radius: 4px; }
+      .metric.highlight { grid-column: span 2; font-size: 1.4em; font-weight: bold; color: #10b981; text-align: center; }
+      .metric-label { font-size: 0.9em; color: #666; }
+      .metric-value { font-size: 1.5em; font-weight: bold; margin-top: 5px; }
+      .analysis-note { margin-top: 15px; font-size: 0.9em; color: #666; }
+
+      /* Amélioration 1: Photo Analysis */
+      .state-table { width: 100%; margin: 20px 0; }
+      .highlight-row { background: #f0f9ff; font-weight: bold; }
+      .work-lists-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+      .work-list-column { background: #f8fafc; padding: 20px; border-radius: 8px; }
+      .urgent-header { color: #dc2626; }
+      .recommended-header { color: #f59e0b; }
+      .optional-header { color: #22c55e; }
+      .work-list { margin-top: 10px; padding-left: 20px; }
+      .work-list.urgent li { color: #dc2626; font-weight: 500; margin: 8px 0; }
+      .work-list.recommended li { color: #f59e0b; margin: 8px 0; }
+      .work-list.optional li { color: #22c55e; margin: 8px 0; }
+      .budget-table { width: 100%; margin: 20px 0; }
+      .budget-summary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px; font-size: 1.5em; text-align: center; border-radius: 8px; margin: 20px 0; }
+      .points-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+      .points-column { background: #f8fafc; padding: 20px; border-radius: 8px; }
+      .points-list { padding-left: 20px; margin-top: 10px; }
+      .points-list.success li { color: #10b981; margin: 8px 0; }
+      .points-list.error li { color: #ef4444; margin: 8px 0; }
+      .analysis-text { background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; line-height: 1.8; }
+
+      /* Amélioration 5: Dual Scores */
+      .dual-score-display { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+      .score-card-large { color: white; padding: 30px; border-radius: 12px; text-align: center; }
+      .score-card-large.retail { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+      .score-card-large.physical { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+      .score-card-large .icon { font-size: 3em; margin-bottom: 15px; }
+      .score-card-large .score { font-size: 3em; font-weight: bold; margin: 10px 0; }
+      .score-card-large .label { font-size: 1.2em; font-weight: bold; margin: 10px 0; }
+      .score-card-large .description { font-size: 0.9em; opacity: 0.9; }
+      .interpretation-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; font-size: 1.1em; }
+
+      /* Amélioration 4: POI Categorization */
+      .category-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+      .category-card { background: #f8fafc; padding: 25px; border-radius: 8px; text-align: center; }
+      .category-card.competitor { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
+      .category-card.complementary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+      .category-card.other { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; }
+      .card-icon { font-size: 2.5em; margin-bottom: 10px; }
+      .card-value { font-size: 3em; font-weight: bold; }
+      .card-label { font-size: 1.1em; margin: 10px 0; }
+      .card-impact { font-size: 0.9em; opacity: 0.9; }
+      .card-impact.negative { background: rgba(0, 0, 0, 0.2); padding: 5px; border-radius: 4px; }
+      .card-impact.positive { background: rgba(255, 255, 255, 0.2); padding: 5px; border-radius: 4px; }
+      .card-impact.neutral { opacity: 0.7; }
+      .competitors-table { width: 100%; margin: 20px 0; }
+      .complementary-list { padding-left: 20px; margin: 20px 0; }
+      .complementary-list li { margin: 10px 0; }
+      .impact-analysis { border-left: 4px solid; padding: 20px; margin: 20px 0; border-radius: 4px; }
+      .impact-analysis.positive { background: #d1fae5; border-color: #10b981; }
+      .impact-analysis.negative { background: #fef2f2; border-color: #ef4444; }
+      .impact-analysis.neutral { background: #f3f4f6; border-color: #9ca3af; }
+      .impact-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 15px 0; }
+      .impact-metric { background: white; padding: 15px; border-radius: 4px; text-align: center; }
+      .impact-conclusion { margin-top: 15px; font-size: 1.1em; }
+
+      /* Amélioration 7: Validation Section */
+      .validation-score { padding: 20px; border-radius: 8px; font-size: 1.5em; font-weight: bold; text-align: center; margin: 20px 0; }
+      .validation-score.success { background: #d1fae5; color: #065f46; }
+      .validation-score.warning { background: #fed7aa; color: #92400e; }
+      .validation-score.error { background: #fecaca; color: #991b1b; }
+      .warning-card { border-left: 4px solid; background: #fffbeb; padding: 15px; margin: 10px 0; border-radius: 4px; }
+      .warning-card.high { border-color: #ef4444; background: #fef2f2; }
+      .warning-card.medium { border-color: #f59e0b; background: #fffbeb; }
+      .warning-card.low { border-color: #3b82f6; background: #eff6ff; }
+      .success-header { color: #10b981; }
+      .error-header { color: #ef4444; }
+
       @media (max-width: 768px) {
         .commune-grid { grid-template-columns: 1fr; }
         .photo-grid { grid-template-columns: 1fr; }
+        .reputation-stats { grid-template-columns: repeat(2, 1fr); }
+        .top-reviews-container { grid-template-columns: 1fr; }
+        .flux-summary { grid-template-columns: repeat(2, 1fr); }
+        .work-lists-container { grid-template-columns: 1fr; }
+        .dual-score-display { grid-template-columns: 1fr; }
+        .category-breakdown { grid-template-columns: 1fr; }
+        .points-grid { grid-template-columns: 1fr; }
       }
     </style>
   `;
@@ -499,7 +590,8 @@ async function fetchCommuneDataWithTavily(commune: string): Promise<{ imageUrl: 
     );
 
     const imageUrl = response.data.images?.[0] || '';
-    const description = response.data.results?.[0]?.content?.substring(0, 300) || '';
+    const rawDescription = response.data.results?.[0]?.content || '';
+    const description = smartTruncate(rawDescription, 500); // Smart truncate at 500 chars
     const sourceUrl = response.data.results?.[0]?.url || '';
 
     console.log(`[fetchCommuneDataWithTavily] Success - Image: ${imageUrl ? 'found' : 'not found'}, Description length: ${description.length}`);
@@ -723,6 +815,69 @@ export const generateHTMLTool = new FunctionTool({
       return value;
     };
 
+/**
+ * Generate validation section (Amélioration 7)
+ */
+function generateValidationSection(data: any): string {
+  const validation = validateGlobalConsistency(data);
+
+  if (validation.warnings.length === 0) {
+    return `
+      <h2>⚙️ Audit de Cohérence</h2>
+      <div class="validation-score success">
+        ✅ ${validation.score}/100 - Aucune incohérence détectée
+      </div>
+    `;
+  }
+
+  const scoreClass = validation.score > 70 ? 'success' : validation.score > 50 ? 'warning' : 'error';
+
+  const highWarnings = validation.warnings.filter(w => w.severity === 'HIGH');
+  const mediumWarnings = validation.warnings.filter(w => w.severity === 'MEDIUM');
+  const lowWarnings = validation.warnings.filter(w => w.severity === 'LOW');
+
+  return `
+    <h2>⚙️ Audit de Cohérence</h2>
+
+    <div class="validation-score ${scoreClass}">
+      ${validation.score}/100 Score de Cohérence
+    </div>
+
+    ${highWarnings.length > 0 ? `
+      <h3>🚨 Incohérences Hautes (${highWarnings.length})</h3>
+      ${highWarnings.map(w => `
+        <div class="warning-card high">
+          <h4><span class="badge error">${w.category}</span> ${w.id}</h4>
+          <p><strong>Description:</strong> ${w.description}</p>
+          <p><strong>Données affectées:</strong> ${w.affected_data.join(', ')}</p>
+          <p><strong>Recommandation:</strong> ${w.recommendation}</p>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${mediumWarnings.length > 0 ? `
+      <h3>⚠️ Incohérences Moyennes (${mediumWarnings.length})</h3>
+      ${mediumWarnings.map(w => `
+        <div class="warning-card medium">
+          <h4><span class="badge warning">${w.category}</span> ${w.id}</h4>
+          <p><strong>Description:</strong> ${w.description}</p>
+          <p><strong>Recommandation:</strong> ${w.recommendation}</p>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${lowWarnings.length > 0 ? `
+      <h3>ℹ️ Incohérences Faibles (${lowWarnings.length})</h3>
+      ${lowWarnings.map(w => `
+        <div class="warning-card low">
+          <h4><span class="badge info">${w.category}</span> ${w.id}</h4>
+          <p><strong>Recommandation:</strong> ${w.recommendation}</p>
+        </div>
+      `).join('')}
+    ` : ''}
+  `;
+}
+
     // Lire tous les outputs depuis state
     const data = {
       business: toolContext?.state.get('business') as BusinessInput | undefined,
@@ -737,7 +892,12 @@ export const generateHTMLTool = new FunctionTool({
       strategic: parseIfNeeded(toolContext?.state.get('strategic'))
     };
 
-    const timestamp = new Date().toLocaleString('fr-FR');
+    const now = new Date();
+    const timestamp = now.toLocaleString('fr-FR'); // Pour affichage dans le HTML
+    const filenameTimestamp = now.toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .replace('T', '_'); // Format: YYYYMMDD_HHMMSS
     const businessName = data.business?.enseigne || data.business?.nom_complet || 'Commerce Inconnu';
 
     // Générer section commune (async avec Tavily)
@@ -762,12 +922,16 @@ export const generateHTMLTool = new FunctionTool({
     ${generateExecutiveSummary(data.strategic, data.gap)}
     ${generateBusinessInfo(data.business, data.preparation)}
     ${communeSection}
-    ${generatePhotosSection(data.places, data.photo)}
+    ${generateReputationSection(data.places)}
+    ${generatePhotoAnalysisSection(data.places, data.photo)}
+    ${generateZoneChalandiseSection(data.demographic, data.preparation)}
+    ${generatePoiCompetitorsSection(data.competitor)}
     ${generateBODACCTable(data.business)}
     ${generateOpeningHoursTable(data.places)}
     ${generateScores(data.gap)}
     ${generateRisks(data.gap)}
     ${generateStrategicRationale(data.strategic)}
+    ${generateValidationSection(data)}
 
     <div class="footer">
       <p>🤖 Généré avec Claude Code - ADK TypeScript SDK</p>
@@ -789,11 +953,68 @@ export const generateHTMLTool = new FunctionTool({
     if (data.arbitration) sectionsIncluded.push('arbitration');
     if (data.strategic) sectionsIncluded.push('strategic');
 
-    return {
-      html,
-      size_bytes: Buffer.byteLength(html, 'utf8'),
-      sections_included: sectionsIncluded,
-      generated_at: timestamp
-    };
+    // ✅ SAUVEGARDE DIRECTE (pattern du pipeline financier)
+    try {
+      // Extraire SIRET depuis state
+      const siret = data.business?.siret || data.business?.siren || 'UNKNOWN';
+
+      if (siret === 'UNKNOWN' || siret.length < 9) {
+        throw new Error('Cannot save report: Valid SIRET required');
+      }
+
+      // Créer structure: data/professional-reports/{SIRET}/
+      const baseDir = path.join(process.cwd(), 'data', 'professional-reports');
+      const siretDir = path.join(baseDir, siret);
+      await fs.mkdir(siretDir, { recursive: true });
+
+      // Générer nom fichier (sans SIRET redondant) - filenameTimestamp déjà calculé en format YYYYMMDD_HHMMSS
+      const filename = `${filenameTimestamp}_professional-report.html`;
+      const filepath = path.join(siretDir, filename);
+
+      // Sauvegarder fichier
+      await fs.writeFile(filepath, html, 'utf8');
+      const stats = await fs.stat(filepath);
+
+      // Injection state (optionnel)
+      const reportResult = {
+        generated: true,
+        saved: true,
+        filepath: path.resolve(filepath),
+        filename,
+        siret,
+        size_bytes: stats.size,
+        sections_included: sectionsIncluded,
+        generated_at: timestamp
+      };
+
+      if (toolContext?.state) {
+        toolContext.state.set('report', reportResult);
+      }
+
+      console.log(`[generateHTML] ✅ Report saved: ${filename} (${stats.size} bytes)`);
+
+      // Retourner métadonnées SEULEMENT (~500 bytes)
+      return {
+        html: `[HTML saved to file: ${filename}]`,  // Placeholder
+        saved: true,
+        filepath: path.resolve(filepath),
+        filename,
+        siret,
+        size_bytes: stats.size,
+        sections_included: sectionsIncluded,
+        generated_at: timestamp
+      };
+
+    } catch (saveError: any) {
+      console.error('[generateHTML] ❌ Save error:', saveError.message);
+      return {
+        html: '[Error: Could not save file]',
+        saved: false,
+        error: true,
+        message: saveError.message,
+        sections_included: sectionsIncluded,
+        generated_at: timestamp
+      };
+    }
   }
 });
