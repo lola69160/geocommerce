@@ -15,7 +15,7 @@ const FetchAssetsInputSchema = z.object({
 
 export const fetchAssetsTool = new FunctionTool({
   name: 'fetchAssets',
-  description: 'Récupère photos (max 8), avis (max 5 significatifs), et détails depuis Google Places. Retourne { photos: [...], reviews: [...], rating, userRatingsTotal }',
+  description: 'Récupère photos (max 5), avis (max 5 significatifs), et détails depuis Google Places. Retourne { photos: [...], reviews: [...], rating, userRatingsTotal }',
   parameters: zToGen(FetchAssetsInputSchema),
 
   execute: async ({ placeId }: z.infer<typeof FetchAssetsInputSchema>) => {
@@ -57,8 +57,8 @@ export const fetchAssetsTool = new FunctionTool({
 
       const place = response.data;
 
-      // Process Photos (Max 8 for analysis)
-      const photos = (place.photos || []).slice(0, 8).map((photo: any) => ({
+      // Process Photos (Max 5 for analysis - optimized token consumption)
+      const photos = (place.photos || []).slice(0, 5).map((photo: any) => ({
         name: photo.name,
         widthPx: photo.widthPx,
         heightPx: photo.heightPx,
@@ -80,6 +80,9 @@ export const fetchAssetsTool = new FunctionTool({
       return {
         photos,
         reviews,
+        // ⚠️ CRITICAL (2026-01-09): Use native API fields (place.rating, place.userRatingCount)
+        // NEVER recalculate from reviews[] array (limited to 5 items by API)
+        // This ensures accurate e-reputation data regardless of sample size
         rating: place.rating || null,
         userRatingsTotal: place.userRatingCount || 0,
         openingHours: place.regularOpeningHours?.weekdayDescriptions || null,

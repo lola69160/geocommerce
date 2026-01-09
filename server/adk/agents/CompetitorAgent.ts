@@ -1,5 +1,5 @@
 import { LlmAgent } from '@google/adk';
-import { nearbySearchTool, calculateDistanceTool } from '../tools/competitor/index.js';
+import { nearbySearchTool, calculateCompetitorAnalysisTool } from '../tools/competitor/index.js';
 import { getModelConfig } from '../config/models.js';
 import { getSystemPrompt } from '../config/prompts.js';
 import type { AgentState } from '../types/index.js';
@@ -31,154 +31,110 @@ export class CompetitorAgent extends LlmAgent {
       // Modèle Gemini
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ CRITICAL: Do NOT add responseMimeType or responseSchema
+      // These are incompatible with tools (Function Calling) - see models.ts line 44
+      // JSON output is achieved via explicit instructions below
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-
       },
 
       // Tools disponibles
-      tools: [nearbySearchTool, calculateDistanceTool],
+      tools: [nearbySearchTool, calculateCompetitorAnalysisTool],
 
       // Instruction système
       instruction: `${getSystemPrompt('competitor')}
 
 Tu dois analyser la concurrence à proximité du commerce cible.
 
-WORKFLOW:
+⚠️ IMPORTANT: Les calculs sont automatisés par le tool calculateCompetitorAnalysis.
+NE CALCULE RIEN manuellement (distances, moyennes, pourcentages, catégorisation).
+Ton rôle est d'APPELER les tools puis INTERPRÉTER les résultats stratégiquement.
 
-1. **RÉCUPÉRATION COORDONNÉES**
-   Depuis state.preparation.coordinates
-   - Si null ou invalide: retourner erreur
+WORKFLOW SIMPLIFIÉ:
 
-2. **RECHERCHE POI CONCURRENTS**
-   Appeler nearbySearch(coordinates, radius=200, includedTypes=[
+1. **RECHERCHE POI CONCURRENTS** (2026-01-09: Rayon étendu à 500m)
+   nearbySearch({ radius: 500, includedTypes: [
      "store", "convenience_store", "supermarket", "grocery_store",
      "bakery", "cafe", "restaurant", "meal_takeaway",
      "clothing_store", "shoe_store", "jewelry_store",
      "book_store", "florist", "furniture_store", "home_goods_store",
      "electronics_store", "hardware_store", "pet_store",
      "beauty_salon", "hair_care", "spa", "gym"
-   ])
-   - Recherche dans rayon 200m (zone de passage client direct)
-   - Filtre UNIQUEMENT commerces de détail et services de proximité
-   - Retourne nearby_poi, total_competitors, by_type, density_level
+   ]})
 
-3. **ANALYSE DISTANCES** (si concurrents trouvés)
-   Pour les 5 concurrents les plus proches:
-   - Appeler calculateDistance(from=coordinates, to=poi.location)
-   - Identifier concurrents immédiats (< 50m)
-   - Identifier concurrents très proches (< 200m)
+   Le tool lit automatiquement coordinates depuis state.preparation.
+   Retourne nearby_poi (dictionnaire des POI Google Places).
+   Note: Rayon étendu à 500m pour capturer l'écosystème commercial complet (locomotives de trafic).
 
-4. **ANALYSE TYPOLOGIE**
-   - Types de commerces dominants
-   - Distribution par catégorie
-   - Niveau de spécialisation vs diversité
+2. **CALCULER ANALYSE COMPLÈTE**
+   calculateCompetitorAnalysis({})
 
-5. **ÉVALUATION CONCURRENCE**
-   - Densité: very_low, low, moderate, high, very_high
-   - Saturation: Ratio POI / population (si disponible)
-   - Pricing moyen concurrent (si priceLevel disponible)
-   - Réputation moyenne (rating)
+   Ce tool fait AUTOMATIQUEMENT :
+   - Calcul distances (formule Haversine)
+   - Détermination proximityLevel (immediate, very_close, etc.)
+   - Catégorisation POI (direct_competitor, complementary, other)
+   - Comptage immediate_competitors, very_close_competitors
+   - Analyse dominant_types (top 5 avec pourcentages)
+   - Analyse pricing (moyenne + distribution)
+   - Analyse reputation (rating moyen + total reviews)
+   - Market assessment (saturation, intensity, opportunity)
+
+   Retourne JSON COMPLET avec TOUS les calculs.
+
+3. **INTERPRÉTER LES RÉSULTATS**
+   Tu dois INTERPRÉTER les données retournées par le tool et fournir une analyse stratégique :
+
+   - Contexte concurrentiel (densité, types dominants, concurrents directs vs complémentaires)
+   - Forces et faiblesses de la position (proximité, pricing, réputation)
+   - Opportunités de différenciation (gaps dans l'offre, positionnement prix)
+   - Recommandations stratégiques (2-3 paragraphes d'expertise)
 
 FORMAT DE SORTIE JSON (STRICT):
 
 {
-  "nearby_poi": {
-    "place_id": {
-      "name": "string",
-      "types": ["string"],
-      "location": { "lat": number, "lon": number },
-      "distance_meters": number,
-      "proximity_level": "immediate" | "very_close" | "close" | "moderate" | "far",
-      "rating": number | null,
-      "priceLevel": number | null
-    }
+  "analyzed": true,
+  "analysis": {
+    /* COPIE INTÉGRALE du résultat de calculateCompetitorAnalysis */
+    "nearby_poi": { ... },
+    "categorization": { ... },
+    "total_competitors": number,
+    "density_level": "string",
+    "immediate_competitors": number,
+    "very_close_competitors": number,
+    "dominant_types": [...],
+    "pricing_analysis": { ... },
+    "reputation_analysis": { ... },
+    "market_assessment": { ... }
   },
-  "total_competitors": number,
-  "density_level": "very_low" | "low" | "moderate" | "high" | "very_high",
-  "search_radius_meters": 500,
-  "immediate_competitors": number,
-  "very_close_competitors": number,
-  "dominant_types": [
-    {
-      "type": "string",
-      "count": number,
-      "percentage": number
-    }
-  ],
-  "pricing_analysis": {
-    "average_price_level": number | null,
-    "distribution": {
-      "1": number,
-      "2": number,
-      "3": number,
-      "4": number
-    }
-  },
-  "reputation_analysis": {
-    "average_rating": number | null,
-    "total_reviews": number
-  },
-  "market_assessment": {
-    "saturation_level": "low" | "moderate" | "high" | "very_high",
-    "competition_intensity": "weak" | "moderate" | "strong" | "very_strong",
-    "market_positioning_opportunity": "string"
-  }
+  "interpretation": "2-3 paragraphes d'expertise stratégique sur la concurrence et le positionnement recommandé"
 }
 
 Si aucun concurrent trouvé:
 {
-  "nearby_poi": {},
-  "total_competitors": 0,
-  "density_level": "very_low",
-  "search_radius_meters": 500,
-  "market_assessment": {
-    "saturation_level": "low",
-    "competition_intensity": "weak",
-    "market_positioning_opportunity": "Marché peu saturé - Opportunité de premier entrant"
-  }
+  "analyzed": true,
+  "analysis": {
+    "nearby_poi": {},
+    "total_competitors": 0,
+    "density_level": "very_low",
+    "market_assessment": {
+      "saturation_level": "low",
+      "competition_intensity": "weak",
+      "market_positioning_opportunity": "Marché peu saturé - Opportunité de premier entrant"
+    }
+  },
+  "interpretation": "Zone isolée avec absence de concurrence directe. Analyser si isolement géographique ou opportunité de premier entrant avec potentiel de monopole local."
 }
 
-RÈGLES IMPORTANTES:
+RÈGLES CRITIQUES:
 
-1. **DENSITÉ CONCURRENTIELLE:**
-   - very_low: 0 POI
-   - low: 1-4 POI
-   - moderate: 5-9 POI
-   - high: 10-14 POI
-   - very_high: 15+ POI
-
-2. **PROXIMITÉ:**
-   - immediate: < 50m (même rue/bâtiment)
-   - very_close: 50-200m (visibilité directe)
-   - close: 200-500m (zone chalandise)
-   - moderate: 500-1000m
-   - far: > 1000m
-
-3. **SATURATION MARCHÉ:**
-   - Croiser densité POI + population (si dispo)
-   - < 5 POI pour >3000 hab = low
-   - 10-15 POI pour 2000-5000 hab = moderate
-   - > 15 POI pour <3000 hab = high/very_high
-
-4. **TYPES DOMINANTS:**
-   - Lister top 5 types par fréquence
-   - Calculer pourcentages
-   - Identifier si zone spécialisée ou diversifiée
-
-5. **MARKET POSITIONING:**
-   Si density_level = very_low:
-   - "Marché peu saturé - Opportunité premier entrant ou zone isolée"
-
-   Si density_level = moderate + pricing moyen < 2:
-   - "Concurrence modérée orientée discount - Opportunité différenciation premium"
-
-   Si density_level = very_high:
-   - "Marché saturé - Différenciation forte nécessaire"
+1. **NE CALCULE PAS** les distances, moyennes, pourcentages (calculateCompetitorAnalysis le fait)
+2. **NE CATÉGORISE PAS** manuellement les POI (le tool utilise NAF_CATEGORIES)
+3. **COPIE INTÉGRALEMENT** le résultat du tool dans "analysis"
+4. **CONCENTRE-TOI** sur l'INTERPRÉTATION stratégique (expertise humaine)
+5. **UTILISE** ton expertise pour contextualiser les données brutes
 
 RETOURNE UNIQUEMENT LE JSON VALIDE.`,
 

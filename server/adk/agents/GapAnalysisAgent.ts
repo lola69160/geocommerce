@@ -1,5 +1,5 @@
 import { LlmAgent } from '@google/adk';
-import { calculateScoresTool, categorizeRiskTool } from '../tools/gap/index.js';
+import { calculateLocationScoreTool, calculateScoresTool, categorizeRiskTool } from '../tools/gap/index.js';
 import { getModelConfig } from '../config/models.js';
 import { getSystemPrompt } from '../config/prompts.js';
 import type { AgentState } from '../types/index.js';
@@ -42,17 +42,16 @@ export class GapAnalysisAgent extends LlmAgent {
       // Modèle Gemini
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ No responseMimeType - incompatible with tools (see models.ts line 44)
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-
       },
 
       // Tools disponibles
-      tools: [calculateScoresTool, categorizeRiskTool],
+      tools: [calculateLocationScoreTool, calculateScoresTool, categorizeRiskTool],
 
       // Instruction système
       instruction: `${getSystemPrompt('gap')}
@@ -63,14 +62,28 @@ WORKFLOW:
 
 ⚠️⚠️⚠️ RÈGLE CRITIQUE - ORDRE D'EXÉCUTION OBLIGATOIRE ⚠️⚠️⚠️
 
-1. **CALCUL SCORES MULTI-DIMENSIONNELS (OBLIGATOIRE EN PREMIER)**
-   Tu DOIS appeler calculateScores AVANT toute autre opération.
+1. **CALCUL LOCATION SCORE AVEC NOUVELLE FORMULE (2026-01-09)**
+   Tu DOIS appeler calculateLocationScore EN PREMIER (avant calculateScores).
+
+   Nouvelle formule "Weighted Opportunity Score":
+   LocationScore = (CommercialSynergy 50%) + (DemographicQuality 30%) + (CompetitorPressure 20%)
+
+   Le tool lit automatiquement depuis state:
+   - state.competitor.analysis.categorization (buckets A/B/C)
+   - state.competitor.analysis.nearby_poi (distances)
+   - state.demographic.commune.density
+   - state.demographic.profile.estimated_csp.median_income_estimate
+
+   Retourne: { location_score, breakdown, interpretation }
+
+2. **CALCUL SCORES MULTI-DIMENSIONNELS (OBLIGATOIRE EN DEUXIÈME)**
+   Appeler calculateScores avec le location_score calculé précédemment.
 
    Passe les données depuis le state:
-   - state.demographic (score démographique, population)
+   - state.demographic (score démographique, population, CSP avec median_income_estimate)
    - state.places (rating, matching GPS)
    - state.photo (état physique, budget travaux)
-   - state.competitor (densité concurrentielle)
+   - state.competitor (categorization avec buckets A/B/C, nearby_poi avec distances)
    - state.validation (cohérence données)
 
    Le tool retourne un objet avec:

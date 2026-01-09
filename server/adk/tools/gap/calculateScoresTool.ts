@@ -16,6 +16,14 @@ import { zToGen } from '../../utils/schemaHelper.js';
  */
 
 const CalculateScoresInputSchema = z.object({
+  // NOUVEAU (2026-01-09): Location score pré-calculé par calculateLocationScoreTool
+  locationScore: z.number().optional().describe('Location score pré-calculé (0-100) par calculateLocationScore'),
+  locationBreakdown: z.object({
+    commercial_synergy: z.number().optional(),
+    demographic_quality: z.number().optional(),
+    competitor_pressure: z.number().optional()
+  }).optional().describe('Breakdown du nouveau location score'),
+
   demographic: z.object({
     demographic_score: z.object({
       overall: z.number().optional()
@@ -59,38 +67,49 @@ export const calculateScoresTool = new FunctionTool({
 
   execute: async (data: z.infer<typeof CalculateScoresInputSchema>) => {
     // DIMENSION 1: LOCATION (Emplacement) - 0-100
+    // NOUVEAU (2026-01-09): Utiliser le score pré-calculé par calculateLocationScore si disponible
     let locationScore = 0;
     let locationBreakdown: Record<string, any> = {};
 
-    // 1.1 Score démographique (40 points)
-    if (data.demographic?.demographic_score?.overall !== undefined) {
-      const demoScore = data.demographic.demographic_score.overall;
-      locationScore += (demoScore / 100) * 40;
-      locationBreakdown.demographic_score = Math.round((demoScore / 100) * 40);
-    }
+    if (data.locationScore !== undefined) {
+      // Utiliser le nouveau "Weighted Opportunity Score" pré-calculé
+      locationScore = data.locationScore;
+      locationBreakdown = data.locationBreakdown || {};
+      console.log(`[calculateScores] 🎯 Using NEW location score: ${locationScore}/100 (Synergy ${locationBreakdown.commercial_synergy}, Demo ${locationBreakdown.demographic_quality}, Competitor ${locationBreakdown.competitor_pressure})`);
+    } else {
+      // Fallback: ancien système (pour rétrocompatibilité)
+      console.warn('[calculateScores] ⚠️ locationScore not provided - using LEGACY calculation (deprecated)');
 
-    // 1.2 Potentiel zone chalandise (30 points)
-    if (data.demographic?.trade_area_potential?.walking_500m !== undefined) {
-      const population = data.demographic.trade_area_potential.walking_500m;
-      let popScore = 0;
-      if (population >= 5000) popScore = 30;
-      else if (population >= 3000) popScore = 25;
-      else if (population >= 1500) popScore = 20;
-      else if (population >= 800) popScore = 15;
-      else if (population >= 400) popScore = 10;
-      else popScore = 5;
-      locationScore += popScore;
-      locationBreakdown.trade_area_population = popScore;
-    }
+      // 1.1 Score démographique (40 points)
+      if (data.demographic?.demographic_score?.overall !== undefined) {
+        const demoScore = data.demographic.demographic_score.overall;
+        locationScore += (demoScore / 100) * 40;
+        locationBreakdown.demographic_score = Math.round((demoScore / 100) * 40);
+      }
 
-    // 1.3 Matching GPS Places (30 points)
-    if (data.places?.matchScore !== undefined) {
-      const matchScore = data.places.matchScore;
-      locationScore += (matchScore / 100) * 30;
-      locationBreakdown.gps_matching = Math.round((matchScore / 100) * 30);
-    } else if (data.places?.found === false) {
-      // Pas de matching = pénalité
-      locationBreakdown.gps_matching = 0;
+      // 1.2 Potentiel zone chalandise (30 points)
+      if (data.demographic?.trade_area_potential?.walking_500m !== undefined) {
+        const population = data.demographic.trade_area_potential.walking_500m;
+        let popScore = 0;
+        if (population >= 5000) popScore = 30;
+        else if (population >= 3000) popScore = 25;
+        else if (population >= 1500) popScore = 20;
+        else if (population >= 800) popScore = 15;
+        else if (population >= 400) popScore = 10;
+        else popScore = 5;
+        locationScore += popScore;
+        locationBreakdown.trade_area_population = popScore;
+      }
+
+      // 1.3 Matching GPS Places (30 points)
+      if (data.places?.matchScore !== undefined) {
+        const matchScore = data.places.matchScore;
+        locationScore += (matchScore / 100) * 30;
+        locationBreakdown.gps_matching = Math.round((matchScore / 100) * 30);
+      } else if (data.places?.found === false) {
+        // Pas de matching = pénalité
+        locationBreakdown.gps_matching = 0;
+      }
     }
 
     // DIMENSION 2: MARKET (Marché et demande) - 0-100

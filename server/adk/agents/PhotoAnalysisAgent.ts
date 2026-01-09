@@ -1,5 +1,5 @@
 import { LlmAgent } from '@google/adk';
-import { analyzePhotosTool } from '../tools/photo/analyzePhotosTool.js';
+import { analyzePhotosTool, selectBestPhotosTool } from '../tools/photo/index.js';
 import { getModelConfig } from '../config/models.js';
 import { getSystemPrompt } from '../config/prompts.js';
 import type { AgentState } from '../types/index.js';
@@ -31,17 +31,16 @@ export class PhotoAnalysisAgent extends LlmAgent {
       // Modèle Gemini Vision
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ No responseMimeType - incompatible with tools (see models.ts line 44)
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-
       },
 
       // Tools disponibles
-      tools: [analyzePhotosTool],
+      tools: [analyzePhotosTool, selectBestPhotosTool],
 
       // Instruction système
       instruction: `${getSystemPrompt('photo')}
@@ -53,23 +52,51 @@ WORKFLOW:
    - Photos: state.places.photos (array d'objets avec url)
    - Type de commerce: state.business.activite_principale_libelle OU state.business.enseigne
 
-2. Si photos disponibles (places.photos existe et length > 0):
-   - Extraire les URLs: photos.map(p => p.url)
-   - Déterminer le type de commerce
-   - Appeler analyzePhotos(photoUrls, businessType)
-
 2. Si photos disponibles (state.places.photos existe et length > 0):
    - Vérifier que chaque photo a une propriété 'url'
    - Filtrer photos sans URL: photos.filter(p => p.url)
    - Si aucune photo valide: retourner { analyzed: false, reason: "No photo URLs available" }
    - Sinon: extraire les URLs: validPhotos.map(p => p.url)
+   - Déterminer le type de commerce
+   - Appeler analyzePhotos(photoUrls, businessType)
 
-3. Si photos non disponibles:
+3. **SÉLECTION PHOTOS RAPPORT** (2026-01-09):
+   Après avoir analysé toutes les photos, sélectionner les 2 meilleures pour le rapport final:
+   - Appeler selectBestPhotos()
+   - Retourne { selectedPhotos: [{ index, type, url, reason, score }] }
+   - Type "interieur": Meilleur éclairage + rangement
+   - Type "facade": Meilleure visibilité commerce (enseigne visible)
+
+4. Si photos non disponibles:
    - Retourner { analyzed: false, reason: "No photos available" }
 
-4. Interpréter le résultat:
-   - Si analyzed=true: Inclure toute l'analyse (état, travaux, budget)
+5. Interpréter le résultat:
+   - Si analyzed=true: Inclure toute l'analyse (état, travaux, budget, selectedPhotos)
    - Si analyzed=false: Inclure la raison
+
+⚠️ DISTINCTION CRITIQUE - DEUX SCORES SÉPARÉS (Amélioration 5):
+
+1. SCORE QUALITÉ RETAIL (0-10) - Évalue le COMMERCE
+   Critères:
+   - Présentation produits (merchandising)
+   - Modernité de l'agencement
+   - Expérience client (ambiance, parcours)
+   - Éclairage et signalétique
+
+   Exemple: Tabac avec belle vitrine, produits bien rangés = 8/10
+
+2. SCORE ÉTAT PHYSIQUE (0-10) - Évalue le BÂTIMENT/LOCAUX
+   Critères:
+   - Propreté des murs/sols/plafonds
+   - Usure des fixtures (comptoir, étagères)
+   - État de la devanture (peinture, vitrines)
+   - Équipements techniques (ventilation, éclairage)
+
+   Exemple: Même Tabac avec murs pelés, vitrine fissurée = 5/10
+
+💡 Interprétation:
+- Retail 8/10 + Physique 5/10 → Bon commerce, travaux bâtiment nécessaires
+- Retail 5/10 + Physique 8/10 → Bon bâtiment, merchandising à moderniser
 
 FORMAT DE SORTIE JSON (STRICT):
 
@@ -81,7 +108,9 @@ Si photos analysées:
     "devanture": "excellent" | "bon" | "moyen" | "mauvais" | "très mauvais",
     "interieur": "excellent" | "bon" | "moyen" | "mauvais" | "très mauvais",
     "equipement": "excellent" | "bon" | "moyen" | "mauvais" | "très mauvais",
-    "note_globale": number (0-10)
+    "note_globale": number (0-10),
+    "score_qualite_retail": number (0-10, optionnel),
+    "score_etat_physique": number (0-10, optionnel)
   },
   "travaux": {
     "urgents": ["string"],
