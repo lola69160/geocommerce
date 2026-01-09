@@ -81,10 +81,25 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `actualités récentes ${commune} France 2025 projets événements en français`,
-          search_depth: 'basic',
+          query: `actualités récentes ${commune} France 2025 projets événements`,
+          search_depth: 'advanced', // FIX: More thorough search for economic/demographic data
           max_results: 5,
-          include_answer: false
+          include_answer: false,
+          // ✅ Privilégier sources françaises
+          include_domains: [
+            'fr.wikipedia.org',
+            'gouv.fr',
+            'ville.fr',
+            'lemonde.fr',
+            'lefigaro.fr',
+            'francetvinfo.fr'
+          ],
+          // ✅ Exclure domaines anglais connus
+          exclude_domains: [
+            'francethisway.com',
+            'tripadvisor.com',
+            'booking.com'
+          ]
         },
         { timeout: 10000 }
       );
@@ -100,10 +115,25 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `projets urbanisme aménagement ${commune} mairie PLU en français`,
-          search_depth: 'basic',
+          query: `projets urbanisme aménagement ${commune} mairie PLU`,
+          search_depth: 'advanced', // FIX: More thorough search for economic/demographic data
           max_results: 5,
-          include_answer: false
+          include_answer: false,
+          // ✅ Privilégier sources françaises
+          include_domains: [
+            'fr.wikipedia.org',
+            'gouv.fr',
+            'ville.fr',
+            'lemonde.fr',
+            'lefigaro.fr',
+            'francetvinfo.fr'
+          ],
+          // ✅ Exclure domaines anglais connus
+          exclude_domains: [
+            'francethisway.com',
+            'tripadvisor.com',
+            'booking.com'
+          ]
         },
         { timeout: 10000 }
       );
@@ -119,10 +149,25 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `développement économique commerce activité ${commune} en français`,
-          search_depth: 'basic',
+          query: `développement économique commerce activité ${commune}`,
+          search_depth: 'advanced', // FIX: More thorough search for economic/demographic data
           max_results: 5,
-          include_answer: false
+          include_answer: false,
+          // ✅ Privilégier sources françaises
+          include_domains: [
+            'fr.wikipedia.org',
+            'gouv.fr',
+            'ville.fr',
+            'lemonde.fr',
+            'lefigaro.fr',
+            'francetvinfo.fr'
+          ],
+          // ✅ Exclure domaines anglais connus
+          exclude_domains: [
+            'francethisway.com',
+            'tripadvisor.com',
+            'booking.com'
+          ]
         },
         { timeout: 10000 }
       );
@@ -138,10 +183,25 @@ export const tavilySearchTool = new FunctionTool({
         'https://api.tavily.com/search',
         {
           api_key: TAVILY_API_KEY,
-          query: `tourisme saisonnalité événements variation population ${commune} en français`,
-          search_depth: 'basic',
+          query: `tourisme saisonnalité événements variation population ${commune}`,
+          search_depth: 'advanced', // FIX: More thorough search for economic/demographic data
           max_results: 3,
-          include_answer: false
+          include_answer: false,
+          // ✅ Privilégier sources françaises
+          include_domains: [
+            'fr.wikipedia.org',
+            'gouv.fr',
+            'ville.fr',
+            'lemonde.fr',
+            'lefigaro.fr',
+            'francetvinfo.fr'
+          ],
+          // ✅ Exclure domaines anglais connus
+          exclude_domains: [
+            'francethisway.com',
+            'tripadvisor.com',
+            'booking.com'
+          ]
         },
         { timeout: 10000 }
       );

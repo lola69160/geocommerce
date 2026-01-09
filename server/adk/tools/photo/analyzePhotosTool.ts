@@ -137,59 +137,66 @@ export const analyzePhotosTool = new FunctionTool({
         model: "gemini-2.5-flash-lite"
       });
 
-      const prompt = `Tu es un expert en agencement commercial et merchandising avec 20 ans d'expérience retail.
-Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMMERCIAL.
+      const prompt = `Tu es un expert en agencement commercial avec 20 ans d'expérience retail.
+Analyse ces photos d'un ${businessType}.
 
-## TÂCHES
+## ⚠️⚠️⚠️ RÈGLES ANTI-HALLUCINATION CRITIQUES ⚠️⚠️⚠️
 
-1. **ÉVALUATION COMMERCIALE** (note sur 10 pour chaque critère)
+AVANT de décrire quoi que ce soit, tu DOIS classifier CHAQUE photo:
+1. **facade**: Vue extérieure UNIQUEMENT (devanture, enseigne, vitrine, rue)
+2. **interieur**: Vue intérieure UNIQUEMENT (rayons, caisse, tables, stock)
+3. **detail**: Gros plan produit/équipement
+4. **non_classifiable**: Floue, sombre, angle indéterminé
 
-   A. **Propreté** (évaluation hygiène & entretien)
-      - Vitrine : traces, poussière, netteté
-      - Sols : propreté, usure, traces
-      - Mobilier : entretien, poussière
-      - Surfaces : comptoirs, étagères, produits
+RÈGLES STRICTES:
+✅ TU PEUX décrire l'intérieur SI ET SEULEMENT SI ≥1 photo est classée "interieur"
+✅ TU PEUX décrire la façade SI ET SEULEMENT SI ≥1 photo est classée "facade"
+❌ SI 0 photo "interieur" → NE PAS mentionner "agencement", "rayons", "caisse", "présentation"
+❌ SI 0 photo "facade" → NE PAS mentionner "devanture", "vitrine", "enseigne"
+❌ SI 0 photo "interieur" → etat_general.propre/lumineux/range DOIVENT être null
+❌ SI 0 photo "interieur" → travaux.urgents/recommandes DOIVENT être [] (vide)
 
-   B. **Modernité** (design vs tendances retail 2024-2025)
-      - Mobilier : style actuel ou obsolète
-      - Couleurs & matériaux : tendances retail
-      - PLV et signalétique : design moderne
-      - Agencement global : impression de nouveau/ancien
+VALIDATION FINALE:
+Compte combien de photos "facade" et "interieur" tu as classées.
+Si 0 interieur → Supprime TOUTE mention intérieure de ton JSON.
+Si 0 facade → Supprime TOUTE mention extérieure de ton JSON.
 
-   C. **Éclairage** (qualité lumière commerciale)
-      - Ambiance générale : luminosité suffisante
-      - Mise en valeur produits : spots, éclairage directionnel
-      - Zones sombres : coins mal éclairés
-      - Type d'éclairage : LED moderne, halogène ancien
+## TÂCHE 1: CLASSIFIER CHAQUE PHOTO (index 0-${validImages.length - 1})
 
-   D. **Présentation Produits** (merchandising)
-      - Organisation : logique, catégorisation claire
-      - Visibilité : produits bien visibles, facing correct
-      - Accessibilité : hauteur, portée client
-      - Quantité affichée : stock visible, impression richesse
+Retourne dans "photo_classifications": [
+  { "index": 0, "type": "facade" },
+  { "index": 1, "type": "interieur" },
+  ...
+]
 
-   E. **Expérience Client** (attractivité globale)
-      - Circulation : espace, fluidité
-      - Confort visuel : harmonie, surcharge
-      - Attractivité : envie d'entrer, de rester
+## TÂCHE 2: ÉTAT GÉNÉRAL (CRITÈRES BOOLÉENS UNIQUEMENT)
 
-2. **ÉTAT PHYSIQUE** (note sur 10)
-   - Devanture, intérieur, équipement (comme actuellement)
+- etat_general.propre: true/false (SI photos intérieures existent)
+- etat_general.lumineux: true/false (SI photos intérieures existent)
+- etat_general.range: true/false (SI photos intérieures existent)
+- etat_general.devanture: "excellent"/"bon"/"moyen"/"mauvais" (SI photos façade existent)
+- etat_general.interieur: "excellent"/"bon"/"moyen"/"mauvais" (SI photos intérieures existent)
 
-3. **OPTIMISATIONS RECOMMANDÉES**
-   - **Urgentes** : Critiques pour attractivité (ex: nettoyage, éclairage insuffisant)
-   - **Recommandées** : Amélioreraient expérience (ex: modernisation, merchandising)
-   - **Optionnelles** : Nice-to-have (ex: PLV, décoration)
+## TÂCHE 3: TRAVAUX FAÇADE (>2000€ STRICT)
 
-4. **ESTIMATION COÛTS RETAIL**
-   - Détail par poste retail : nettoyage pro, éclairage LED, modernisation vitrine, merchandising, PLV
-   - Prix marché français 2024 (pas travaux lourds)
+✅ INCLURE: Devanture complète (5000-15000€), Vitrine (3000-8000€), Ravalement (4000-12000€), Enseigne lumineuse (2500-6000€)
+❌ EXCLURE: Peinture simple (<1500€), Nettoyage (<800€), Réparations mineures (<1000€)
 
-5. **ANALYSE COMMERCIALE**
-   - 3 atouts commerciaux (ce qui attire et retient le client)
-   - 3 axes d'amélioration prioritaires (impact direct sur ventes)
+Si aucun >2000€ → laisser "urgents" et "recommandes" VIDES []
 
-**FOCUS** : Attractivité commerciale et expérience client (PAS travaux construction).`;
+## TÂCHE 4: TRAVAUX INTÉRIEUR (>1000€ pour nettoyage)
+
+✅ INCLURE: Nettoyage professionnel (>1500€), Remplacement mobilier, Agencement
+❌ EXCLURE: Nettoyage simple (<1000€), Petit rangement, Réparations esthétiques mineures
+
+Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), Optionnels
+
+## TÂCHE 5: BUDGET ET ANALYSE
+
+- Estimation coûts réalistes (marché français 2024)
+- 3 points forts commerciaux maximum
+- 3 points faibles maximum
+- Analyse détaillée (2-3 phrases UNIQUEMENT sur zones visibles sur photos)`;
 
       // Préparer images pour Gemini
       const imageParts = validImages.map(base64 => ({
@@ -211,6 +218,33 @@ Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMM
           responseSchema: {
             type: "object",
             properties: {
+              // ✅ NOUVEAU: Classification des photos
+              photo_classifications: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    index: {
+                      type: "number",
+                      description: "Index de la photo (0-7)"
+                    },
+                    type: {
+                      type: "string",
+                      enum: ["facade", "interieur", "detail", "non_classifiable"],
+                      description: "Type de photo identifié"
+                    }
+                  },
+                  required: ["index", "type"]
+                },
+                minItems: 1,
+                description: "Classification de chaque photo analysée"
+              },
+
+              facade_visible: {
+                type: "boolean",
+                description: "Au moins une photo de façade a-t-elle été trouvée ?"
+              },
+
               etat_general: {
                 type: "object",
                 properties: {
@@ -231,28 +265,24 @@ Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMM
                     minimum: 0,
                     maximum: 10
                   },
-                  proprete: {
-                    type: "string",
-                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+
+                  // ✅ NOUVEAU: 3 critères simples (boolean)
+                  propre: {
+                    type: "boolean",
+                    description: "L'intérieur est-il propre ?"
                   },
-                  modernite: {
-                    type: "string",
-                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  lumineux: {
+                    type: "boolean",
+                    description: "L'intérieur est-il bien éclairé ?"
                   },
-                  eclairage: {
-                    type: "string",
-                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
-                  },
-                  presentation_produits: {
-                    type: "string",
-                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
-                  },
-                  experience_client: {
-                    type: "string",
-                    enum: ["excellent", "bon", "moyen", "mauvais", "très mauvais"]
+                  range: {
+                    type: "boolean",
+                    description: "L'intérieur est-il bien rangé/organisé ?"
                   }
+
+                  // ❌ ANCIENS CRITÈRES COMPLEXES SUPPRIMÉS (optionnels dans schema pour rétrocompatibilité)
                 },
-                required: ["devanture", "interieur", "equipement", "note_globale", "proprete", "modernite"]
+                required: ["devanture", "interieur", "equipement", "note_globale", "propre", "lumineux", "range"]
               },
               travaux: {
                 type: "object",
@@ -319,6 +349,8 @@ Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMM
               }
             },
             required: [
+              "photo_classifications",
+              "facade_visible",
               "etat_general",
               "travaux",
               "budget_travaux",
@@ -332,6 +364,180 @@ Analyse ces photos d'un ${businessType} pour évaluer la QUALITÉ DU LAYOUT COMM
       // Parser résultat
       const responseText = result.response.text();
       const analysis = JSON.parse(responseText);
+
+      // ✅ FIX: Anti-hallucination validation
+      const classifications = analysis.photo_classifications || [];
+      const hasInterior = classifications.some((c: any) => c.type === 'interieur');
+      const hasFacade = classifications.some((c: any) => c.type === 'facade');
+
+      console.log(`[analyzePhotos] Classifications: ${hasInterior ? '✓ Interior' : '✗ Interior'} ${hasFacade ? '✓ Facade' : '✗ Facade'}`);
+
+      // ❌ NO interior photos → Remove interior descriptions
+      if (!hasInterior) {
+        console.warn('[analyzePhotos] ⚠️ No interior photos - removing interior descriptions');
+
+        if (analysis.etat_general) {
+          analysis.etat_general.interieur = 'Non visible sur les photos';
+          analysis.etat_general.propre = null;
+          analysis.etat_general.lumineux = null;
+          analysis.etat_general.range = null;
+        }
+
+        // Filter interior work recommendations
+        const interiorKeywords = ['intérieur', 'agencement', 'rayon', 'caisse', 'présentoir', 'stock'];
+        if (analysis.travaux) {
+          analysis.travaux.urgents = (analysis.travaux.urgents || []).filter((t: string) =>
+            !interiorKeywords.some(kw => t.toLowerCase().includes(kw))
+          );
+          analysis.travaux.recommandes = (analysis.travaux.recommandes || []).filter((t: string) =>
+            !interiorKeywords.some(kw => t.toLowerCase().includes(kw))
+          );
+        }
+
+        // Clean analyse_detaillee
+        if (analysis.analyse_detaillee) {
+          const sentences = analysis.analyse_detaillee.split('.').filter((s: string) => {
+            return !interiorKeywords.some(kw => s.toLowerCase().includes(kw));
+          });
+          analysis.analyse_detaillee = sentences.join('.') + '. L\'intérieur du commerce n\'est pas visible sur les photos fournies.';
+        }
+      }
+
+      // ❌ NO facade photos → Remove facade descriptions
+      if (!hasFacade) {
+        console.warn('[analyzePhotos] ⚠️ No facade photos - removing facade descriptions');
+
+        if (analysis.etat_general) {
+          analysis.etat_general.devanture = 'Non visible sur les photos';
+        }
+
+        // Filter facade work recommendations
+        const facadeKeywords = ['devanture', 'façade', 'vitrine', 'enseigne', 'store'];
+        if (analysis.travaux) {
+          analysis.travaux.urgents = (analysis.travaux.urgents || []).filter((t: string) =>
+            !facadeKeywords.some(kw => t.toLowerCase().includes(kw))
+          );
+          analysis.travaux.recommandes = (analysis.travaux.recommandes || []).filter((t: string) =>
+            !facadeKeywords.some(kw => t.toLowerCase().includes(kw))
+          );
+        }
+      }
+
+      // Set visibility flags for HTML display
+      analysis.facade_visible = hasFacade;
+      analysis.interior_visible = hasInterior;
+
+      // ✅ EXISTING: Filtrer travaux façade par montant (>2000€)
+      if (analysis.travaux?.urgents) {
+        analysis.travaux.urgents = analysis.travaux.urgents.filter((travail: string) => {
+          const description = travail.toLowerCase();
+
+          // Si montant mentionné, vérifier >2000€
+          const montantMatch = description.match(/(\d+)\s*(?:€|euros?)/);
+          if (montantMatch) {
+            const montant = parseInt(montantMatch[1]);
+            if (montant < 2000) {
+              console.log(`[analyzePhotos] Filtered out façade work <2000€: ${travail}`);
+              return false;
+            }
+            return true;
+          }
+
+          // Si pas de montant mais mots-clés de travaux majeurs → garder
+          const majorKeywords = ['devanture', 'vitrine', 'ravalement', 'menuiserie', 'enseigne lumineuse', 'rénovation'];
+          const hasMajorKeyword = majorKeywords.some(kw => description.includes(kw));
+
+          // Si pas de montant mais mots-clés mineurs → rejeter
+          const minorKeywords = ['peinture', 'nettoyage', 'réparation mineure', 'rafraîchir'];
+          const hasMinorKeyword = minorKeywords.some(kw => description.includes(kw));
+
+          if (hasMinorKeyword && !hasMajorKeyword) {
+            console.log(`[analyzePhotos] Filtered out minor façade work: ${travail}`);
+            return false;
+          }
+
+          return hasMajorKeyword;
+        });
+      }
+
+      if (analysis.travaux?.recommandes) {
+        analysis.travaux.recommandes = analysis.travaux.recommandes.filter((travail: string) => {
+          const description = travail.toLowerCase();
+
+          const montantMatch = description.match(/(\d+)\s*(?:€|euros?)/);
+          if (montantMatch) {
+            const montant = parseInt(montantMatch[1]);
+            if (montant < 2000) {
+              console.log(`[analyzePhotos] Filtered out façade work <2000€: ${travail}`);
+              return false;
+            }
+            return true;
+          }
+
+          const majorKeywords = ['devanture', 'vitrine', 'ravalement', 'menuiserie', 'enseigne lumineuse', 'rénovation'];
+          const hasMajorKeyword = majorKeywords.some(kw => description.includes(kw));
+
+          const minorKeywords = ['peinture', 'nettoyage', 'réparation mineure', 'rafraîchir'];
+          const hasMinorKeyword = minorKeywords.some(kw => description.includes(kw));
+
+          if (hasMinorKeyword && !hasMajorKeyword) {
+            console.log(`[analyzePhotos] Filtered out minor façade work: ${travail}`);
+            return false;
+          }
+
+          return hasMajorKeyword;
+        });
+      }
+
+      // ✅ NOUVEAU : Filtrer travaux intérieur par montant (>1000€ pour nettoyage)
+      const filterInteriorCleaning = (travaux: string[]) => {
+        return travaux.filter((travail: string) => {
+          const description = travail.toLowerCase();
+
+          // Détection nettoyage
+          const isCleaningWork = description.includes('nettoyage') ||
+                                 description.includes('nettoyer') ||
+                                 description.includes('propreté');
+
+          if (!isCleaningWork) return true; // Garder tous travaux non-nettoyage
+
+          // Extraction montant
+          const montantMatch = description.match(/(\d+)\s*(?:€|euros?)/);
+          if (montantMatch) {
+            const montant = parseInt(montantMatch[1]);
+            if (montant < 1000) {
+              console.log(`[analyzePhotos] Filtered out minor cleaning <1000€: ${travail}`);
+              return false;
+            }
+            return true;
+          }
+
+          // Mots-clés majeurs vs mineurs
+          const majorKeywords = ['profond', 'approfondi', 'complet', 'grande ampleur'];
+          const hasMajorKeyword = majorKeywords.some(kw => description.includes(kw));
+
+          const minorKeywords = ['simple', 'léger', 'entretien', 'courant'];
+          const hasMinorKeyword = minorKeywords.some(kw => description.includes(kw));
+
+          if (hasMinorKeyword && !hasMajorKeyword) {
+            console.log(`[analyzePhotos] Filtered out minor cleaning: ${travail}`);
+            return false;
+          }
+
+          return hasMajorKeyword;
+        });
+      };
+
+      // Appliquer le filtre nettoyage à toutes les catégories
+      if (analysis.travaux?.urgents) {
+        analysis.travaux.urgents = filterInteriorCleaning(analysis.travaux.urgents);
+      }
+      if (analysis.travaux?.recommandes) {
+        analysis.travaux.recommandes = filterInteriorCleaning(analysis.travaux.recommandes);
+      }
+      if (analysis.travaux?.optionnels) {
+        analysis.travaux.optionnels = filterInteriorCleaning(analysis.travaux.optionnels);
+      }
 
       return {
         analyzed: true,

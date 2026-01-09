@@ -46,13 +46,12 @@ export class StrategicAgent extends LlmAgent {
       // Modèle Gemini Thinking
       model: modelConfig.name,
 
-      // Configuration génération JSON forcé via responseMimeType)
+      // ⚠️ No responseMimeType - incompatible with tools (see models.ts line 44)
       generateContentConfig: {
         temperature: modelConfig.temperature,
         topP: modelConfig.topP,
         topK: modelConfig.topK,
         maxOutputTokens: modelConfig.maxOutputTokens
-
       },
 
       // Tools disponibles
@@ -130,38 +129,37 @@ WORKFLOW:
       - Conflits résolus par arbitration
       - Actions requises (URGENT/HIGH)
 
-4. **SCORE GO/NO-GO** (0-100) - CALCUL TRANSPARENT OBLIGATOIRE
+4. **SCORE GO/NO-GO** (0-100) - UTILISE gap.scores.overall COMME BASE
 
-   ⚠️⚠️⚠️ RÈGLE CRITIQUE : TU DOIS MONTRER TON CALCUL ÉTAPE PAR ÉTAPE ⚠️⚠️⚠️
+   ⚠️⚠️⚠️ RÈGLE CRITIQUE : NE PAS RECALCULER LE SCORE GLOBAL ⚠️⚠️⚠️
 
-   Formule pondérée:
-   score_final = (potentiel × 50%) + (sécurité × 30%) + (cohérence × 20%)
+   Le score global a DÉJÀ été calculé scientifiquement par GapAnalysisAgent.
+   Tu DOIS utiliser gap.scores.overall comme base et appliquer UNIQUEMENT des ajustements mineurs.
 
-   ÉTAPE 1: Calculer POTENTIEL (0-100)
-   - Basé sur gap.scores.location (30%)
-   - Basé sur gap.scores.market (25%)
-   - Basé sur demographic.demographic_score.overall (45%)
-   - Exemple: (75×0.30) + (60×0.25) + (80×0.45) = 73.5
+   ÉTAPE 1: Lire le score de base
+   - score_base = state.gap.scores.overall (ex: 32/100)
 
-   ÉTAPE 2: Calculer SÉCURITÉ (0-100)
-   - sécurité = 100 - gap.risk_score (inversé)
-   - Si risk_score = 25 → sécurité = 75
-   - Si risk_score = 60 → sécurité = 40
+   ÉTAPE 2: Appliquer ajustements stratégiques (±10 MAX)
+   - Si clarifications révèlent potentiel caché: +5 à +10 points
+   - Si success_conditions très claires et réalistes: +5 points
+   - Si risques CRITICAL non résolus: -5 à -10 points
 
-   ÉTAPE 3: Calculer COHÉRENCE (0-100)
-   - validation.coherence_score OU 70 (défaut si pas de conflits)
+   ⚠️ LES AJUSTEMENTS DOIVENT ÊTRE JUSTIFIÉS ET LIMITÉS À ±10 POINTS MAXIMUM
 
-   ÉTAPE 4: Appliquer pondération
-   - score_final = (potentiel × 0.50) + (sécurité × 0.30) + (cohérence × 0.20)
-   - Exemple: (73.5 × 0.50) + (75 × 0.30) + (90 × 0.20)
-   - = 36.75 + 22.50 + 18.00 = 77.25 → Arrondi à 77/100
+   ÉTAPE 3: Calcul final
+   - score_final = score_base + ajustements
+   - Limiter à [0, 100]
+   - Exemple: 32 + 8 (clarifications) + 5 (conditions) = 45/100
 
-   SEUILS DE DÉCISION:
+   SEUILS DE DÉCISION (BASÉS SUR SCORE AJUSTÉ):
    - 75-100: GO (forte opportunité)
    - 50-74: GO_WITH_RESERVES (opportunité conditionnelle)
    - 0-49: NO-GO (risques > opportunités)
 
-   ⚠️ TU DOIS inclure ce calcul détaillé dans "score_breakdown" du JSON
+   ⚠️ TU DOIS inclure ce calcul détaillé dans "score_breakdown" du JSON avec:
+   - base_score: gap.scores.overall
+   - adjustments: [{ reason: "string", value: +5 }]
+   - final_score: base_score + sum(adjustments)
 
 5. **RECOMMANDATION FINALE**
    Générer arguments détaillés:
@@ -178,6 +176,18 @@ FORMAT DE SORTIE JSON (STRICT):
   "recommendation": "GO" | "NO-GO" | "GO_WITH_RESERVES",
   "score": number (0-100),
   "confidence": number (0.0-1.0),
+  "score_breakdown": {
+    "base_score": number (OBLIGATOIRE: gap.scores.overall),
+    "base_source": "gap.scores.overall",
+    "adjustments": [
+      {
+        "reason": "string (ex: Potentiel caché révélé par clarifications)",
+        "value": number (ex: +8, limité à ±10)
+      }
+    ],
+    "adjusted_score": number (base_score + sum(adjustments)),
+    "confidence_modifier": number (0.0-1.0)
+  },
   "rationale": {
     "strengths": [
       "string (point fort)"
@@ -197,22 +207,6 @@ FORMAT DE SORTIE JSON (STRICT):
     "risk": number (0-100),
     "coherence": number (0-100),
     "overall": number (0-100)
-  },
-  "score_breakdown": {
-    "potentiel_calc": "string (ex: '(75×0.30) + (60×0.25) + (80×0.45) = 73.5')",
-    "potentiel_score": number (0-100),
-    "potentiel_weight": 0.50,
-    "potentiel_contribution": number,
-    "securite_calc": "string (ex: '100 - 25 = 75')",
-    "securite_score": number (0-100),
-    "securite_weight": 0.30,
-    "securite_contribution": number,
-    "coherence_calc": "string (ex: 'validation.coherence_score = 90')",
-    "coherence_score": number (0-100),
-    "coherence_weight": 0.20,
-    "coherence_contribution": number,
-    "final_calc": "string (ex: '36.75 + 22.50 + 18.00 = 77.25 → 77')",
-    "final_score": number (0-100)
   },
   "success_conditions": [
     {

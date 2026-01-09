@@ -65,6 +65,11 @@ function generateCSS(): string {
       .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
       .score-card { background: #f8fafc; border-left: 4px solid #0066cc; padding: 20px; border-radius: 4px; }
       .score-value { font-size: 2.5em; font-weight: bold; color: #0066cc; }
+      .score-value.excellent { color: #10b981; } /* Vert 75-100 */
+      .score-value.good { color: #3b82f6; } /* Bleu 50-74 */
+      .score-value.fair { color: #f59e0b; } /* Orange 25-49 */
+      .score-value.poor { color: #ef4444; } /* Rouge 0-24 */
+      .score-value.critical { color: #dc2626; } /* Rouge foncé risk critical */
       .score-label { color: #666; font-size: 0.9em; text-transform: uppercase; }
       .info-grid { display: grid; grid-template-columns: 200px 1fr; gap: 15px; margin: 15px 0; }
       .info-label { font-weight: bold; color: #666; }
@@ -84,10 +89,72 @@ function generateCSS(): string {
       th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e7eb; }
       th { background: #f8fafc; font-weight: 600; color: #374151; }
       .photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }
-      .photo-card { position: relative; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+      .photo-card { position: relative; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+      .photo-card:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       .photo-card img { width: 100%; height: 250px; object-fit: cover; }
       .photo-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.8em; }
       .photo-annotation { background: #f8fafc; padding: 10px; font-size: 0.85em; margin-top: 5px; border-radius: 0 0 8px 8px; }
+
+      /* ✅ NOUVEAU: Photo link styling */
+      .photo-link { display: block; text-decoration: none; }
+
+      /* ✅ NOUVEAU: Lightbox Modal (CSS pur, pas de JS) */
+      .lightbox {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox:target {
+        display: flex; /* Afficher quand URL contient #photo-X */
+      }
+      .lightbox-content {
+        position: relative;
+        max-width: 90%;
+        max-height: 90%;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .lightbox-image {
+        display: block;
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        font-size: 3em;
+        color: white;
+        text-decoration: none;
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox-close:hover {
+        background: rgba(0, 0, 0, 0.8);
+      }
+      .lightbox-caption {
+        padding: 15px;
+        text-align: center;
+        font-size: 1.1em;
+        color: #333;
+        background: #f8fafc;
+      }
+
       .commune-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
       .commune-grid img { width: 100%; border-radius: 8px; max-height: 300px; object-fit: cover; }
       .no-data { color: #666; font-style: italic; padding: 15px; background: #f8fafc; border-radius: 4px; margin: 10px 0; }
@@ -230,6 +297,23 @@ function generateExecutiveSummary(strategic: any, gap: any): string {
   const recommendationClass = strategic.recommendation === 'GO' ? 'go' :
                               strategic.recommendation === 'NO-GO' ? 'no-go' : 'reserves';
 
+  // FIX: Calculate dynamic score class based on value and risk level
+  const globalScore = gap.scores?.overall || strategic.score || 0;
+  const riskLevel = gap.risk_summary?.overall_risk_level || '';
+
+  let scoreClass = 'good'; // Default
+  if (riskLevel === 'critical') {
+    scoreClass = 'critical'; // RED for critical risk
+  } else if (globalScore >= 75) {
+    scoreClass = 'excellent';
+  } else if (globalScore >= 50) {
+    scoreClass = 'good';
+  } else if (globalScore >= 25) {
+    scoreClass = 'fair';
+  } else {
+    scoreClass = 'poor';
+  }
+
   return `
     <div class="summary-box">
       <h2>Executive Summary</h2>
@@ -240,7 +324,7 @@ function generateExecutiveSummary(strategic: any, gap: any): string {
       <div class="score-grid">
         <div class="score-card">
           <div class="score-label">Score Global</div>
-          <div class="score-value">${strategic.score || gap.scores?.overall || 'N/A'}/100</div>
+          <div class="score-value ${scoreClass}">${globalScore}/100</div>
         </div>
         <div class="score-card">
           <div class="score-label">Confiance</div>
@@ -248,7 +332,7 @@ function generateExecutiveSummary(strategic: any, gap: any): string {
         </div>
         <div class="score-card">
           <div class="score-label">Niveau Risque</div>
-          <div class="score-value">${gap.risk_summary?.overall_risk_level || 'N/A'}</div>
+          <div class="score-value ${riskLevel === 'critical' || riskLevel === 'high' ? 'critical' : 'good'}">${riskLevel || 'N/A'}</div>
         </div>
       </div>
     </div>
@@ -654,19 +738,22 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
   // Récupérer données Tavily
   const tavilyData = await fetchCommuneDataWithTavily(commune);
 
-  // Générer URL Google Maps Static avec error handling
+  // FIX: Generate URL Google Maps Static with API key validation
   const PLACE_API_KEY = process.env.PLACE_API_KEY;
   let mapUrl = '';
   let mapError = '';
 
   if (lat && lon) {
-    if (PLACE_API_KEY) {
-      mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&maptype=roadmap&markers=color:red|${lat},${lon}&key=${PLACE_API_KEY}`;
+    if (PLACE_API_KEY && PLACE_API_KEY.length > 20) { // Validate key length
+      mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x300&maptype=roadmap&markers=color:red%7C${lat},${lon}&key=${PLACE_API_KEY}`;
+      console.log(`[generateHTML] Map URL générée: ${mapUrl.substring(0, 80)}...`);
     } else {
-      mapError = 'API key manquante pour Google Maps Static';
+      mapError = 'API key manquante ou invalide pour Google Maps Static';
+      console.error(`[generateHTML] PLACE_API_KEY invalide: ${PLACE_API_KEY ? 'trop courte' : 'manquante'}`);
     }
   } else {
     mapError = 'Coordonnées GPS non disponibles';
+    console.warn(`[generateHTML] Coordonnées GPS manquantes: lat=${lat}, lon=${lon}`);
   }
 
   // Récupérer local_context pour données enrichies
@@ -782,13 +869,20 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
 
       ${mapUrl ? `
         <div>
-          <img src="${mapUrl}" alt="Carte de ${commune}" style="width: 100%; border-radius: 8px; border: 1px solid #e0e0e0;"
-               onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhcnRlIG5vbiBkaXNwb25pYmxlPC90ZXh0Pjwvc3ZnPg==';
-               this.alt='Carte non disponible';" />
+          <img src="${mapUrl}"
+               alt="Carte de ${commune}"
+               style="width: 100%; border-radius: 8px; border: 1px solid #e0e0e0;"
+               onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <!-- FIX: Inline fallback hidden by default -->
+          <div style="display: none; width: 100%; height: 300px; background: #f5f5f5; border-radius: 8px; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+            <p style="margin: 0; font-size: 1.2em;">📍 Carte non disponible</p>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em;">${mapError || 'Erreur de chargement'}</p>
+          </div>
         </div>
       ` : `
-        <div style="width: 100%; height: 300px; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">
-          <p class="no-data">Carte non disponible${mapError ? ' - ' + mapError : ''}</p>
+        <div style="width: 100%; height: 300px; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+          <p style="margin: 0; font-size: 1.2em;">📍 Carte non disponible</p>
+          <p style="margin: 5px 0 0 0; font-size: 0.9em;">${mapError || 'Coordonnées GPS manquantes'}</p>
         </div>
       `}
     </div>
