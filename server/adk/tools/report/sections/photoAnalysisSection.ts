@@ -86,13 +86,18 @@ function generatePhotoGrid(photos: any[], photoClassifications?: any[]): string 
   }
 
   // Générer les cartes photo
-  const photoCards = filteredPhotos.map((p: any, index: number) => {
-    // ✅ NOUVEAU: Utiliser classification Gemini si disponible
+  const photoCards = filteredPhotos.map((p: any, filterIndex: number) => {
+    // Trouver l'index original de cette photo dans le tableau complet
+    const originalIndex = (places?.photos || []).indexOf(p);
+
+    // Chercher la classification correspondant à cet index original
+    const classification = photoClassifications?.find(c => c.index === originalIndex);
+
     let badge = 'Non classé';
     let badgeColor = '#6b7280'; // Gris par défaut
 
-    if (photoClassifications && photoClassifications[index]) {
-      const type = photoClassifications[index].type;
+    if (classification) {
+      const type = classification.type;
 
       switch (type) {
         case 'facade':
@@ -114,12 +119,12 @@ function generatePhotoGrid(photos: any[], photoClassifications?: any[]): string 
       }
     }
 
-    const photoId = `photo-${index}`;
+    const photoId = `photo-${filterIndex}`;
 
     return `
       <div class="photo-card">
         <a href="#${photoId}" class="photo-link">
-          <img src="${p.url}" alt="Photo du commerce ${index + 1}" loading="lazy" />
+          <img src="${p.url}" alt="Photo du commerce ${filterIndex + 1}" loading="lazy" />
           <div class="photo-badge" style="background-color: ${badgeColor};">${badge}</div>
         </a>
       </div>
@@ -128,8 +133,8 @@ function generatePhotoGrid(photos: any[], photoClassifications?: any[]): string 
       <div id="${photoId}" class="lightbox">
         <div class="lightbox-content">
           <a href="#" class="lightbox-close">&times;</a>
-          <img src="${p.url}" alt="Photo du commerce ${index + 1}" class="lightbox-image" />
-          <div class="lightbox-caption">Photo ${index + 1} - ${badge}</div>
+          <img src="${p.url}" alt="Photo du commerce ${filterIndex + 1}" class="lightbox-image" />
+          <div class="lightbox-caption">Photo ${filterIndex + 1} - ${badge}</div>
         </div>
       </div>
     `;
