@@ -51,7 +51,14 @@ export const BudgetTravauxSchema = z.object({
 // ✅ NOUVEAU: Schéma pour classification des photos
 export const PhotoClassificationSchema = z.object({
   index: z.number().min(0).max(7),
-  type: z.enum(['facade', 'interieur', 'detail', 'non_classifiable'])
+  type: z.enum(['facade', 'interieur', 'detail', 'non_classifiable']),
+
+  // ✅ NOUVEAU (2026-01-09): Validation commerce visible (uniquement pour type="facade")
+  commerce_visible: z.boolean().optional()
+    .describe('Si type=facade, le commerce cible est-il visible sur la photo ?'),
+
+  visibility_details: z.string().optional()
+    .describe('Détails sur la visibilité (ex: "Enseigne claire", "Rue générique")')
 });
 
 // ✅ NOUVEAU (2026-01-09): Schéma pour photos sélectionnées (2 meilleures)
