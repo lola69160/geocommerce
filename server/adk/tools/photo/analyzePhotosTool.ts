@@ -161,11 +161,47 @@ Compte combien de photos "facade" et "interieur" tu as classées.
 Si 0 interieur → Supprime TOUTE mention intérieure de ton JSON.
 Si 0 facade → Supprime TOUTE mention extérieure de ton JSON.
 
+## ✅ NOUVEAU: VALIDATION COMMERCE VISIBLE (PHOTOS FAÇADE UNIQUEMENT)
+
+Pour chaque photo classée "facade", tu DOIS déterminer si le COMMERCE CIBLE est réellement visible:
+
+**commerce_visible: true** SI ET SEULEMENT SI:
+- ✅ Enseigne du commerce visible (nom, logo)
+- ✅ Vitrine claire avec produits/services visibles
+- ✅ Devanture identifiable (porte d'entrée, façade commerciale)
+- ✅ Indicateurs visuels du type d'activité
+
+**commerce_visible: false** SI:
+- ❌ Vue générique de rue (bâtiments sans détails commerciaux)
+- ❌ Photo prise de loin (impossible de distinguer le commerce)
+- ❌ Angle de vue partiel (rue visible mais pas devanture)
+- ❌ Photo floue/sombre rendant identification impossible
+- ❌ Commerce visible MAIS ce n'est PAS le commerce cible
+
+**visibility_details**: Justifie ta décision en 1 phrase.
+
+EXEMPLE:
+{
+  "index": 0,
+  "type": "facade",
+  "commerce_visible": true,
+  "visibility_details": "Enseigne 'Boulangerie Dupont' + vitrine avec pains visible"
+}
+
 ## TÂCHE 1: CLASSIFIER CHAQUE PHOTO (index 0-${validImages.length - 1})
 
 Retourne dans "photo_classifications": [
-  { "index": 0, "type": "facade" },
-  { "index": 1, "type": "interieur" },
+  {
+    "index": 0,
+    "type": "facade",
+    "commerce_visible": true,
+    "visibility_details": "Enseigne claire + vitrine visible"
+  },
+  {
+    "index": 1,
+    "type": "interieur"
+    // commerce_visible non requis pour type != facade
+  },
   ...
 ]
 
@@ -232,6 +268,15 @@ Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), O
                       type: "string",
                       enum: ["facade", "interieur", "detail", "non_classifiable"],
                       description: "Type de photo identifié"
+                    },
+                    // ✅ NOUVEAU (2026-01-09): Validation commerce visible
+                    commerce_visible: {
+                      type: "boolean",
+                      description: "Si type=facade, le commerce est-il visible ?"
+                    },
+                    visibility_details: {
+                      type: "string",
+                      description: "Justification de commerce_visible (1 phrase)"
                     }
                   },
                   required: ["index", "type"]
