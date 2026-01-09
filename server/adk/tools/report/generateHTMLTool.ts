@@ -705,7 +705,7 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
     const projects = localContext.urban_projects.slice(0, 3);
     const projectsList = projects.map((p: any) => {
       const title = p.title || '';
-      const content = p.content ? p.content.substring(0, 150) : '';
+      const content = p.content ? smartTruncate(p.content, 300) : '';
       const url = p.url || '';
       return `<strong>${title}</strong>: ${content}${url ? ` <a href="${url}" target="_blank" style="color: #0066cc;">[source]</a>` : ''}`;
     }).join('<br/>');
@@ -720,7 +720,7 @@ async function generateCommuneSection(preparation: any, demographic: any): Promi
     const news = localContext.recent_news.slice(0, 2);
     const newsList = news.map((n: any) => {
       const title = n.title || '';
-      const content = n.content ? n.content.substring(0, 120) : '';
+      const content = n.content ? smartTruncate(n.content, 250) : '';
       return `${title}: ${content}`;
     }).join('<br/>');
 
