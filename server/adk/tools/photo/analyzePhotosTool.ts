@@ -413,9 +413,25 @@ Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), O
       // ✅ FIX: Anti-hallucination validation
       const classifications = analysis.photo_classifications || [];
       const hasInterior = classifications.some((c: any) => c.type === 'interieur');
-      const hasFacade = classifications.some((c: any) => c.type === 'facade');
 
-      console.log(`[analyzePhotos] Classifications: ${hasInterior ? '✓ Interior' : '✗ Interior'} ${hasFacade ? '✓ Facade' : '✗ Facade'}`);
+      // ✅ NOUVEAU (2026-01-09): Filtrer façades sans commerce visible
+      const usableFacades = classifications.filter((c: any) =>
+        c.type === 'facade' && c.commerce_visible !== false
+      );
+      const hasFacade = usableFacades.length > 0;
+
+      console.log(`[analyzePhotos] Classifications: ${hasInterior ? '✓ Interior' : '✗ Interior'} ${hasFacade ? '✓ Usable Facade' : '✗ Usable Facade'}`);
+
+      // Log des façades exclues
+      const excludedFacades = classifications.filter((c: any) =>
+        c.type === 'facade' && c.commerce_visible === false
+      );
+      if (excludedFacades.length > 0) {
+        console.warn(`[analyzePhotos] ⚠️ ${excludedFacades.length} facade photo(s) excluded (commerce not visible):`);
+        excludedFacades.forEach((c: any) => {
+          console.warn(`  - Photo ${c.index}: ${c.visibility_details || 'No details'}`);
+        });
+      }
 
       // ❌ NO interior photos → Remove interior descriptions
       if (!hasInterior) {
@@ -448,9 +464,9 @@ Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), O
         }
       }
 
-      // ❌ NO facade photos → Remove facade descriptions
+      // ❌ NO usable facade photos → Remove facade descriptions
       if (!hasFacade) {
-        console.warn('[analyzePhotos] ⚠️ No facade photos - removing facade descriptions');
+        console.warn('[analyzePhotos] ⚠️ No usable facade photos - removing facade descriptions');
 
         if (analysis.etat_general) {
           analysis.etat_general.devanture = 'Non visible sur les photos';
@@ -465,6 +481,19 @@ Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), O
           analysis.travaux.recommandes = (analysis.travaux.recommandes || []).filter((t: string) =>
             !facadeKeywords.some(kw => t.toLowerCase().includes(kw))
           );
+        }
+
+        // ✅ NOUVEAU (2026-01-09): Ajouter disclaimer dans analyse_detaillee
+        if (analysis.analyse_detaillee) {
+          const sentences = analysis.analyse_detaillee.split('.').filter((s: string) => {
+            return !facadeKeywords.some(kw => s.toLowerCase().includes(kw));
+          });
+
+          if (excludedFacades.length > 0) {
+            analysis.analyse_detaillee = sentences.join('.') + `. IMPORTANT: ${excludedFacades.length} photo(s) de rue générique exclue(s) de l'analyse (commerce cible non identifiable).`;
+          } else {
+            analysis.analyse_detaillee = sentences.join('.') + '. La devanture du commerce n\'est pas visible sur les photos fournies.';
+          }
         }
       }
 
