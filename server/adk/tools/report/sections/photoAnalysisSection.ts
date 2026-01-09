@@ -99,23 +99,29 @@ function generatePhotoGrid(photos: any[], photoClassifications?: any[]): string 
     if (classification) {
       const type = classification.type;
 
-      switch (type) {
-        case 'facade':
-          badge = 'Façade';
-          badgeColor = '#0066cc'; // Bleu
-          break;
-        case 'interieur':
-          badge = 'Intérieur';
-          badgeColor = '#10b981'; // Vert
-          break;
-        case 'detail':
-          badge = 'Détail';
-          badgeColor = '#f59e0b'; // Orange
-          break;
-        case 'non_classifiable':
-          badge = 'Non classifiable';
-          badgeColor = '#ef4444'; // Rouge
-          break;
+      // ✅ NOUVEAU (2026-01-09): Gestion commerce_visible pour façades
+      if (type === 'facade' && classification.commerce_visible === false) {
+        badge = '⚠️ Rue (commerce non visible)';
+        badgeColor = '#ef4444'; // Rouge pour attirer attention
+      } else {
+        switch (type) {
+          case 'facade':
+            badge = 'Façade';
+            badgeColor = '#0066cc'; // Bleu
+            break;
+          case 'interieur':
+            badge = 'Intérieur';
+            badgeColor = '#10b981'; // Vert
+            break;
+          case 'detail':
+            badge = 'Détail';
+            badgeColor = '#f59e0b'; // Orange
+            break;
+          case 'non_classifiable':
+            badge = 'Non classifiable';
+            badgeColor = '#ef4444'; // Rouge
+            break;
+        }
       }
     }
 
@@ -134,7 +140,10 @@ function generatePhotoGrid(photos: any[], photoClassifications?: any[]): string 
         <div class="lightbox-content">
           <a href="#" class="lightbox-close">&times;</a>
           <img src="${p.url}" alt="Photo du commerce ${filterIndex + 1}" class="lightbox-image" />
-          <div class="lightbox-caption">Photo ${filterIndex + 1} - ${badge}</div>
+          <div class="lightbox-caption">
+            Photo ${filterIndex + 1} - ${badge}
+            ${classification?.visibility_details ? `<br/><small style="color: #999;">${classification.visibility_details}</small>` : ''}
+          </div>
         </div>
       </div>
     `;

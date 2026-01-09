@@ -99,21 +99,28 @@ export const selectBestPhotosTool = new FunctionTool({
     }
 
     // ÉTAPE 2: Sélection Image Extérieur (façade avec meilleure visibilité)
-    const facadePhotos = classifications.filter(c => c.type === 'facade');
+    // ✅ NOUVEAU (2026-01-09): Filtrer façades sans commerce visible
+    const facadePhotos = classifications.filter(c =>
+      c.type === 'facade' && c.commerce_visible !== false
+    );
     let bestFacade: any = null;
 
     if (facadePhotos.length > 0) {
-      // Pour l'instant, prendre la première façade disponible
-      // TODO: Implémenter analyse Gemini Vision pour détecter visibilité commerce
       const scoredFacade = facadePhotos.map(classification => {
-        // Score par défaut: favoriser les premières photos (mieux classées par Google)
-        const positionScore = 10 - classification.index; // Index 0 = 10 points, Index 4 = 6 points
+        const positionScore = 10 - classification.index;
+
+        // ✅ NOUVEAU (2026-01-09): Bonus si commerce clairement visible
+        const visibilityBonus = classification.commerce_visible === true ? 5 : 0;
+
+        const totalScore = positionScore + visibilityBonus;
 
         return {
           index: classification.index,
           type: 'facade' as const,
-          score: positionScore,
-          reason: 'Façade classée en priorité par Google Places (visibilité commerce)'
+          score: totalScore,
+          reason: classification.commerce_visible === true
+            ? `Façade avec commerce visible (${classification.visibility_details || 'Détails non disponibles'})`
+            : 'Façade classée en priorité par Google Places'
         };
       });
 
@@ -157,6 +164,14 @@ export const selectBestPhotosTool = new FunctionTool({
     }
 
     console.log(`[selectBestPhotos] Selected ${selectedPhotos.length} photos:`, selectedPhotos.map(p => `${p.type} (index ${p.index}, score ${p.score})`).join(', '));
+
+    // ✅ NOUVEAU (2026-01-09): Log des façades exclues
+    const excludedFacades = classifications.filter(c =>
+      c.type === 'facade' && c.commerce_visible === false
+    );
+    if (excludedFacades.length > 0) {
+      console.log(`[selectBestPhotos] Excluded ${excludedFacades.length} facade photo(s) without visible commerce`);
+    }
 
     return {
       selectedPhotos,
