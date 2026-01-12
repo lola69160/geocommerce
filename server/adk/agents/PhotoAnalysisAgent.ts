@@ -1,5 +1,5 @@
 import { LlmAgent } from '@google/adk';
-import { analyzePhotosTool, selectBestPhotosTool } from '../tools/photo/index.js';
+import { analyzePhotosTool } from '../tools/photo/index.js';
 import { getModelConfig } from '../config/models.js';
 import { getSystemPrompt } from '../config/prompts.js';
 import type { AgentState } from '../types/index.js';
@@ -40,7 +40,7 @@ export class PhotoAnalysisAgent extends LlmAgent {
       },
 
       // Tools disponibles
-      tools: [analyzePhotosTool, selectBestPhotosTool],
+      tools: [analyzePhotosTool],
 
       // Instruction système
       instruction: `${getSystemPrompt('photo')}
@@ -59,18 +59,12 @@ WORKFLOW:
    - Sinon: extraire les URLs: validPhotos.map(p => p.url)
    - Déterminer le type de commerce
    - Appeler analyzePhotos(photoUrls, businessType)
+   - ✅ analyzePhotos retourne automatiquement les 2 meilleures photos sélectionnées dans selectedPhotos
 
-3. **SÉLECTION PHOTOS RAPPORT** (2026-01-09):
-   Après avoir analysé toutes les photos, sélectionner les 2 meilleures pour le rapport final:
-   - Appeler selectBestPhotos()
-   - Retourne { selectedPhotos: [{ index, type, url, reason, score }] }
-   - Type "interieur": Meilleur éclairage + rangement
-   - Type "facade": Meilleure visibilité commerce (enseigne visible)
-
-4. Si photos non disponibles:
+3. Si photos non disponibles:
    - Retourner { analyzed: false, reason: "No photos available" }
 
-5. Interpréter le résultat:
+4. Interpréter le résultat:
    - Si analyzed=true: Inclure toute l'analyse (état, travaux, budget, selectedPhotos)
    - Si analyzed=false: Inclure la raison
 
@@ -104,6 +98,26 @@ Si photos analysées:
 {
   "analyzed": true,
   "photos_analyzed": number,
+
+  // ✅ Classifications et sélection (retourné par analyzePhotos)
+  "photo_classifications": [
+    {
+      "index": number,
+      "type": "facade" | "interieur" | "detail" | "non_classifiable",
+      "commerce_visible": boolean,  // Pour façades uniquement
+      "visibility_details": "string"  // Optionnel
+    }
+  ],
+  "selectedPhotos": [  // ✅ NOUVEAU: 2 meilleures photos auto-sélectionnées
+    {
+      "index": number,
+      "type": "interieur" | "facade",
+      "url": "string",
+      "reason": "string",
+      "score": number
+    }
+  ],
+
   "etat_general": {
     "devanture": "excellent" | "bon" | "moyen" | "mauvais" | "très mauvais",
     "interieur": "excellent" | "bon" | "moyen" | "mauvais" | "très mauvais",

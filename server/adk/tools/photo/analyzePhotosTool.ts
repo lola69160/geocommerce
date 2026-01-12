@@ -6,6 +6,7 @@ import type { BusinessInput, PlacesOutput } from '../../schemas';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import sharp from 'sharp';
 import axios from 'axios';
+import { selectBestPhotosHelper } from './selectBestPhotosTool.js';
 
 /**
  * Analyze Photos Tool
@@ -613,10 +614,39 @@ Catégories: Urgents (hygiène/sécurité), Recommandés (expérience client), O
         analysis.travaux.optionnels = filterInteriorCleaning(analysis.travaux.optionnels);
       }
 
+      // ✅ NOUVEAU (2026-01-09): Sélection automatique des 2 meilleures photos
+      // Read places.photos from state to get URLs
+      let placesData = toolContext?.state.get('places') as PlacesOutput | string | undefined;
+      if (typeof placesData === 'string') {
+        try {
+          placesData = JSON.parse(placesData) as PlacesOutput;
+        } catch (e) {
+          console.warn('[analyzePhotos] Failed to parse places state for photo selection');
+          placesData = undefined;
+        }
+      }
+
+      const placesPhotos = (placesData as PlacesOutput)?.photos || [];
+
+      // Call helper function with all data
+      let bestPhotosSelection: any[] = [];
+      if (analysis.photo_classifications && placesPhotos.length > 0) {
+        const selectionResult = selectBestPhotosHelper(
+          analysis.photo_classifications,
+          placesPhotos,
+          analysis.etat_general || {}
+        );
+        bestPhotosSelection = selectionResult.selectedPhotos;
+        console.log(`[analyzePhotos] Selected ${bestPhotosSelection.length} best photos for report`);
+      } else {
+        console.warn('[analyzePhotos] Skipping photo selection: missing classifications or photos');
+      }
+
       return {
         analyzed: true,
         photos_analyzed: validImages.length,
-        ...analysis
+        ...analysis,
+        selectedPhotos: bestPhotosSelection  // ✅ NOUVEAU: Include selected photos in response
       };
 
     } catch (error: any) {

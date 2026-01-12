@@ -61,126 +61,151 @@ export const selectBestPhotosTool = new FunctionTool({
       };
     }
 
-    const classifications = photo.photo_classifications;
-    const photos = places.photos;
-    const etatGeneral = photo.etat_general;
-
-    // ÉTAPE 1: Sélection Image Intérieur (meilleur score luminosité + rangement)
-    const interiorPhotos = classifications.filter(c => c.type === 'interieur');
-    let bestInterior: any = null;
-
-    if (interiorPhotos.length > 0) {
-      // Scorer chaque photo intérieur
-      const scoredInterior = interiorPhotos.map(classification => {
-        // Score basé sur les critères booléens de l'état général
-        // Note: lumineux et range s'appliquent globalement au commerce
-        const luminosityScore = etatGeneral?.lumineux ? 5 : 0;
-        const tidinessScore = etatGeneral?.range ? 5 : 0;
-        const cleanlinessBonus = etatGeneral?.propre ? 2 : 0;
-
-        const totalScore = luminosityScore + tidinessScore + cleanlinessBonus;
-
-        return {
-          index: classification.index,
-          type: 'interieur' as const,
-          score: totalScore,
-          reason: generateInteriorReason(etatGeneral)
-        };
-      });
-
-      // Trier par score décroissant et prendre le premier
-      scoredInterior.sort((a, b) => b.score - a.score);
-      bestInterior = scoredInterior[0];
-
-      // Ajouter URL de la photo
-      if (photos[bestInterior.index]) {
-        bestInterior.url = photos[bestInterior.index].url;
-      }
-    }
-
-    // ÉTAPE 2: Sélection Image Extérieur (façade avec meilleure visibilité)
-    // ✅ NOUVEAU (2026-01-09): Filtrer façades sans commerce visible
-    const facadePhotos = classifications.filter(c =>
-      c.type === 'facade' && c.commerce_visible !== false
+    // Use helper function with state data
+    return selectBestPhotosHelper(
+      photo.photo_classifications,
+      places.photos,
+      photo.etat_general || {}
     );
-    let bestFacade: any = null;
-
-    if (facadePhotos.length > 0) {
-      const scoredFacade = facadePhotos.map(classification => {
-        const positionScore = 10 - classification.index;
-
-        // ✅ NOUVEAU (2026-01-09): Bonus si commerce clairement visible
-        const visibilityBonus = classification.commerce_visible === true ? 5 : 0;
-
-        const totalScore = positionScore + visibilityBonus;
-
-        return {
-          index: classification.index,
-          type: 'facade' as const,
-          score: totalScore,
-          reason: classification.commerce_visible === true
-            ? `Façade avec commerce visible (${classification.visibility_details || 'Détails non disponibles'})`
-            : 'Façade classée en priorité par Google Places'
-        };
-      });
-
-      // Trier par score décroissant
-      scoredFacade.sort((a, b) => b.score - a.score);
-      bestFacade = scoredFacade[0];
-
-      // Ajouter URL de la photo
-      if (photos[bestFacade.index]) {
-        bestFacade.url = photos[bestFacade.index].url;
-      }
-    }
-
-    // ÉTAPE 3: Construire résultat
-    const selectedPhotos = [];
-
-    if (bestInterior) {
-      selectedPhotos.push(bestInterior);
-    }
-
-    if (bestFacade) {
-      selectedPhotos.push(bestFacade);
-    }
-
-    // Si pas assez de photos sélectionnées, prendre les meilleures disponibles
-    if (selectedPhotos.length < 2) {
-      const otherPhotos = classifications
-        .filter(c => c.type === 'detail' || c.type === 'non_classifiable')
-        .map(c => ({
-          index: c.index,
-          type: c.type,
-          url: photos[c.index]?.url || '',
-          score: 5,
-          reason: 'Photo supplémentaire (aucune façade ou intérieur disponible)'
-        }));
-
-      // Compléter jusqu'à 2 photos si possible
-      while (selectedPhotos.length < 2 && otherPhotos.length > 0) {
-        selectedPhotos.push(otherPhotos.shift());
-      }
-    }
-
-    console.log(`[selectBestPhotos] Selected ${selectedPhotos.length} photos:`, selectedPhotos.map(p => `${p.type} (index ${p.index}, score ${p.score})`).join(', '));
-
-    // ✅ NOUVEAU (2026-01-09): Log des façades exclues
-    const excludedFacades = classifications.filter(c =>
-      c.type === 'facade' && c.commerce_visible === false
-    );
-    if (excludedFacades.length > 0) {
-      console.log(`[selectBestPhotos] Excluded ${excludedFacades.length} facade photo(s) without visible commerce`);
-    }
-
-    return {
-      selectedPhotos,
-      total_analyzed: classifications.length,
-      interior_count: interiorPhotos.length,
-      facade_count: facadePhotos.length
-    };
   }
 });
+
+/**
+ * Helper function: Select best photos without state dependency
+ * Can be called directly from analyzePhotos
+ *
+ * @param photoClassifications - Array of photo classifications from Gemini
+ * @param photos - Array of photos from state.places.photos
+ * @param etatGeneral - General state analysis from photo analysis
+ * @returns Selection result with best 2 photos
+ */
+export function selectBestPhotosHelper(
+  photoClassifications: any[],
+  photos: any[],
+  etatGeneral: any
+): {
+  selectedPhotos: any[];
+  total_analyzed: number;
+  interior_count: number;
+  facade_count: number;
+} {
+  const classifications = photoClassifications;
+
+  // ÉTAPE 1: Sélection Image Intérieur (meilleur score luminosité + rangement)
+  const interiorPhotos = classifications.filter((c: any) => c.type === 'interieur');
+  let bestInterior: any = null;
+
+  if (interiorPhotos.length > 0) {
+    // Scorer chaque photo intérieur
+    const scoredInterior = interiorPhotos.map((classification: any) => {
+      // Score basé sur les critères booléens de l'état général
+      // Note: lumineux et range s'appliquent globalement au commerce
+      const luminosityScore = etatGeneral?.lumineux ? 5 : 0;
+      const tidinessScore = etatGeneral?.range ? 5 : 0;
+      const cleanlinessBonus = etatGeneral?.propre ? 2 : 0;
+
+      const totalScore = luminosityScore + tidinessScore + cleanlinessBonus;
+
+      return {
+        index: classification.index,
+        type: 'interieur' as const,
+        score: totalScore,
+        reason: generateInteriorReason(etatGeneral)
+      };
+    });
+
+    // Trier par score décroissant et prendre le premier
+    scoredInterior.sort((a, b) => b.score - a.score);
+    bestInterior = scoredInterior[0];
+
+    // Ajouter URL de la photo
+    if (photos[bestInterior.index]) {
+      bestInterior.url = photos[bestInterior.index].url;
+    }
+  }
+
+  // ÉTAPE 2: Sélection Image Extérieur (façade avec meilleure visibilité)
+  // ✅ NOUVEAU (2026-01-09): Filtrer façades sans commerce visible
+  const facadePhotos = classifications.filter((c: any) =>
+    c.type === 'facade' && c.commerce_visible !== false
+  );
+  let bestFacade: any = null;
+
+  if (facadePhotos.length > 0) {
+    const scoredFacade = facadePhotos.map((classification: any) => {
+      const positionScore = 10 - classification.index;
+
+      // ✅ NOUVEAU (2026-01-09): Bonus si commerce clairement visible
+      const visibilityBonus = classification.commerce_visible === true ? 5 : 0;
+
+      const totalScore = positionScore + visibilityBonus;
+
+      return {
+        index: classification.index,
+        type: 'facade' as const,
+        score: totalScore,
+        reason: classification.commerce_visible === true
+          ? `Façade avec commerce visible (${classification.visibility_details || 'Détails non disponibles'})`
+          : 'Façade classée en priorité par Google Places'
+      };
+    });
+
+    // Trier par score décroissant
+    scoredFacade.sort((a, b) => b.score - a.score);
+    bestFacade = scoredFacade[0];
+
+    // Ajouter URL de la photo
+    if (photos[bestFacade.index]) {
+      bestFacade.url = photos[bestFacade.index].url;
+    }
+  }
+
+  // ÉTAPE 3: Construire résultat
+  const selectedPhotos = [];
+
+  if (bestInterior) {
+    selectedPhotos.push(bestInterior);
+  }
+
+  if (bestFacade) {
+    selectedPhotos.push(bestFacade);
+  }
+
+  // Si pas assez de photos sélectionnées, prendre les meilleures disponibles
+  if (selectedPhotos.length < 2) {
+    const otherPhotos = classifications
+      .filter((c: any) => c.type === 'detail' || c.type === 'non_classifiable')
+      .map((c: any) => ({
+        index: c.index,
+        type: c.type,
+        url: photos[c.index]?.url || '',
+        score: 5,
+        reason: 'Photo supplémentaire (aucune façade ou intérieur disponible)'
+      }));
+
+    // Compléter jusqu'à 2 photos si possible
+    while (selectedPhotos.length < 2 && otherPhotos.length > 0) {
+      selectedPhotos.push(otherPhotos.shift());
+    }
+  }
+
+  console.log(`[selectBestPhotosHelper] Selected ${selectedPhotos.length} photos:`, selectedPhotos.map(p => `${p.type} (index ${p.index}, score ${p.score})`).join(', '));
+
+  // ✅ NOUVEAU (2026-01-09): Log des façades exclues
+  const excludedFacades = classifications.filter((c: any) =>
+    c.type === 'facade' && c.commerce_visible === false
+  );
+  if (excludedFacades.length > 0) {
+    console.log(`[selectBestPhotosHelper] Excluded ${excludedFacades.length} facade photo(s) without visible commerce`);
+  }
+
+  return {
+    selectedPhotos,
+    total_analyzed: classifications.length,
+    interior_count: interiorPhotos.length,
+    facade_count: facadePhotos.length
+  };
+}
 
 /**
  * Generate Interior Photo Selection Reason
